@@ -1,0 +1,26 @@
+{
+  "name": "similarweb",
+  "version": "0.1.0",
+  "description": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output. Cross-platform (Claude Code, Codex, Cursor, Claude.ai).",
+  "author": {
+    "name": "Idan Yaron"
+  },
+  "license": "MIT",
+  "keywords": [
+    "similarweb",
+    "similarweb-plugin",
+    "mcp",
+    "competitive-intelligence",
+    "audience-analytics",
+    "aeo",
+    "marketing-analytics"
+  ],
+  "homepage": "https://github.com/idan-yaron/similarweb-mcp-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/idan-yaron/similarweb-mcp-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/idan-yaron/similarweb-mcp-plugin/issues"
+  }
+}

@@ -1,0 +1,23 @@
+name: PR validate + build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate (frontmatter + descriptions under cap + file presence)
+        run: python3 build.py --validate
+      - name: Build all platform bundles
+        run: python3 build.py --build
+      - name: List build artifacts
+        run: ls -la dist/
