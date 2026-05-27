@@ -1,0 +1,40 @@
+# Local-only test infrastructure (per design spec, tests stay local)
+tests/
+.pii-blocklist
+
+# Build artifacts
+dist/
+
+# Local-only authoring + planning artifacts (never push to public repo)
+CLAUDE.md
+docs/superpowers/
+docs/cowork-architecture-notes.md
+docs/codex-install-live-probe-*.md
+
+# Similarweb product UI screenshots (brand/IP, never push)
+sw-*.png
+
+# User-side capabilities cache (lives in $HOME, never in repo)
+.similarweb-plugin/
+
+# Editor / OS
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Scratch and editor artifacts
+.playwright-mcp/
+*.tmp
+*.bak
+*.swp
+.env
+.env.*
+.aider*
