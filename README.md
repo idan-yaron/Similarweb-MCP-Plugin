@@ -5,7 +5,7 @@
 **Turn the Similarweb MCP server into deterministic, analyst-grade playbooks across Cowork, Claude Code, Codex, Cursor, and Claude.ai.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](.claude-plugin/plugin.json)
 [![Platforms](https://img.shields.io/badge/platforms-Cowork%20%7C%20Claude%20Code%20%7C%20Codex%20%7C%20Cursor%20%7C%20Claude.ai-blueviolet.svg)](#install)
 [![Python](https://img.shields.io/badge/python-3.x%20stdlib-blue.svg)](build.py)
 
@@ -123,7 +123,7 @@ Pick the easiest path for your stack. Full per-platform details are in [`docs/in
 
 ```
 1. Configure the Similarweb MCP in Cowork (see Prerequisite)
-2. Download similarweb-cowork-0.1.2.zip from the Releases page:
+2. Download similarweb-cowork-0.1.3.zip from the Releases page:
    https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest
 3. Open Cowork: Customize > Plugins > Upload plugin, select the file
 4. Type: "compare nike.com and adidas.com on similarweb"
@@ -148,7 +148,7 @@ Grab the bundle for your AI client from the [Releases page](https://github.com/i
 <details>
 <summary><b>Cowork (Claude Desktop)</b></summary>
 
-Open Cowork, click **Customize > Plugins > Upload plugin**, select `similarweb-cowork-0.1.2.zip`. The validator should accept the bundle on first try.
+Open Cowork, click **Customize > Plugins > Upload plugin**, select `similarweb-cowork-0.1.3.zip`. The validator should accept the bundle on first try.
 
 After install: `/sw-config --show` confirms the bundle is live, the seven recipes appear in the `/` menu, three sub-agents appear in the agent palette, and Similarweb-shaped free-form prompts auto-suggest recipes via the UserPromptSubmit hook.
 
@@ -166,14 +166,14 @@ Install via the plugin marketplace flow:
 /plugin install similarweb@<marketplace>
 ```
 
-Or drop `similarweb-claude-code-0.1.2.zip` into your Claude Code plugins directory and reload. After install: `/sw-config --show` confirms the bundle is live. Skills-only subset (no sub-agents, hooks, or HTML artifacts). Requires the Similarweb MCP server registered in your Claude Code MCP config (see Prerequisite).
+Or drop `similarweb-claude-code-0.1.3.zip` into your Claude Code plugins directory and reload. After install: `/sw-config --show` confirms the bundle is live. Skills-only subset (no sub-agents, hooks, or HTML artifacts). Requires the Similarweb MCP server registered in your Claude Code MCP config (see Prerequisite).
 
 </details>
 
 <details>
 <summary><b>Codex (OpenAI CLI)</b></summary>
 
-The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.com/codex/plugins/build](https://developers.openai.com/codex/plugins/build). The canonical marketplace tree is committed to this repo at `codex/` so the Codex Desktop **Add marketplace** dialog can fetch it directly from GitHub. The same tree is also published as a zip artifact on Releases for CLI installs.
+The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.com/codex/plugins/build](https://developers.openai.com/codex/plugins/build). The canonical marketplace tree (`.agents/plugins/marketplace.json` + `plugins/similarweb/`) is committed at the repo root so the Codex Desktop **Add marketplace** dialog can fetch it directly from GitHub. The same tree is also published as a zip artifact on Releases for CLI installs.
 
 #### Recommended: install via Codex Desktop UI
 
@@ -181,8 +181,8 @@ The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.co
 2. Click the marketplace dropdown next to the search bar (it defaults to **Built by OpenAI**) and choose **+ Add more**.
 3. In the **Add marketplace** dialog:
    - **Source**: `idan-yaron/Similarweb-MCP-Plugin`
-   - **Git ref**: `v0.1.2` (or `main` for the latest)
-   - **Sparse paths**: `codex`
+   - **Git ref**: `v0.1.3` (or `main` for the latest)
+   - **Sparse paths**: leave blank
 4. Click **Add marketplace**. The marketplace registers and the Similarweb plugin appears under the dropdown.
 5. Open a new chat and type `compare nike.com and adidas.com on similarweb`. The `sw-router` skill auto-dispatches to `sw-competitive-teardown`.
 
@@ -190,7 +190,7 @@ The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.co
 
 ```bash
 # From the directory containing the downloaded zip:
-unzip similarweb-codex-0.1.2.zip -d ./similarweb-codex
+unzip similarweb-codex-0.1.3.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
 codex plugin add similarweb@similarweb-local
 ```
@@ -203,11 +203,11 @@ The Codex bundle ships `plugins/similarweb/.mcp.json.template` for the MCP shape
 
 #### Sub-agents companion (optional, source-build only)
 
-Per the Codex spec, sub-agents live in `~/.codex/agents/` outside any plugin. The three TOMLs are NOT attached to the GitHub release to keep the downloads page focused on the four installable AI environments. To get them, clone the repo and run `python3 build.py --build`; the TOMLs will appear under `dist/similarweb-codex-subagents-0.1.2/`. Then:
+Per the Codex spec, sub-agents live in `~/.codex/agents/` outside any plugin. The three TOMLs are NOT attached to the GitHub release to keep the downloads page focused on the four installable AI environments. To get them, clone the repo and run `python3 build.py --build`; the TOMLs will appear under `dist/similarweb-codex-subagents-0.1.3/`. Then:
 
 ```bash
 mkdir -p ~/.codex/agents
-cp dist/similarweb-codex-subagents-0.1.2/*.toml ~/.codex/agents/
+cp dist/similarweb-codex-subagents-0.1.3/*.toml ~/.codex/agents/
 ```
 
 #### Hooks limitation
@@ -219,14 +219,14 @@ codex-cli 0.133.0-alpha.1 does not execute plugin hooks in `exec` sessions (veri
 <details>
 <summary><b>Cursor</b></summary>
 
-Install via `/add-plugin` from a local path pointing at `similarweb-cursor-0.1.2.zip`, or via cursor.com/marketplace if published. After install, `/sw-config` should be available in the command palette and chat. Skills-only subset. Requires the Similarweb MCP server in Cursor's MCP settings (see Prerequisite).
+Install via `/add-plugin` from a local path pointing at `similarweb-cursor-0.1.3.zip`, or via cursor.com/marketplace if published. After install, `/sw-config` should be available in the command palette and chat. Skills-only subset. Requires the Similarweb MCP server in Cursor's MCP settings (see Prerequisite).
 
 </details>
 
 <details>
 <summary><b>Claude.ai</b></summary>
 
-Claude.ai installs skills one at a time: **Settings > Features > Skills > upload** each of the 13 per-skill zips from `similarweb-claude-ai-0.1.2/` individually.
+Claude.ai installs skills one at a time: **Settings > Features > Skills > upload** each of the 13 per-skill zips from `similarweb-claude-ai-0.1.3/` individually.
 
 Claude.ai has no slash command surface, so invocation is by name in natural language: "run sw-competitive-teardown on apple.com vs samsung.com" or just "compare apple.com and samsung.com on similarweb" (the router handles the natural-language dispatch). Skills-only subset. Requires the Similarweb MCP connector enabled in your Claude.ai account (see Prerequisite).
 

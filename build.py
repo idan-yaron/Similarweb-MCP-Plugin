@@ -319,22 +319,22 @@ def cmd_validate():
                 f"Handoff JSON schema drift; update sw-foundation-render § handoff-json-schema."
             )
 
-    codex_root = REPO_ROOT / "codex"
-    if codex_root.is_dir():
-        manifest_at = codex_root / ".agents" / "plugins" / "marketplace.json"
-        plugin_at = codex_root / "plugins" / "similarweb" / ".codex-plugin" / "plugin.json"
+    manifest_at = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
+    plugin_at = REPO_ROOT / "plugins" / "similarweb" / ".codex-plugin" / "plugin.json"
+    if manifest_at.is_file() or plugin_at.is_file():
         if not manifest_at.is_file():
             errors.append(
-                f"{codex_root}: marketplace manifest missing at canonical location "
-                f".agents/plugins/marketplace.json. Codex Desktop UI Add-marketplace "
-                f"dialog and the codex CLI both reject this layout with `marketplace "
-                f"root does not contain a supported manifest`. Re-run build.py --build."
+                f"{REPO_ROOT}: plugins/similarweb is present but the marketplace "
+                f"manifest is missing at .agents/plugins/marketplace.json. Codex "
+                f"Desktop UI Add-marketplace dialog and the codex CLI both reject "
+                f"this with `marketplace root does not contain a supported manifest`. "
+                f"Re-run build.py --build."
             )
         elif not plugin_at.is_file():
             errors.append(
-                f"{codex_root}: marketplace manifest present but plugin payload missing "
-                f"at plugins/similarweb/.codex-plugin/plugin.json. Layout drift in "
-                f"emit_codex."
+                f"{REPO_ROOT}: marketplace manifest present at .agents/plugins/ but "
+                f"plugin payload missing at plugins/similarweb/.codex-plugin/plugin.json. "
+                f"Layout drift in emit_codex."
             )
 
     if errors:
@@ -475,11 +475,18 @@ def emit_codex(manifest, version):
     The Similarweb MCP server is configured separately by the user; .mcp.json.template
     documents the shape without auto-spawning.
 
-    Output location: REPO_ROOT/codex/ (committed to git) so the Codex Desktop UI
-    Add-marketplace dialog can fetch it directly from GitHub via Source +
-    Sparse-paths=codex. The zipped artifact still lands under dist/ for Releases.
+    Output: built in a gitignored staging directory under dist/codex/, then
+    mirrored into REPO_ROOT/.agents/plugins/ + REPO_ROOT/plugins/similarweb/ so
+    the Codex Desktop UI Add-marketplace dialog can fetch the marketplace tree
+    directly from GitHub via Source + (blank) Sparse-paths. Codex's manifest
+    loader looks at the staging ROOT for `.agents/plugins/marketplace.json`, so
+    the marketplace files have to live at the cloned-repo root, not under a
+    subdirectory (sparse-paths is a fetch filter only, not a root-redirector;
+    verified live 2026-05-28 by inspecting the .git/info/sparse-checkout file
+    Codex wrote during a UI add attempt). The zipped artifact lands under dist/
+    for Releases.
     """
-    target_dir = REPO_ROOT / "codex"
+    target_dir = DIST_DIR / "codex"
     _prepare_target_dir(target_dir)
     plugin_name = manifest["name"]
 
@@ -563,11 +570,24 @@ def emit_codex(manifest, version):
     with open(plugin_root / ".mcp.json.template", "w", encoding="utf-8") as f:
         json.dump(mcp_template, f, indent=2)
 
-    _write_codex_readme(target_dir, manifest["name"], version)
+    _wipe_codex_marketplace_dirs(REPO_ROOT)
+    shutil.copytree(target_dir / ".agents", REPO_ROOT / ".agents")
+    shutil.copytree(target_dir / "plugins", REPO_ROOT / "plugins")
 
     zip_path = DIST_DIR / f"similarweb-codex-{version}.zip"
     _zip_target_dir(target_dir, zip_path)
     print(f"  codex: {zip_path}")
+
+
+def _wipe_codex_marketplace_dirs(root):
+    """Selectively wipe the Codex marketplace mirror dirs at repo root
+    (.agents/ and plugins/) before re-copying from the staging build. Never
+    use _prepare_target_dir on REPO_ROOT directly; that would delete the
+    whole working tree."""
+    for sub in (".agents", "plugins"):
+        sub_path = root / sub
+        if sub_path.exists():
+            shutil.rmtree(sub_path)
 
 
 def _write_codex_readme(codex_root, plugin_name, version):
