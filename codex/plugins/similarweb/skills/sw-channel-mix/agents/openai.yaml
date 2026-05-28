@@ -1,0 +1,6 @@
+interface:
+  displayName: Channel Mix
+  defaultPrompt:
+    - "Break down apple.com traffic channels over the last 90 days"
+policy:
+  allow_implicit_invocation: true

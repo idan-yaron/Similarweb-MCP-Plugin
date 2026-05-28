@@ -1,0 +1,6 @@
+interface:
+  displayName: Market Size
+  defaultPrompt:
+    - "Market size for cloud storage software"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  displayName: Page Mix
+  defaultPrompt:
+    - "Top URLs and folders for shopify.com"
+policy:
+  allow_implicit_invocation: true

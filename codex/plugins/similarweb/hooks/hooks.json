@@ -1,0 +1,41 @@
+{
+  "description": "Event-driven hooks for the similarweb-mcp-plugin. Injects capability-map summary at SessionStart, hints recipe coverage on Similarweb-shaped prompts, and surfaces NEXT MOVES notifications at Stop.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PLUGIN_ROOT}/hooks/scripts/session-start.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PLUGIN_ROOT}/hooks/scripts/user-prompt-hint.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PLUGIN_ROOT}/hooks/scripts/stop.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "similarweb",
+  "version": "0.1.2",
+  "description": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output. Cross-platform (Claude Code, Codex, Cursor, Claude.ai).",
+  "author": {
+    "name": "Idan Yaron"
+  },
+  "license": "MIT",
+  "keywords": [
+    "similarweb",
+    "similarweb-plugin",
+    "mcp",
+    "competitive-intelligence",
+    "audience-analytics",
+    "aeo",
+    "marketing-analytics"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Similarweb",
+    "shortDescription": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output. Cross-platform (Claude Code, Codex, Cursor, Claude.ai).",
+    "longDescription": "Expert co-pilot for the Similarweb MCP server. Seven analyst recipes (competitive teardown, audience overlap, channel mix, market size, AEO audit, page mix, keyword opportunity), free-form intent routing, lazy capability discovery, intent-aware output. Turns the Similarweb MCP from a 90-tool flat menu into deterministic multi-tool playbooks.",
+    "developerName": "Idan Yaron",
+    "category": "Marketing Analytics",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Bash"
+    ],
+    "websiteURL": "https://github.com/idan-yaron/similarweb-mcp-plugin",
+    "brandColor": "#106DFC",
+    "defaultPrompt": [
+      "Compare nike.com and adidas.com on Similarweb",
+      "Break down apple.com traffic channels over the last 90 days",
+      "Audit chase.com Answer Engine Optimization posture"
+    ],
+    "composerIcon": "./assets/logo.png",
+    "logo": "./assets/logo.png"
+  }
+}
