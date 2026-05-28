@@ -1,0 +1,6 @@
+interface:
+  displayName: AEO Audit
+  defaultPrompt:
+    - "Audit chase.com Answer Engine Optimization posture"
+policy:
+  allow_implicit_invocation: true

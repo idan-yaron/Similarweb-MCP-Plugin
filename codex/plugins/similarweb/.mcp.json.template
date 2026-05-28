@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "similarweb": {
+      "command": "<your-similarweb-mcp-command>",
+      "args": [
+        "--stdio"
+      ],
+      "env": {
+        "SIMILARWEB_API_KEY": "<your-similarweb-api-key>"
+      }
+    }
+  }
+}

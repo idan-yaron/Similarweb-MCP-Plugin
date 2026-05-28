@@ -1,0 +1,20 @@
+{
+  "name": "similarweb-local",
+  "interface": {
+    "displayName": "Similarweb (local)"
+  },
+  "plugins": [
+    {
+      "name": "similarweb",
+      "source": {
+        "source": "local",
+        "path": "./plugins/similarweb"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Marketing Analytics"
+    }
+  ]
+}

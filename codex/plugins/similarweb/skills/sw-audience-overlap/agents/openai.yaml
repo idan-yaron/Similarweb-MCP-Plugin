@@ -1,0 +1,6 @@
+interface:
+  displayName: Audience Overlap
+  defaultPrompt:
+    - "Audience overlap for nike.com vs adidas.com"
+policy:
+  allow_implicit_invocation: true
