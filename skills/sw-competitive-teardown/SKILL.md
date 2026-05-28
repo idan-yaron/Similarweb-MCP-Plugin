@@ -290,7 +290,7 @@ returned data. Shape when populated:
 
 ## Cowork persistent artifact (when 3+ competitors)
 
-Per sw-foundation-render § "Rich rendering tiers" Tier 3. SUPPLEMENTAL to the markdown answer; the markdown answer ALWAYS renders unchanged.
+Per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL to the markdown answer; the markdown answer ALWAYS renders unchanged.
 
 **Trigger.** One of:
 - The comp set is target + 3 or more competitors (4+ total domains).
@@ -298,7 +298,7 @@ Per sw-foundation-render § "Rich rendering tiers" Tier 3. SUPPLEMENTAL to the m
 
 **Slug.** `sw-teardown-<target-slug>-<yyyymm>`. Call `mcp__cowork__list_artifacts` first; if the slug exists, prefer `mcp__cowork__update_artifact` to refresh the page rather than creating a duplicate.
 
-**Two-step usage.** Write the HTML to `~/sw-teardown-<target-slug>-<yyyymm>.html` with the `Write` tool, then call `mcp__cowork__create_artifact({id, html_path, description, mcp_tools})` with the absolute path. See sw-foundation-render § Tier 3 for the full call shape and CSP whitelist.
+**Two-step usage.** Write the HTML to `~/sw-teardown-<target-slug>-<yyyymm>.html` with the `Write` tool, then call `mcp__cowork__create_artifact({id, html_path, description, mcp_tools})` with the absolute path. See sw-foundation-render-cowork § Tier 3 for the full call shape and CSP whitelist.
 
 **Page structure (sections, in order):**
 
@@ -396,7 +396,7 @@ Call pattern on page load: loop the per-domain tools in parallel (`Promise.all` 
 
 The runtime LLM fills in the SRI hashes (Cowork provides them in the iframe's CSP `integrity` directives), the actual channel-mix dataset shape, and the renderOverlapBars / renderSankey bodies. The skeleton fixes the CONTRACT: head with three SRI-pinned CDN script tags, an async `load()` calling the four MCP tools via `window.cowork.callMcpTool`, and four render functions stitched together.
 
-**Failure handling.** Per sw-foundation-render § "Failure handling". If `mcp__cowork__create_artifact` is unavailable, emit one line in the `## Caveats` block ("Persistent dashboard skipped: artifact tool unavailable.") and continue with markdown-only.
+**Failure handling.** Per sw-foundation-render-cowork § Failure handling. If `mcp__cowork__create_artifact` is unavailable, emit one line in the `## Caveats` block ("Persistent dashboard skipped: artifact tool unavailable.") and continue with markdown-only.
 
 ## Export options (Cowork-only)
 

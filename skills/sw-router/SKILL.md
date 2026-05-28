@@ -22,6 +22,45 @@ Free-form intent classifier for Similarweb-shaped prompts. Pure LLM-discretion r
 - NEVER trigger when the prompt is itself an explicit `/sw-*` command; the user invoked that recipe directly, so yield to it.
 - NEVER echo the dispatched recipe's full output; the recipe owns its own rendering.
 
+## Step 0: Trivial-lookup carve-out (EXIT FAST)
+
+Before doing anything else, check if the user's prompt is a single-domain, single-metric Similarweb lookup that takes ONE MCP call to answer. If yes, **EXIT this skill immediately**: do NOT run Step 1-4, do NOT load any foundation, do NOT emit a "Routing to /sw-..." line, do NOT emit Branch A/B/C/D output. The LLM should call the one relevant MCP tool directly with sensible defaults and render a brief response (1-2 sentences + a one-line table + ONE Sources line with the data-credit total).
+
+**Positive examples (EXIT this skill, call MCP directly):**
+- "what's the traffic of nike" / "nike traffic" / "visits to nike.com"
+- "X's rank" / "what's the rank of google.com globally" / "country rank of bbc.co.uk in UK"
+- "pages per visit for spotify.com"
+- "bounce rate of netflix.com"
+- "monthly visits for amazon last month"
+- "unique visitors to wikipedia.org"
+- "is X showing any traffic" / "does X have traffic data"
+
+**Sensible defaults the LLM applies for trivial lookups:**
+- Country: `us` if not stated. Surface a one-line note ("Defaulted to US; ask for global or another market if needed.") at the end.
+- Window: rolling last 3 months ending at server `meta.last_updated`. Use `start_date = first day of (current month - 3)`, `end_date = "latest"`. NEVER pass `today` as `end_date`.
+- For "global" or "worldwide" hints in the prompt: `country = "ww"`.
+- For a single-month spot value: use the most recent month from a 3-month series.
+
+**Render target for trivial lookups (NO foundation needed):**
+- ONE intro sentence ("Nike.com had about 109M visits worldwide in April 2026.").
+- ONE table row OR one-line breakdown.
+- ONE Sources line: `**Sources:** <total> data credits across <N> calls (<rollup>).`
+- That is it. No Executive read, no Caveats unless something failed, no NEXT MOVES, no slash-command hints.
+
+**Negative examples (DO proceed to Step 1 and run the router):**
+- Anything with two or more domains mentioned ("nike vs adidas", "compare X and Y").
+- Anything with "vs", "compare", "stack up against", "head to head".
+- Channel breakdowns, traffic-source shifts, period-over-period deltas ("did X's paid drop", "channel mix", "traffic sources").
+- Audience-side questions ("overlap", "demographics", "who else visits").
+- AEO / SEO posture questions ("AEO audit", "is X in ChatGPT").
+- Market sizing ("how big is the X market", "leaders in Y").
+- Keyword gap / opportunity questions.
+- Page-mix / content-surface questions.
+- Anything mentioning multiple metrics ("traffic AND engagement", "rank AND channels").
+- Anything requesting a verdict, recommendation, or strategic read ("what should I do about X").
+
+**Decision rule.** If the prompt is one positive-example pattern AND none of the negative-example patterns fit, EXIT this skill (let the LLM call MCP directly). Otherwise, proceed to Step 1. When in doubt (the prompt is ambiguous between trivial and complex), proceed to Step 1; over-routing into a recipe wastes a few seconds, but mis-classifying a complex question as trivial costs the user analytical depth they wanted. Default to the heavier path on ties.
+
 ## Step 1: Read the user prompt
 
 The user message is the free-form question. If the prompt is an explicit `/sw-*` command (starts with `/sw-`), do nothing and yield. Otherwise, classify against the recipe inventory in Step 2.
