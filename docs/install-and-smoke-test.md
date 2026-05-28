@@ -203,8 +203,8 @@ The Codex bundle is a spec-compliant Codex MARKETPLACE per [developers.openai.co
 
 ### Where the bundles live
 
-- `similarweb-codex-0.1.1.zip` (primary plugin bundle)
-- `similarweb-codex-subagents-0.1.1/` (optional companion: 3 sub-agent TOMLs)
+- `similarweb-codex-0.1.1.zip` is attached to the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest); download it from there.
+- `similarweb-codex-subagents-0.1.1/` (optional companion: 3 sub-agent TOMLs) is NOT attached to the official release. To get it, clone the repo and run `python3 build.py --build`; the directory and TOMLs appear under `dist/`.
 
 ### Codex marketplace bundle contents
 
@@ -232,6 +232,9 @@ The bundle ships `plugins/similarweb/.mcp.json.template` as a shape reference (t
 
 ### Install (primary: marketplace add)
 
+1. Download `similarweb-codex-0.1.1.zip` from the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest).
+2. From the directory containing the downloaded zip, run:
+
 ```bash
 unzip similarweb-codex-0.1.1.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
@@ -248,16 +251,19 @@ If your Codex version does not support local marketplaces, unzip the bundle and 
 
 Do NOT unzip the entire bundle into `~/.codex/plugins/sw/`. Codex's plugin loader resolves plugins only through marketplace registration; a manually-placed plugin directory under `~/.codex/plugins/` is silently ignored (no error, no listing in `codex plugin list`, no skill discovery).
 
-### Install the sub-agents companion (optional)
+### Install the sub-agents companion (optional, source-build only)
 
-Per the Codex spec, sub-agents live in `~/.codex/agents/` (or `.codex/agents/` for project scope), not inside any plugin. Copy each TOML into that directory:
+Per the Codex spec, sub-agents live in `~/.codex/agents/` (or `.codex/agents/` for project scope), not inside any plugin. The three TOMLs (`similarweb-analyst`, `competitive-deep-dive`, `aeo-strategist`) are NOT attached to the GitHub release; the official release pages stay focused on the four installable AI environments. To get the companion:
 
 ```bash
+git clone https://github.com/idan-yaron/Similarweb-MCP-Plugin.git
+cd Similarweb-MCP-Plugin
+python3 build.py --build
 mkdir -p ~/.codex/agents
-cp similarweb-codex-subagents-0.1.1/*.toml ~/.codex/agents/
+cp dist/similarweb-codex-subagents-0.1.1/*.toml ~/.codex/agents/
 ```
 
-The three agents (similarweb-analyst, competitive-deep-dive, aeo-strategist) are then available in Codex's agent palette and via `@<agent-name>` dispatch.
+After install the three agents are available in Codex's agent palette and via `@<agent-name>` dispatch.
 
 ### Verify install
 
