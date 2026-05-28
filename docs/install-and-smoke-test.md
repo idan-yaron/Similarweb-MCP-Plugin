@@ -6,10 +6,10 @@ Per-platform install instructions, verification steps, smoke tests, known limita
 
 Download the bundle for your AI client from the [Releases page](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest). The four AI-environment bundles ship as `.zip` assets attached to each release:
 
-- `similarweb-cowork-0.1.0.zip` (Cowork-native flagship; also accepted as `.plugin`)
-- `similarweb-claude-code-0.1.0.zip` (Claude Code bundle; skills-only subset)
-- `similarweb-codex-0.1.0.zip` (Codex CLI bundle; skills-only subset)
-- `similarweb-cursor-0.1.0.zip` (Cursor bundle; skills-only subset)
+- `similarweb-cowork-0.1.1.zip` (Cowork-native flagship; also accepted as `.plugin`)
+- `similarweb-claude-code-0.1.1.zip` (Claude Code bundle; skills-only subset)
+- `similarweb-codex-0.1.1.zip` (Codex CLI bundle; skills-only subset)
+- `similarweb-cursor-0.1.1.zip` (Cursor bundle; skills-only subset)
 
 The Cowork bundle is the flagship target with the full surface (skills + agents + hooks + artifacts + connectors). The other three are skills-only subsets.
 
@@ -34,7 +34,7 @@ For each platform below, the "Verify MCP is configured" section tells you where 
 
 ### Where the bundle lives
 
-`similarweb-cowork-0.1.0.zip`
+`similarweb-cowork-0.1.1.zip`
 
 Contents (23 files):
 
@@ -64,7 +64,7 @@ CONNECTORS.md
 README.md
 ```
 
-What you're installing: everything the other four platforms get (7 recipes + 3 foundations + 2 operators + sw-router), plus three Cowork-only autonomous agents, three event-driven hooks, the cross-plugin connector declarations, and the artifact-pattern docs. v0.3.0 failed Cowork validation with "Plugin validation failed."; v0.1.0 fixes that by normalizing CRLF to LF at zip-time (the Cowork VM is Linux) and moving the `depends_on` ledger references out of YAML frontmatter into a `## Grounded assertions` body block (Cowork rejects non-canonical fields).
+What you're installing: everything the other four platforms get (7 recipes + 3 foundations + 2 operators + sw-router), plus three Cowork-only autonomous agents, three event-driven hooks, the cross-plugin connector declarations, and the artifact-pattern docs. v0.3.0 failed Cowork validation with "Plugin validation failed."; v0.1.1 fixes that by normalizing CRLF to LF at zip-time (the Cowork VM is Linux) and moving the `depends_on` ledger references out of YAML frontmatter into a `## Grounded assertions` body block (Cowork rejects non-canonical fields).
 
 ### Verify the Similarweb MCP connector is enabled (do this BEFORE installing the plugin)
 
@@ -74,7 +74,7 @@ In Cowork: **Customize > Connectors > Similarweb**. If the toggle is off or the 
 
 1. Open Cowork.
 2. Click **Customize > Plugins > Upload plugin**.
-3. Select `similarweb-cowork-0.1.0.zip`.
+3. Select `similarweb-cowork-0.1.1.zip`.
 4. Cowork validates the bundle (LF line endings, canonical frontmatter, hooks.json shape). The validator should accept the bundle on first try.
 5. Cowork loads the plugin into the active session. No restart required.
 
@@ -103,7 +103,7 @@ In Cowork: **Customize > Connectors > Similarweb**. If the toggle is off or the 
 
 ### Troubleshoot
 
-- **"Plugin validation failed."** on upload: this was the v0.3.0 issue. v0.1.0 fixed CRLF and the depends_on frontmatter field. If you still see this on v0.1.0, log the Cowork validator output and check `python tests/structural-validation.py` locally to compare expected bundle shape against what shipped.
+- **"Plugin validation failed."** on upload: this was the v0.3.0 issue. v0.1.1 fixed CRLF and the depends_on frontmatter field. If you still see this on v0.1.1, log the Cowork validator output and check `python tests/structural-validation.py` locally to compare expected bundle shape against what shipped.
 - **Hook fires too aggressively on UserPromptSubmit:** the keyword surface is in `hooks/scripts/user-prompt-hint.sh`. Edit `KEYWORDS_PATTERN` if your workflow has lots of false positives.
 - **Agent does not auto-trigger:** check that the agent's `description` frontmatter contains 2-4 `<example>` blocks (Cowork's auto-router uses those to match natural-language prompts to agents).
 
@@ -113,7 +113,7 @@ In Cowork: **Customize > Connectors > Similarweb**. If the toggle is off or the 
 
 ### Where the bundle lives
 
-`similarweb-claude-code-0.1.0.zip`
+`similarweb-claude-code-0.1.1.zip`
 
 Contents:
 
@@ -134,7 +134,7 @@ skills/sw-router/SKILL.md
 skills/sw-setup/SKILL.md
 ```
 
-What you're installing: 7 user-invocable recipes (competitive-teardown, audience-overlap, aeo-audit, channel-mix, market-size, page-mix, keyword-opportunity), 1 router, 2 operator skills (sw-setup + sw-config), and the 3 sub-foundation skills (sw-foundation-core / data / render) that auto-load together on every Similarweb-shaped turn. v0.1.0 splits the original sw-foundation into 3 sub-foundations carrying the same description surface so all three auto-load in lockstep; recipes declare their inheritance explicitly via an `Inherits:` block.
+What you're installing: 7 user-invocable recipes (competitive-teardown, audience-overlap, aeo-audit, channel-mix, market-size, page-mix, keyword-opportunity), 1 router, 2 operator skills (sw-setup + sw-config), and the 3 sub-foundation skills (sw-foundation-core / data / render) that auto-load together on every Similarweb-shaped turn. v0.1.1 splits the original sw-foundation into 3 sub-foundations carrying the same description surface so all three auto-load in lockstep; recipes declare their inheritance explicitly via an `Inherits:` block.
 
 Note: no `.mcp.json` ships in the bundle. The Similarweb MCP server must already be configured in your client (see Prerequisite above).
 
@@ -152,7 +152,7 @@ Option A (marketplace flow):
 
 Option B (direct):
 
-1. Unzip `similarweb-claude-code-0.1.0.zip` into `~/.claude/plugins/similarweb/` (or the user-plugins directory your install uses).
+1. Unzip `similarweb-claude-code-0.1.1.zip` into `~/.claude/plugins/similarweb/` (or the user-plugins directory your install uses).
 2. Restart the Claude Code session.
 
 ### Verify install
@@ -203,8 +203,8 @@ The Codex bundle is a spec-compliant Codex MARKETPLACE per [developers.openai.co
 
 ### Where the bundles live
 
-- `similarweb-codex-0.1.0.zip` (primary plugin bundle)
-- `similarweb-codex-subagents-0.1.0/` (optional companion: 3 sub-agent TOMLs)
+- `similarweb-codex-0.1.1.zip` (primary plugin bundle)
+- `similarweb-codex-subagents-0.1.1/` (optional companion: 3 sub-agent TOMLs)
 
 ### Codex marketplace bundle contents
 
@@ -233,7 +233,7 @@ The bundle ships `plugins/similarweb/.mcp.json.template` as a shape reference (t
 ### Install (primary: marketplace add)
 
 ```bash
-unzip similarweb-codex-0.1.0.zip -d ./similarweb-codex
+unzip similarweb-codex-0.1.1.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
 codex plugin add similarweb@similarweb-local
 ```
@@ -254,7 +254,7 @@ Per the Codex spec, sub-agents live in `~/.codex/agents/` (or `.codex/agents/` f
 
 ```bash
 mkdir -p ~/.codex/agents
-cp similarweb-codex-subagents-0.1.0/*.toml ~/.codex/agents/
+cp similarweb-codex-subagents-0.1.1/*.toml ~/.codex/agents/
 ```
 
 The three agents (similarweb-analyst, competitive-deep-dive, aeo-strategist) are then available in Codex's agent palette and via `@<agent-name>` dispatch.
@@ -302,7 +302,7 @@ Look for: the 10-channel taxonomy table, a delta column (current vs prior), an i
 
 ### Where the bundle lives
 
-`similarweb-cursor-0.1.0.zip`
+`similarweb-cursor-0.1.1.zip`
 
 Contents:
 
@@ -335,7 +335,7 @@ Open Cursor Settings > MCP and confirm a `similarweb` server entry exists with a
 Option A (in-app):
 
 1. In Cursor, run `/add-plugin` from the command palette.
-2. Point at the local path of `similarweb-cursor-0.1.0.zip` (or a directory containing the unzipped `.cursor-plugin/` tree).
+2. Point at the local path of `similarweb-cursor-0.1.1.zip` (or a directory containing the unzipped `.cursor-plugin/` tree).
 3. Reload the Cursor window.
 
 Option B (marketplace):
@@ -346,7 +346,7 @@ Option B (marketplace):
 ### Verify install
 
 - `/sw-config --show` is available in the Cursor chat command palette.
-- Settings > Plugins should list `similarweb` with version 0.1.0.
+- Settings > Plugins should list `similarweb` with version 0.1.1.
 - A free-form Similarweb prompt triggers sw-router.
 
 ### Smoke test
@@ -380,7 +380,7 @@ Look for:
 
 ### Where the bundles live
 
-`similarweb-claude-ai-0.1.0/` (a directory, NOT a single zip)
+`similarweb-claude-ai-0.1.1/` (a directory, NOT a single zip)
 
 Contents (13 per-skill zips, uploaded one at a time):
 
@@ -437,7 +437,7 @@ Or:
 compare apple.com and samsung.com on similarweb
 ```
 
-Or one of the new v0.1.0 recipes:
+Or one of the new v0.1.1 recipes:
 
 ```
 what's nike.com's content surface? map the top pages and folders.

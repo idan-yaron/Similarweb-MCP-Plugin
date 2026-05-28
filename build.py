@@ -468,11 +468,12 @@ def emit_codex(manifest, version):
     Plugin payload: .codex-plugin/plugin.json with the full interface block, per-skill
     SKILL.md plus agents/openai.yaml (recipes get displayName + defaultPrompt; operators,
     router, and foundations get policy-only), hooks/ with PLUGIN_ROOT path-var rewrite,
-    and .mcp.json.template with the standard {mcpServers: ...} wrapper.
+    and .mcp.json.template with the standard {mcpServers: ...} wrapper. The optional
+    assets/codex-icon.png at repo root, when present, is embedded as the install-card
+    composerIcon and logo (Codex-only; not rendered in the README).
 
     The Similarweb MCP server is configured separately by the user; .mcp.json.template
-    documents the shape without auto-spawning. No install-card icon ships; Codex
-    falls back to text-only card rendering.
+    documents the shape without auto-spawning.
     """
     target_dir = DIST_DIR / "codex"
     _prepare_target_dir(target_dir)
@@ -520,8 +521,17 @@ def emit_codex(manifest, version):
             "defaultPrompt": CODEX_DEFAULT_PROMPTS,
         },
     }
+    icon_src = REPO_ROOT / "assets" / "codex-icon.png"
+    if icon_src.is_file():
+        codex_manifest["interface"]["composerIcon"] = "./assets/logo.png"
+        codex_manifest["interface"]["logo"] = "./assets/logo.png"
     with open(plugin_root / ".codex-plugin" / "plugin.json", "w", encoding="utf-8") as f:
         json.dump(codex_manifest, f, indent=2)
+
+    if icon_src.is_file():
+        assets_target = plugin_root / "assets"
+        assets_target.mkdir()
+        shutil.copy(icon_src, assets_target / "logo.png")
 
     skills_target = plugin_root / "skills"
     skills_target.mkdir()
