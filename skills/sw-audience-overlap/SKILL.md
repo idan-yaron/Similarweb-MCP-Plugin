@@ -224,13 +224,13 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
 
 ## Cowork persistent artifact (when 3+ domains)
 
-Persistent artifact per sw-foundation-render § Tier 3. SUPPLEMENTAL; markdown ALWAYS renders unchanged.
+Persistent artifact per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL; markdown ALWAYS renders unchanged.
 
 **Trigger.** Target + 2 or more competitors (3+ total domains). N=2 renders better in markdown (asymmetry bars + absolute-breakdown bar).
 
 **Slug.** `sw-overlap-<target-slug>-<yyyymm>`. Call `mcp__cowork__list_artifacts` first; if exists, prefer `update_artifact`.
 
-**Two-step.** `Write` HTML to `~/sw-overlap-<target-slug>-<yyyymm>.html`, then `mcp__cowork__create_artifact({id, html_path, description, mcp_tools})`. See sw-foundation-render § Tier 3 for call shape + CSP whitelist.
+**Two-step.** `Write` HTML to `~/sw-overlap-<target-slug>-<yyyymm>.html`, then `mcp__cowork__create_artifact({id, html_path, description, mcp_tools})`. See sw-foundation-render-cowork § Tier 3 for call shape + CSP whitelist.
 
 **Page:**
 
@@ -295,7 +295,7 @@ load().catch(e=>document.body.insertAdjacentHTML('beforeend',`<pre>${e.message}<
 
 Runtime LLM fills in SRI hashes (from Cowork's CSP `integrity` directives) and the three render functions. Skeleton fixes the contract: three SRI-pinned CDN scripts, async `load()` calling the two MCP tools, client-side `share_of_union` derivation, tier-class assignment via `tier()` per sw-foundation-render § expert-heuristics.
 
-**Failure handling.** Per sw-foundation-render § "Failure handling". If `create_artifact` is unavailable, one line in `## Caveats` and continue markdown-only.
+**Failure handling.** Per sw-foundation-render-cowork § Failure handling. If `create_artifact` is unavailable, one line in `## Caveats` and continue markdown-only.
 
 ## Export options (Cowork-only)
 

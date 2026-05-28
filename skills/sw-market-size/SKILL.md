@@ -290,13 +290,13 @@ Field semantics:
 
 ## Cowork artifact (when 10+ top brands)
 
-Persistent artifact per sw-foundation-render § Tier 3. SUPPLEMENTAL; markdown ALWAYS renders unchanged.
+Persistent artifact per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL; markdown ALWAYS renders unchanged.
 
 **Trigger.** Step 3 returned 10 or more top-brand rows.
 
 **Slug.** `sw-market-<category-slug>-<yyyymm>` (slug = kebab-cased `category_path`). Call `mcp__cowork__list_artifacts` first; if exists, prefer `update_artifact`.
 
-**Two-step.** `Write` HTML to `~/sw-market-<category-slug>-<yyyymm>.html`, then `mcp__cowork__create_artifact({id, html_path, description, mcp_tools})`. See sw-foundation-render § Tier 3 for call shape + CSP whitelist.
+**Two-step.** `Write` HTML to `~/sw-market-<category-slug>-<yyyymm>.html`, then `mcp__cowork__create_artifact({id, html_path, description, mcp_tools})`. See sw-foundation-render-cowork § Tier 3 for call shape + CSP whitelist.
 
 **Page:**
 
@@ -355,7 +355,7 @@ load().catch(e=>document.body.insertAdjacentHTML('beforeend',`<pre>${e.message}<
 
 Runtime LLM fills in SRI hashes (from Cowork's CSP `integrity` directives), resolved `CATEGORY_ID`, and the three render functions. Skeleton fixes the contract: two SRI-pinned CDN scripts, async `load()` calling two MCP tools, client-side HHI per Step 5 derivation #5.
 
-**Failure handling.** Per sw-foundation-render § "Failure handling". If `create_artifact` is unavailable, one line in `## Caveats` and continue markdown-only.
+**Failure handling.** Per sw-foundation-render-cowork § Failure handling. If `create_artifact` is unavailable, one line in `## Caveats` and continue markdown-only.
 
 ## Export options (Cowork-only)
 

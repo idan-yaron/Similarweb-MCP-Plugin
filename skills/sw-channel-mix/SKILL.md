@@ -181,7 +181,7 @@ Field semantics:
 
 ## Cowork chat-side panel (when --vs-period set)
 
-Per sw-foundation-render § "Rich rendering tiers" Tier 2. SUPPLEMENTAL to the markdown answer; the markdown answer ALWAYS renders unchanged.
+Per sw-foundation-render-cowork § Tier 2. SUPPLEMENTAL to the markdown answer; the markdown answer ALWAYS renders unchanged.
 
 **Trigger.** `--vs-period` was supplied (single domain, two time periods). The 10-channel period-over-period table is the recipe's signature output; a Recharts grouped-bar chart carries the delta direction + magnitude per channel more cleanly than 10 rows of Unicode delta bars.
 
@@ -273,7 +273,7 @@ export default function Panel() {
 
 The runtime LLM replaces the `data` array values with the actual per-channel current + prior share % derived from the recipe's Step 1 and Step 2 responses. The skeleton fixes: Recharts component imports, color logic per § expert-heuristics, delta-direction `Cell` coloring on the current-period bar, and a custom tooltip body that names current / prior / delta-pp / pct-change / verdict.
 
-**Failure handling.** Per sw-foundation-render § "Failure handling". If the `Write` tool errors (no permission on the path, disk error), the recipe drops to Tier 1 silently; the markdown render is identical with or without the panel.
+**Failure handling.** Per sw-foundation-render-cowork § Failure handling. If the `Write` tool errors (no permission on the path, disk error), the recipe drops to Tier 1 silently; the markdown render is identical with or without the panel.
 
 ## Export options (Cowork-only)
 

@@ -1,6 +1,6 @@
 ---
 name: sw-foundation-render
-description: Expert priors for Similarweb MCP server output rendering: intent-aware modes, citation block, error rendering, handoff JSON, expert heuristics, visualizations. Auto-loads on any Similarweb-shaped turn (web traffic, web rank, traffic-and-engagement, keywords overview, app downloads, brand sales, category performance, audience overlap, AEO audit, similar sites, PPC spend, channel mix, market size, or any specific Similarweb MCP tool name). Recipes cite its helper sections § citation block, § error-rendering, § handoff-json-schema, § expert-heuristics, § visualizations. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
+description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries Similarweb MCP output rendering priors: intent-aware modes, citation block, error rendering, handoff JSON, expert heuristics, Unicode-bar visualizations. Helper sections cited by recipes are section citation block, section error-rendering, section handoff-json-schema, section expert-heuristics, section visualizations. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Cowork-specific rich-rendering tiers (chat-side jsx panels, persistent HTML artifacts) live in the separate sw-foundation-render-cowork skill. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
 user-invocable: false
 ---
 # sw-foundation-render: Similarweb MCP output rendering priors
@@ -37,7 +37,7 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 - **Caveats.** One bullet per real caveat (clamped windows, access denials, structural-zero rollups, brand absence, fallback modes). Drop duplicated context (window, country) the header already states. Drop "opt-in flag X not supplied" promotional lines: users see opt-in flags via `argument-hint` completion. Caveats are not for advertising features.
 - **Strategic insights (DEFEND / EXPOSE / PLAY).** 3 bullets, ~25 words each, `(confidence: HIGH | MEDIUM | LOW)` at end.
 - **NEXT MOVES.** 2 backtick-quoted natural-language questions, one-sentence rationale max each. See § conversational-tone below. Do NOT emit slash-commands or `--flag` syntax in NEXT MOVES.
-- **Output-render targets (v0.1.4):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
+- **Output-render targets (v0.1.5):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
 **1. Sources (single line, NOT a table, NOT collapsible).** Format:
 
@@ -142,7 +142,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -162,7 +162,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.4` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
+The `version` literal `0.1.5` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 
@@ -289,193 +289,9 @@ HHI: 1,101  ████░░░░░░░░░░░░░░░░  FRAGME
 
 **Mermaid appendix (OPTIONAL).** For Cursor / Claude.ai artifacts: `pie`, `xychart-beta`, `sankey-beta`. Recipes do NOT emit Mermaid by default.
 
-## Rich rendering tiers (Cowork-only)
+## Cowork rich-rendering tiers (separate skill)
 
-Cowork supports three distinct render surfaces. Markdown is the primary contract everywhere; the two richer tiers are SUPPLEMENTAL and OPT-IN. The markdown answer renders unchanged across all three.
-
-| Tier | Surface | Persistence | Tool | When |
-|------|---------|-------------|------|------|
-| 1 | Markdown + Unicode bars | Per-message | (none) | Default for every recipe. |
-| 2 | Chat-side `.jsx` panel | Per-message (ephemeral) | `Write` (one `.jsx` file) | Recipe output has comparison shape but the user did not ask for a dashboard. |
-| 3 | Persistent HTML artifact | Saved at `~/Documents/Claude/Artifacts/<slug>/index.html`, versioned (cap 100), shareable, `cowork-artifact://local/<slug>/index.html` URI | `mcp__cowork__create_artifact` (TWO-STEP: Write the HTML file, then call the tool with the absolute path) | User asks for a dashboard, persistent view, or recipe-specific high-dimensionality trigger fired. |
-
-The three subsections below define each tier's contract.
-
-### Tier 1: monospace + Unicode bars (baseline)
-
-Already documented in § visualizations above. Every recipe emits this by default. Skip the richer tiers when the data is trivial (2-point, single-cell) or the user did not ask for an interactive view.
-
-### Tier 2: chat-side .jsx panels (inline, ephemeral)
-
-**Trigger.** One of:
-- Recipe's intent classifier returns `interactive view` / `explore` / `dashboard` AND the user did NOT ask for a persistent artifact (they want a richer view inline, not a saved page).
-- A comparison gets richer than 5 rows (e.g., a 10-channel period-over-period table) and a chart would carry the signal better than a Unicode bar.
-- The recipe-specific trigger listed in that recipe's `## Cowork chat-side panel` section fired.
-
-**How.** Use the `Write` tool to emit a SINGLE `.jsx` file with the path under `~/` (Cowork renders any file whose extension is `.md`, `.html`, `.jsx`, `.mermaid`, `.svg`, or `.pdf` inline as a chat panel). The runtime auto-loads these libraries before evaluating the file (no install / import map needed):
-
-`lucide-react`, `recharts`, `d3`, `plotly`, `three`, `mathjs`, `lodash`, `papaparse`, `sheetjs`, `chart.js`, `tone`, `mammoth`, `tensorflow`, `shadcn/ui`.
-
-Tailwind core utility classes work (the base set only; the JIT compiler is not running so arbitrary values like `w-[37px]` fail silently). Hand-roll any custom utility class as inline `style={{ }}`.
-
-**Constraints.** No `localStorage` (chat-side artifacts are scoped to the message). No external scripts (the `.jsx` runtime is sandboxed). Component must default-export.
-
-**Pattern.** One default-exported React component with `props.data` set at the top of the file as a literal object (the runtime LLM inlines MCP result values into the literal). Recharts is simplest for bar / line / area. `chart.js` for stacked bars. `plotly` for sankey / heatmap. No imports needed; the runtime resolves these from the auto-loaded module set.
-
-Skeleton (Recharts bar chart, 30 lines):
-
-```jsx
-import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
-
-const data = [
-  { channel: 'Direct',        current: 24.3, prior: 22.0 },
-  { channel: 'Organic Search', current: 33.6, prior: 38.2 },
-  { channel: 'Paid Search',    current: 15.4, prior: 12.1 }
-];
-
-export default function Panel() {
-  return (
-    <div style={{ padding: 16, background: '#fff', color: '#111', fontFamily: 'system-ui' }}>
-      <h2 style={{ fontSize: 16, marginBottom: 8 }}>Channel mix shift (current vs prior)</h2>
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="channel" />
-          <YAxis label={{ value: 'Share %', angle: -90, position: 'insideLeft' }} />
-          <Tooltip />
-          <Legend />
-          <Bar dataKey="prior"   fill="#9ca3af" name="Prior" />
-          <Bar dataKey="current" fill="#2563eb" name="Current" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-```
-
-Write the file to `~/sw-<recipe>-panel.jsx`. Cowork renders it inline in the chat the moment the file is written; no separate tool call.
-
-### Tier 3: persistent HTML artifacts via `mcp__cowork__create_artifact`
-
-**Trigger.** One of:
-- User asks for a dashboard, persistent view, interactive view, or "give me a dashboard".
-- Intent classifier returns `mode=dashboard`.
-- Recipe-specific high-dimensionality trigger fired (see each recipe's `## Cowork persistent artifact` section: 3+ competitors, 3+ overlap domains, 10+ market brands, etc.).
-- Analysis the user is likely to return to (weekly competitive review, ongoing market tracker, recurring audit).
-
-**How.** TWO-STEP:
-
-1. Use `Write` to emit a self-contained HTML file. Recommended path: `~/sw-<recipe>-<target>-<yyyymm>.html`.
-2. Call `mcp__cowork__create_artifact` with the file's absolute path.
-
-Tool schema (the REAL schema, not the legacy `{title, content_type, content}` shape):
-
-```
-mcp__cowork__create_artifact({
-  id:          "sw-<recipe>-<target-slug>-<yyyymm>",
-  html_path:   "/absolute/path/to/the/file.html",
-  description: "<one-line description shown to the user>",
-  mcp_tools:   ["mcp__<server>__<tool>", "..."]
-})
-```
-
-Field rules:
-- `id` is a kebab-case slug; must contain at least one letter or digit. Use the slug pattern `sw-<recipe>-<target>-<yyyymm>` so repeat invocations REUSE the same artifact via `mcp__cowork__update_artifact` instead of creating duplicates. Call `mcp__cowork__list_artifacts` first to detect an existing slug.
-- `html_path` is the absolute path the `Write` tool wrote. Do NOT pass content inline.
-- `description` is visible in the artifact panel header. Keep it under one line.
-- `mcp_tools` is the fully-qualified list of MCP tools the page will call via the JS bridge (see below). Cowork uses this for permission gating; missing tools fail at runtime.
-
-**CSP that the iframe enforces (verbatim):**
-
-```
-default-src 'self'; script-src 'self' 'unsafe-inline' <whitelist>; style-src 'self' 'unsafe-inline' <whitelist-css>; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'; webrtc 'block'
-```
-
-The script / style whitelist is exactly these three CDNs (SRI-pinned; do NOT change versions):
-
-- `https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js`
-- `https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js` + `https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css`
-- `https://cdn.jsdelivr.net/npm/mermaid@11.10.0/dist/mermaid.min.js`
-
-**JS bridge available inside the iframe (Cowork injects `window.cowork`):**
-
-- `window.cowork.callMcpTool(name, args)` returns a Promise resolving to the MCP tool's response payload. Cowork enforces a 5-minute read cache (identical args = cached) and a 30-call-per-minute rate cap per artifact. All data flows through this bridge; `fetch` / `XHR` / `WebSocket` / `EventSource` are blocked by `connect-src 'none'`.
-- `window.cowork.askClaude(prompt, data?)` runs a single-turn Haiku 4.5 inference (no tools, no system prompt). Use for natural-language summaries the user can ask for in-panel.
-- `window.cowork.runScheduledTask(taskId)` triggers a scheduled task; requires a user click + native confirm dialog. Do NOT call from page load.
-
-`localStorage` IS available and persists across reloads of the artifact. Use it to remember the user's filter and sort choices.
-
-**Constraints persistent artifacts MUST respect:**
-- No `fetch`, `XHR`, `WebSocket`, `EventSource`. All data goes through `window.cowork.callMcpTool`.
-- No `<iframe>`, no `<object>`, no Tailwind CDN. Hand-roll utility CSS inline.
-- HTML must be self-contained: inline CSS + JS, base64 or `data:` URIs for fonts and images. Max 10 MiB. Max 1M chars when sharing.
-- `:root { color-scheme: light }` is mandated.
-- Reload button is built into the panel header. Do NOT add your own.
-- Slug pattern `sw-<recipe>-<target>-<yyyymm>` so monthly refreshes update the same artifact via `mcp__cowork__update_artifact`. Check via `mcp__cowork__list_artifacts` first; if the slug exists, prefer `update_artifact` over `create_artifact`.
-
-Skeleton (~60 lines, Chart.js + Grid.js + one MCP call on load):
-
-```html
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>sw-teardown-target-202605</title>
-  <style>
-    :root { color-scheme: light; }
-    body { font: 14px/1.4 system-ui; margin: 0; padding: 16px; background: #fff; color: #111; }
-    header { display: flex; gap: 12px; align-items: baseline; margin-bottom: 12px; }
-    h1 { font-size: 16px; margin: 0; }
-    .meta { color: #6b7280; }
-    .grid-wrap { margin-top: 16px; }
-    .toolbar button { padding: 4px 10px; margin-right: 6px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; }
-    .toolbar button[aria-pressed="true"] { background: #2563eb; color: #fff; border-color: #2563eb; }
-  </style>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css" integrity="sha384-..." crossorigin="anonymous">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
-</head>
-<body>
-  <header>
-    <h1>Competitive teardown: target.com</h1>
-    <span class="meta">US | last 90 days | last_updated 2026-04-30</span>
-  </header>
-  <div class="toolbar" id="toolbar"></div>
-  <canvas id="channel-chart" height="200"></canvas>
-  <div class="grid-wrap" id="comp-grid"></div>
-  <script>
-    const COMPETITORS = ['target.com', 'rival-a.com', 'rival-b.com'];
-    const SORT_KEY = localStorage.getItem('sw-teardown-sort') || 'visits';
-    async function load() {
-      const ranks = await Promise.all(COMPETITORS.map(d =>
-        window.cowork.callMcpTool('mcp__similarweb__get-websites-website-rank',
-          { domain: d, country: 'ww', start_date: '2026-01-01', end_date: 'latest' })));
-      const rows = COMPETITORS.map((d, i) => ({ domain: d, rank: ranks[i]?.data?.[0]?.country_rank ?? null }));
-      new gridjs.Grid({ columns: ['Domain', 'Global rank'], data: rows.map(r => [r.domain, r.rank]), sort: true })
-        .render(document.getElementById('comp-grid'));
-    }
-    load().catch(e => { document.body.insertAdjacentHTML('beforeend', `<pre>${e.message}</pre>`); });
-  </script>
-</body>
-</html>
-```
-
-The runtime LLM fills in the actual SRI hashes (Cowork provides them in the iframe's CSP `integrity` directives), the real domain list, and the real call chain. The skeleton fixes the page STRUCTURE: head with three SRI-pinned CDN script tags, body with a toolbar + a Chart.js canvas + a Grid.js container, an async `load()` that pulls data via `window.cowork.callMcpTool`, and `localStorage` for user preferences.
-
-### Failure handling
-
-If `mcp__cowork__create_artifact` is unavailable (non-Cowork runtime, or the tool returns an error), emit a one-line note in the markdown `## Caveats` block: "Persistent dashboard skipped: artifact tool unavailable." The markdown answer continues unchanged. NEVER block the markdown delivery on artifact failures.
-
-If the Tier 2 `.jsx` write fails (no `Write` permission on the path, disk error), drop to Tier 1 silently; the recipe's markdown render is identical with or without the panel.
-
-### Hard rules
-
-- Markdown output ALWAYS renders. Tier 2 and Tier 3 are SUPPLEMENTAL.
-- NEVER include user-identifying or PII content in artifacts (CLAUDE.md global rule).
-- Persistent artifacts MUST self-contain: no external network calls beyond the 3 whitelisted CDNs, no localhost references, no Tailwind CDN.
-- Persistent artifacts MUST route all data through `window.cowork.callMcpTool`. `fetch` / `XHR` are blocked by CSP.
-- Slug pattern is `sw-<recipe>-<target-slug>-<yyyymm>`. Check existing artifacts via `mcp__cowork__list_artifacts` before creating; prefer `update_artifact` for refreshes.
+Tier 1 (markdown + Unicode bars, defined in section visualizations above) is the universal baseline and renders on every platform. Tier 2 (chat-side `.jsx` panels via the `Write` tool) and Tier 3 (persistent HTML artifacts via `mcp__cowork__create_artifact`) are Cowork-only and live in the separate `sw-foundation-render-cowork` skill, which loads only when the user asks for a dashboard or persistent view, or when a recipe's high-dimensionality trigger fires. Recipes that emit Tier 2 or Tier 3 cite that skill's sections by name.
 
 ## What this skill does NOT do
 
