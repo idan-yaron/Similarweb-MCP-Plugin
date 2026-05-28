@@ -175,6 +175,10 @@ Or drop `similarweb-claude-code-0.1.1.zip` into your Claude Code plugins directo
 
 The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.com/codex/plugins/build](https://developers.openai.com/codex/plugins/build). The bundle root contains `.agents/plugins/marketplace.json` and `plugins/similarweb/`, which is what `codex plugin marketplace add` expects.
 
+**Step 1.** Download `similarweb-codex-0.1.1.zip` from the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest).
+
+**Step 2.** From the directory containing the downloaded zip, run:
+
 ```bash
 unzip similarweb-codex-0.1.1.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
@@ -183,13 +187,13 @@ codex plugin add similarweb@similarweb-local
 
 The subcommand is `codex plugin add`, not `codex plugin install`. After install, `codex plugin list` shows `similarweb@similarweb-local (installed, enabled)` and a fresh `codex exec` session surfaces all ten user-facing `similarweb:sw-*` skills.
 
-The Codex bundle ships `plugins/similarweb/.mcp.json.template` for the MCP shape; rename to `.mcp.json` and fill in your `SIMILARWEB_API_KEY`, or configure the server in your global Codex MCP config.
+**Step 3 (MCP).** The Codex bundle ships `plugins/similarweb/.mcp.json.template` for the MCP shape; rename to `.mcp.json` and fill in your `SIMILARWEB_API_KEY`, or configure the server in your global Codex MCP config.
 
-**Sub-agents companion** (optional): per the Codex spec, sub-agents live in `~/.codex/agents/`. Three TOMLs ship in `similarweb-codex-subagents-0.1.1/`:
+**Sub-agents companion** (optional, source-build only): per the Codex spec, sub-agents live in `~/.codex/agents/` outside any plugin. The three TOMLs are NOT attached to the GitHub release to keep the downloads page focused on the four installable AI environments. To get them, clone the repo and run `python3 build.py --build`; the TOMLs will appear under `dist/similarweb-codex-subagents-0.1.1/`. Then:
 
 ```bash
 mkdir -p ~/.codex/agents
-cp similarweb-codex-subagents-0.1.1/*.toml ~/.codex/agents/
+cp dist/similarweb-codex-subagents-0.1.1/*.toml ~/.codex/agents/
 ```
 
 **Hooks limitation**: codex-cli 0.133.0-alpha.1 does not execute plugin hooks in `exec` sessions (verified live 2026-05-27). The `hooks/` directory ships for forward-compatibility; the capability-map summary the hooks would inject is discovered lazily by the foundation skills at runtime.
