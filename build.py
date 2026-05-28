@@ -57,8 +57,8 @@ CODEX_DEFAULT_PROMPTS = [
     "Audit chase.com Answer Engine Optimization posture",
 ]
 
-CODEX_MARKETPLACE_NAME = "similarweb-local"
-CODEX_MARKETPLACE_DISPLAY = "Similarweb (local)"
+CODEX_MARKETPLACE_NAME = "similarweb"
+CODEX_MARKETPLACE_DISPLAY = "Similarweb"
 
 CODEX_SKILL_INTERFACES = {
     "sw-aeo-audit": {
