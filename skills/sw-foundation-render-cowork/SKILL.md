@@ -25,6 +25,10 @@ Cowork supports three distinct render surfaces. Markdown is the primary contract
 
 Tiers 2 and 3 are defined below. Tier 1 stays in `sw-foundation-render`.
 
+## Derived-metric glossing (applies to every tier)
+
+Per sw-foundation-render section derived-metric glossing: any metric the plugin DERIVES (engagement-quality score, PPC cost-per-visit, HHI, share-of-union, persona Jaccard, affinity) MUST carry a plain-language gloss everywhere it is shown. In a panel or dashboard this means every KPI card, ladder row, or chart axis bound to a derived metric needs a caption / subtitle directly under the label AND a tooltip, stating what the number measures and its direction. A KPI card that shows a bare value like `Best engagement: 3.23` with only the winning brand underneath is the exact failure this rule exists to prevent: render it as label + value + a one-line gloss ("Engagement quality = pages-per-visit x non-bounce share; unitless, higher = stickier"). A superlative header ("Best engagement", "Reach leader", "Lowest PPC/visit") names the winner, never the metric; the gloss is still required when the metric is derived. Raw MCP metrics (visits, bounce rate, rank, revenue share) are self-explanatory and need no gloss.
+
 ## Tier 2: chat-side .jsx panels (inline, ephemeral)
 
 **Trigger.** One of:

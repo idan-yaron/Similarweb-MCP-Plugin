@@ -1,6 +1,6 @@
 ---
 name: sw-foundation-render
-description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries Similarweb MCP output rendering priors: intent-aware modes, citation block, error rendering, handoff JSON, expert heuristics, Unicode-bar visualizations. Helper sections cited by recipes are section citation block, section error-rendering, section handoff-json-schema, section expert-heuristics, section visualizations. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Cowork-specific rich-rendering tiers (chat-side jsx panels, persistent HTML artifacts) live in the separate sw-foundation-render-cowork skill. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
+description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries Similarweb MCP output rendering priors: intent-aware modes, citation block, error rendering, handoff JSON, expert heuristics, Unicode-bar visualizations. Helper sections cited by recipes are section citation block, section error-rendering, section handoff-json-schema, section expert-heuristics, section derived-metric glossing, section visualizations. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Cowork-specific rich-rendering tiers (chat-side jsx panels, persistent HTML artifacts) live in the separate sw-foundation-render-cowork skill. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
 user-invocable: false
 ---
 # sw-foundation-render: Similarweb MCP output rendering priors
@@ -37,7 +37,7 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 - **Caveats.** One bullet per real caveat (clamped windows, access denials, structural-zero rollups, brand absence, fallback modes). Drop duplicated context (window, country) the header already states. Drop "opt-in flag X not supplied" promotional lines: users see opt-in flags via `argument-hint` completion. Caveats are not for advertising features.
 - **Strategic insights (DEFEND / EXPOSE / PLAY).** 3 bullets, ~25 words each, `(confidence: HIGH | MEDIUM | LOW)` at end.
 - **NEXT MOVES.** 2 backtick-quoted natural-language questions, one-sentence rationale max each. See § conversational-tone below. Do NOT emit slash-commands or `--flag` syntax in NEXT MOVES.
-- **Output-render targets (v0.1.6):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
+- **Output-render targets (v0.1.7):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
 **1. Sources (single line, NOT a table, NOT collapsible).** Format:
 
@@ -142,7 +142,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -162,7 +162,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.6` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
+The `version` literal `0.1.7` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 
@@ -186,9 +186,9 @@ inventing a threshold.
 - Organic Search <20% on a content-heavy site = SEO underinvestment.
 - Any single channel >40% = concentration risk.
 
-**Derived metrics:**
-- Engagement quality score = `(1 - bounce_rate) * pages_per_visit` (higher = better).
-- Cost per visit (CAC proxy) = `ppc_spend / visits` (cross-domain comparable; not cross-category).
+**Derived metrics (each carries a canonical reader gloss; see § derived-metric glossing):**
+- Engagement quality score = `(1 - bounce_rate) * pages_per_visit`. Unitless index, higher = stickier. Reader gloss: "Pages per visit scaled by the share of visits that did not bounce; unitless, higher = stickier. Not a percentage; not comparable across very different site types."
+- Cost per visit (CAC proxy) = `ppc_spend / visits`. USD per visit, lower = more efficient. Reader gloss: "Monthly paid spend divided by visits; a rough customer-acquisition-cost proxy. Comparable across domains, NOT across categories."
 
 **Period-over-period verdict ladder (use on every delta computation):**
 - `|delta_pct| < 5%` -> WITHIN NOISE (do not invent root causes; report and stop).
@@ -214,6 +214,32 @@ inventing a threshold.
 - DO NOT introduce external-world speculation (algorithm-update dates, news events) unless the user supplied that context. If you must, label `UNCONFIRMED EXTERNAL HYPOTHESIS` and put it LAST.
 
 **Refusal-as-feature:** if signal is thin (no defensible hook, no recent data, no meaningful delta), REFUSE to render the recommendation section. A generic recommendation is worse than no recommendation. Render an `INSUFFICIENT SIGNAL` block with the explicit reason (e.g., "no winning SERP positions across audited keywords; no answer-box-adjacent features on any landing page; recommend re-run after domain accumulates SERP presence"). Sources line still ships.
+
+### § derived-metric glossing
+
+Any metric the plugin DERIVES (computes client-side, not returned verbatim by the MCP) MUST carry a plain-language gloss every place it is surfaced. A bare derived number is a usability bug: a reader who sees `Best engagement: 3.23` or `HHI: 1,101` has no idea what it means, what the unit is, or which direction is good. The raw MCP metrics (visits, bounce_rate, country_rank, revenue_share) are self-explanatory and do NOT need this; only the derived ones do.
+
+**The derived metrics that require a gloss:**
+
+| Metric | Formula | Unit / direction | One-line reader gloss |
+|--------|---------|------------------|------------------------|
+| Engagement quality score | `(1 - bounce_rate) * pages_per_visit` | unitless index, higher = stickier | "Pages per visit scaled by non-bounce share; unitless, higher = stickier. Not a %, not comparable across very different site types." |
+| PPC cost per visit (CAC proxy) | `ppc_spend / visits` | USD/visit, lower = more efficient | "Paid spend divided by visits; a rough customer-acquisition-cost proxy. Comparable across domains, not across categories." |
+| HHI (market concentration) | `sum(share_i^2) * 10000` over top-N | 0 to 10000, higher = more concentrated | "Herfindahl index from the top-N revenue shares; higher = more concentrated. From top-N only, so the true value is higher." |
+| Share of union (audience overlap) | `overlap_unique_visitors / union_unique_users` | %, higher = more duplication | "Percent of the two domains' combined unique audience that visits both; higher = more duplicated eyeballs." |
+| Persona Jaccard (interest overlap) | `intersection / union` of top interests | 0 to 1, higher = more similar | "Set-overlap of the two domains' top audience interests; 0 = no shared interests, 1 = identical." |
+| Affinity (similar-sites) | server-supplied 0 to 1 score | higher = more co-visited | "How strongly the two domains share visitors, per Similarweb's similar-sites model; higher = more co-visited." |
+
+**Where the gloss appears:**
+
+- **Markdown.** A one-line footnote on the metric's FIRST appearance (the `$/visit is a CAC proxy ...` footnote pattern already in sw-competitive-teardown is the model). One footnote per metric per output; do not repeat it on every row.
+- **Tier 2 / Tier 3 artifacts (per sw-foundation-render-cowork).** Every KPI card, ladder section, or chart axis that shows a derived metric MUST carry the gloss as a caption / subtitle directly under the label, AND in the chart tooltip. A KPI card titled "Best engagement" with a bare `3.23` is the exact failure this rule prevents: render the card as label + value + one-line gloss (e.g., subtitle "Engagement quality = pages-per-visit x non-bounce share; unitless, higher = stickier").
+- **Handoff JSON.** No gloss needed; the `data` schema documents the field. Glossing is a human-rendering concern only.
+
+**Hard rules:**
+- NEVER render a derived score as a bare number with no gloss anywhere a human reads it.
+- A superlative label ("Best engagement", "Reach leader", "Lowest PPC/visit") names the WINNER; it does NOT explain the METRIC. When the underlying metric is derived, the gloss is still required alongside the superlative.
+- The gloss states what the number measures and its direction, NOT the winning brand (the value/label already shows the winner).
 
 ### § visualizations
 

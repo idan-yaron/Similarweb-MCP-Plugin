@@ -1,6 +1,6 @@
 {
   "name": "similarweb",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output. Cross-platform (Claude Code, Codex, Cursor, Claude.ai).",
   "author": {
     "name": "Similarweb"
