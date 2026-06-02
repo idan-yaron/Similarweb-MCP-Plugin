@@ -185,7 +185,7 @@ Skeleton (~60 lines, Chart.js + Grid.js + one MCP call on load):
 </html>
 ```
 
-The runtime LLM fills in the actual SRI hashes (Cowork provides them in the iframe's CSP `integrity` directives), the real domain list, and the real call chain. The skeleton fixes the page STRUCTURE: head with three SRI-pinned CDN script tags, body with a toolbar + a Chart.js canvas + a Grid.js container, an async `load()` that pulls data via `window.cowork.callMcpTool`, and `localStorage` for user preferences.
+The runtime LLM fills in the actual SRI hashes (Cowork provides them in the iframe's CSP `integrity` directives), the real domain list, the real call chain, and the actual Similarweb MCP tool prefix (the skeleton uses the `mcp__similarweb__` placeholder; on Cowork the live prefix is connector-specific). The skeleton fixes the page STRUCTURE: head with three SRI-pinned CDN script tags, body with a toolbar + a Chart.js canvas + a Grid.js container, an async `load()` that pulls data via `window.cowork.callMcpTool`, and `localStorage` for user preferences.
 
 ## Failure handling
 

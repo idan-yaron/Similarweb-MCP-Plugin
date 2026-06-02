@@ -241,7 +241,7 @@ Persistent artifact per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL; mar
 5. Chart.js horizontal bars of `total_deduplicated_audience` per domain. Sorted descending; bars labeled with absolute audience count.
 6. Toolbar: "view mode" (matrix / sankey / dedup-bars), "sort by" (dedup / overlap-with-target). State in `localStorage`.
 
-**MCP tools (prefix `mcp__similarweb__`):** `get-websites-audience-overlap-agg` (single batched call; `domains` is the comma-joined set), `get-websites-deduplicated-audience` (looped per domain; live tool takes a single `domain`).
+**MCP tools (prefix `mcp__similarweb__`; substitute the prefix your session exposes for the Similarweb tools, which is connector-specific on Cowork):** `get-websites-audience-overlap-agg` (single batched call; `domains` is the comma-joined set), `get-websites-deduplicated-audience` (looped per domain; live tool takes a single `domain`).
 
 Page derives `share_of_union = overlap_unique_visitors / union_unique_users` client-side (server does NOT supply it; same rule as markdown render).
 

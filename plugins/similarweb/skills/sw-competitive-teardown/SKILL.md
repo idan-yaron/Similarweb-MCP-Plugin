@@ -311,7 +311,7 @@ Per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL to the markdown answer; 
 
 **Data binding contract (page calls these tools via `window.cowork.callMcpTool`):**
 
-The Similarweb MCP server prefix in this user's setup is `mcp__similarweb__`. The page MUST pass exactly these fully-qualified tool names in the `mcp_tools` array of the `create_artifact` call (Cowork uses this for permission gating):
+The Similarweb MCP server prefix is environment-specific (`mcp__similarweb__` for a standard `.mcp.json` install; a connector-specific id on Cowork). Substitute the prefix your session actually exposes for the Similarweb tools. The page MUST pass exactly these fully-qualified tool names in the `mcp_tools` array of the `create_artifact` call (Cowork uses this for permission gating):
 
 - `mcp__similarweb__get-websites-website-rank`
 - `mcp__similarweb__get-websites-traffic-and-engagement`

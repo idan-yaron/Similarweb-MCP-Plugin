@@ -307,7 +307,7 @@ Persistent artifact per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL; mar
 5. Grid.js sortable table. Columns: `rank`, `brand`, `revenue_share`, `market_share` (alias for `total_views_share`), `total_clicks`, `conversion_rate`, `last_updated`.
 6. Optional Chart.js pie (top-10 + "all others") when brand count > 25.
 
-**MCP tools (prefix `mcp__similarweb__`):** `get-categories-top-brands-agg`, `get-categories-performance-agg`.
+**MCP tools (prefix `mcp__similarweb__`; substitute the prefix your session exposes for the Similarweb tools, which is connector-specific on Cowork):** `get-categories-top-brands-agg`, `get-categories-performance-agg`.
 
 **localStorage:** `sw-market-top-n`, `sw-market-sort-by`, `sw-market-sort-order`.
 
