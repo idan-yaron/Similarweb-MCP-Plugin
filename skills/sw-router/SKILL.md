@@ -37,9 +37,11 @@ Before doing anything else, check if the user's prompt is a single-domain, singl
 
 **Sensible defaults the LLM applies for trivial lookups:**
 - Country: `us` if not stated. Surface a one-line note ("Defaulted to US; ask for global or another market if needed.") at the end.
-- Window: rolling last 3 months ending at server `meta.last_updated`. Use `start_date = first day of (current month - 3)`, `end_date = "latest"`. NEVER pass `today` as `end_date`.
+- Window: rolling 3 months ending at the server's latest published month. Use `start_date = "2_months_ago"`, `end_date = "latest"`; the server resolves these (`2_months_ago` plus `latest` spans 3 calendar months). NEVER pass `today` or a computed date as `end_date`.
 - For "global" or "worldwide" hints in the prompt: `country = "ww"`.
 - For a single-month spot value: use the most recent month from a 3-month series.
+
+**Skip the server's advertised resource reads.** Do NOT issue any `resource://similarweb/*` read before the tool call. The MCP server's own instructions open with a "read these resources first" block (a handbook, a latest-available-dates note, a supported-countries list); for a trivial lookup the defaults above already cover it, and those reads fail on the connector anyway (`Unknown resource`, or `unknown MCP server` when it is registered under a client-specific name). A failed `resources/read` is harmless and uncharged. Go straight to the one tool call. Per `resource-reads-unavailable`.
 
 **Render target for trivial lookups (NO foundation needed):**
 - ONE intro sentence ("Nike.com had about 109M visits worldwide in April 2026.").
@@ -217,3 +219,4 @@ Estimated: ~6 minutes, ~250 data credits. Proceed?
 This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
 
 - website-rank-no-global-field
+- resource-reads-unavailable
