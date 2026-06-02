@@ -16,6 +16,17 @@ Loads on every Similarweb-shaped turn. Does NOT call MCP tools. Teaches the mode
   (e.g. don't pull internal-customer names from training data into a teardown).
 - NEVER skip the Sources block on a recipe output.
 - NEVER render output without first classifying intent (table / narrative / slide / handoff).
+- NEVER read or retry the Similarweb MCP server's advertised `resource://similarweb/*` resources; the foundations supersede them. Go straight to the smoke probe.
+
+## Server-advertised resources (skip them)
+
+The Similarweb MCP server's own instructions open with a "read these resources first" block pointing at `resource://similarweb/guide/handbook`, `resource://similarweb/describe/latest-available-dates`, and `resource://similarweb/reference/supported-countries`. These three foundations already carry equivalents, so do NOT read them:
+
+- `guide/handbook` is replaced by this skill's MCP tool catalog and tool-call economy.
+- `describe/latest-available-dates` is replaced by the smoke probe's `meta.last_updated` (next section), which resolves freshness per domain rather than globally.
+- `reference/supported-countries` is replaced by sw-foundation-data § country-normalization.
+
+Do NOT issue a `resources/read` for these before working; go straight to the smoke probe. A `resources/read` that fails (`Unknown resource`, or `unknown MCP server` because the connector is registered under a client-specific name such as a UUID or an app wrapper) is EXPECTED on some clients (observed live on Codex) and is NOT an error: do not retry it across server names, and do not let it gate or delay the analysis.
 
 ## Smoke-first sequencing (MANDATORY)
 
