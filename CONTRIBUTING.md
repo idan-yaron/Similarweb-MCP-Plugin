@@ -64,17 +64,17 @@ The contract for which tier each recipe targets lives in `sw-foundation-render` 
 
 Before tagging a release:
 
-1. `python3 build.py --validate` passes (frontmatter, descriptions under cap, description pattern check, grounding ledger).
+1. `python3 build.py --validate` passes (frontmatter, descriptions under cap, description pattern check, grounding ledger, and the personal-data/secrets gate: connector ids, emails, absolute local paths, secrets, banned identity, and `.pii-blocklist` terms across every tracked file, with matches redacted in output).
 2. `python3 build.py --test` passes locally (stub-MCP behavioral contract).
 3. Re-run each grounded assertion's "Re-validation notes" block manually against the live MCP (or via an AI client session with MCP access). Update `tests/grounding-ledger.json` if any assertion's shape drifted. The `build.py --ground` mode is a stub today; the manual re-run is the contract.
 4. `python3 build.py --build` produces clean per-platform zips.
-5. `bash tests/translator/lint-pii.sh all` passes locally (no PII in shipped artifacts; `all` scans skills/, docs/, and root .md files).
+5. The personal-data/secrets gate runs automatically inside `build.py --validate` (step 1) and in CI, scanning every tracked file. The optional `tests/translator/lint-pii.sh` (gitignored, local) remains as a convenience for scanning a single directory against `.pii-blocklist` only; the `--validate` gate is the enforced contract and covers more (connector ids, emails, paths, secrets, identity, plus the blocklist).
 6. Bump `version` in `.claude-plugin/plugin.json` per semver. Do NOT bump for failed install attempts.
 7. Confirm grounding ledger has no `status: pending_manual` assertions blocking ship. The three acknowledged operator-required gaps (`auth-invalid-envelope-shape`, `partial-access-envelope-shape`, `aeo-tool-availability`) ship with caveats. Five additional forward-looking pending_manual entries (`keywords-competitors-exact-3-months`, `pages-tools-web-source-total`, `apps-tool-constraints`, `clicks-share-per-brand-only`, `keywords-overview-3-month-max`) do not block (their `depended_on_by` is empty). Document the acknowledged caveats in release notes.
 8. When uploading a new version of a same-named plugin to Cowork, UNINSTALL the old one first. Cowork uploads with `overwrite=false` and the marketplace API rejects same-name uploads, surfacing as the generic "Plugin validation failed."
 9. `git tag v<version>` and push (with user approval per the commit rule above).
 
-CI (`.github/workflows/release.yml`) runs `--validate` and `--build`, then publishes the platform zips as release assets.
+CI (`.github/workflows/release.yml`) runs `--validate` and `--build`, then publishes the platform zips as release assets. Because the personal-data/secrets gate lives in `--validate`, a leak fails the workflow before any bundle is attached.
 
 ## Phase 3 prep notes
 
