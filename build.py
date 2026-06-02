@@ -14,6 +14,7 @@ Python 3 stdlib only. Runs developer-side. Customers never invoke this.
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,48 @@ TEXT_EXTENSIONS = {".sh", ".py", ".md", ".json", ".yml", ".yaml", ".txt", ".toml
 TEXT_FILES = {".gitattributes", "LICENSE", "CONNECTORS.md", "README.md"}
 
 GROUNDED_BODY_HEADER = "## Grounded assertions"
+
+# --- Personal-data / secrets ship-gate ------------------------------------
+# Enforced by --validate, which CI runs on every PR and before the release
+# workflow attaches any bundle. The automated form of the manual pre-ship scan:
+# connector ids, emails, absolute local paths, secrets, the banned commit
+# identity, plus any term in the gitignored .pii-blocklist. Matched values are
+# redacted in output so a failing (public) CI log never re-leaks them.
+PII_SELF_EXCLUDE = {"build.py"}  # the scanner defines the patterns; skip it to avoid self-matches
+PII_SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".zip", ".pyc"}
+PII_EMAIL_ALLOWLIST = set()  # legitimate shipped emails (none today)
+PII_FALLBACK_ROOTS = [
+    "skills", "commands", "agents", "hooks", "plugins", ".agents",
+    ".claude-plugin", "README.md", "CONNECTORS.md", "CONTRIBUTING.md",
+    "docs/install-and-smoke-test.md",
+]
+PII_PATTERNS = [
+    (
+        "an account-specific MCP connector id",
+        re.compile(r"mcp__[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}__"),
+        "Use the mcp__similarweb__ placeholder; the runtime substitutes the live prefix.",
+    ),
+    (
+        "an absolute local filesystem path",
+        re.compile(r"(?:[A-Za-z]:\\Users\\|/Users/|/home/)[^\s\"'`)\]]+"),
+        "Strip machine-specific paths from shipped files.",
+    ),
+    (
+        "the banned commit identity",
+        re.compile(r"buzibully", re.IGNORECASE),
+        "The only public identity for this repo is idan-yaron (see feedback_git_author).",
+    ),
+    (
+        "a hardcoded API key or secret",
+        re.compile(
+            r"(?:api[_-]?key|secret|access[_-]?token|client[_-]?secret|password)"
+            r"[\"']?\s*[:=]\s*[\"']?(?!<)[A-Za-z0-9_\-]{16,}",
+            re.IGNORECASE,
+        ),
+        "Use a <placeholder>; never commit a real key or secret value.",
+    ),
+]
+PII_EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 CODEX_BRAND_COLOR = "#106DFC"
 CODEX_DISPLAY_NAME = "Similarweb"
@@ -183,6 +226,84 @@ def parse_frontmatter(skill_md_path):
         elif current_kind == "scalar-fold" and line.startswith("  "):
             fm[current_key] = (fm[current_key] + " " + stripped).strip()
     return fm, body
+
+
+def _load_pii_blocklist():
+    """Read the gitignored .pii-blocklist: case-insensitive substring terms, one
+    per line, '#' comments. Returns [(line_number, lowercased_term)]; empty if absent."""
+    path = REPO_ROOT / ".pii-blocklist"
+    if not path.is_file():
+        return []
+    terms = []
+    for idx, raw in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+        s = raw.strip()
+        if s and not s.startswith("#"):
+            terms.append((idx, s.lower()))
+    return terms
+
+
+def _shipped_files():
+    """Yield (relpath, Path) for tracked, shippable text files (the public surface).
+    Uses `git ls-files`; falls back to a fixed shipped-roots walk when git is
+    unavailable. Skips the scanner itself and binary assets."""
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "-z"], cwd=str(REPO_ROOT),
+            capture_output=True, text=True, check=True,
+        ).stdout
+        names = [n for n in out.split("\0") if n]
+    except (OSError, subprocess.CalledProcessError):
+        names = []
+        for root in PII_FALLBACK_ROOTS:
+            rp = REPO_ROOT / root
+            if rp.is_file():
+                names.append(root)
+            elif rp.is_dir():
+                names.extend(p.relative_to(REPO_ROOT).as_posix() for p in rp.rglob("*") if p.is_file())
+    for name in names:
+        if name in PII_SELF_EXCLUDE:
+            continue
+        p = REPO_ROOT / name
+        if p.suffix.lower() in PII_SKIP_SUFFIXES or not p.is_file():
+            continue
+        yield name, p
+
+
+def _redact(value, keep=6):
+    return value.strip()[:keep] + "***"
+
+
+def scan_personal_data():
+    """Return ERROR strings for personal/account-specific data in shipped files:
+    connector ids, emails, absolute local paths, secrets, the banned identity, or
+    any .pii-blocklist term. The automated form of the manual pre-ship scan; CI
+    runs --validate, so nothing ships unscanned. Matches are redacted in output."""
+    errors = []
+    blocklist = _load_pii_blocklist()
+    for relpath, path in _shipped_files():
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for i, line in enumerate(lines, start=1):
+            for label, rx, hint in PII_PATTERNS:
+                m = rx.search(line)
+                if m:
+                    errors.append(f"PERSONAL DATA: {relpath}:{i} looks like {label} ('{_redact(m.group(0))}'). {hint}")
+            for m in PII_EMAIL_PATTERN.finditer(line):
+                if m.group(0).lower() not in PII_EMAIL_ALLOWLIST:
+                    errors.append(
+                        f"PERSONAL DATA: {relpath}:{i} contains an email address "
+                        f"('{_redact(m.group(0))}'). Remove it, or add it to PII_EMAIL_ALLOWLIST if intentional."
+                    )
+            low = line.lower()
+            for idx, term in blocklist:
+                if term in low:
+                    errors.append(
+                        f"PERSONAL DATA: {relpath}:{i} matches .pii-blocklist entry #{idx} "
+                        f"(term redacted). Remove the blocklisted term before shipping."
+                    )
+    return errors
 
 
 def cmd_validate():
@@ -336,6 +457,8 @@ def cmd_validate():
                 f"plugin payload missing at plugins/similarweb/.codex-plugin/plugin.json. "
                 f"Layout drift in emit_codex."
             )
+
+    errors.extend(scan_personal_data())
 
     if errors:
         for e in errors:
