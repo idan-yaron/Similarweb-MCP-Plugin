@@ -54,7 +54,7 @@ Per sw-foundation-core § bulk-input-from-context. sw-page-mix is single-domain.
 
 | Step | Tool | Purpose |
 |------|------|---------|
-| 0 | `get-websites-website-rank` | Smoke + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = first day of current_month - 3`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. |
+| 0 | `get-websites-website-rank` | Smoke + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. |
 | 1 | `get-pages-popular-pages-agg` | Top URLs by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 25`. 3-month window. ~75 sw_coins. |
 | 2 | `get-pages-leading-folders-agg` | Top folders by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 15`. 3-month window. ~45 sw_coins. |
 
@@ -62,7 +62,7 @@ Default total cost: ~125 sw_coins (rank smoke + 25 pages + 15 folders).
 
 ## Step 5: Execute
 
-Step 0 runs first; derive effective `end_date` from its `meta.last_updated` per sw-foundation-data § window-resolution (`start_date = first day of (end_date_month - 2)`, so 3-month rolling). Steps 1 and 2 are independent given the resolved window; parallelize.
+Step 0 runs first; derive the effective window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`, so 3 calendar months) and read `meta.last_updated` from its response. Steps 1 and 2 are independent given the resolved window; parallelize.
 
 Client-side derivations after responses arrive:
 

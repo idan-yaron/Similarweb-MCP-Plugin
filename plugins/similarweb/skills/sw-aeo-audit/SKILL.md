@@ -77,7 +77,7 @@ Per sw-foundation-core § bulk-input-from-context. If `--keywords` was not suppl
 
 | Step | Tool | Purpose |
 |------|------|---------|
-| 1 | `get-websites-website-rank` | Smoke + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = first day of current_month - 3`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series |
+| 1 | `get-websites-website-rank` | Smoke + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series |
 | 2 | `get-keywords-seo-overview` | Branded vs unbranded clicks split + intent mix; addressable AEO market context |
 | 3 | `get-websites-serp-players-agg` | LOOPED per keyword (5-10 calls); brand's `traffic_share` + `serp_features` per keyword; competitive set |
 | 4 | `get-websites-landing-pages-agg` | Brand's organic landing pages; AEO-worthiness score per URL from answer-box-adjacent `serp_features` |

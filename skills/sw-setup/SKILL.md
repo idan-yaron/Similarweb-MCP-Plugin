@@ -23,7 +23,7 @@ Call each of these MCP tools (sequentially is fine; the cost is six cheap calls 
 
 | Category | MCP tool | Params |
 |----------|----------|--------|
-| websites | `get-websites-website-rank` | `{"domain": "google.com", "start_date": "<first day of current_month - 3>", "end_date": "latest"}` |
+| websites | `get-websites-website-rank` | `{"domain": "google.com", "start_date": "2_months_ago", "end_date": "latest"}` |
 | keywords | `get-keywords-overview` | `{"keyword": "similarweb"}` |
 | apps | `get-apps-search` | `{"term": "instagram"}` |
 | brands | `get-brands-search` | `{"domain": "amazon.com", "search_term": "apple"}` |

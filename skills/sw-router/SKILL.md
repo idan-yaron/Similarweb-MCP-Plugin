@@ -142,10 +142,10 @@ Cite the decision in ONE line, then list the planned calls:
 
 ```
 No specific recipe fits this question. Running a direct MCP plan:
-  - get-websites-website-rank(domain="google.com", country="ww", start_date=<first day of current_month - 3>, end_date="latest")
+  - get-websites-website-rank(domain="google.com", country="ww", start_date="2_months_ago", end_date="latest")
 ```
 
-Then execute. If a planned tool turns out inaccessible at runtime, drop it and note the skip in the Caveats block; do not exceed 3 calls for a typical direct-MCP question (the lead/contact enrichment carve-out below is the one exception, and it caps cost a different way). When the plan includes `get-websites-website-rank`, bound it to a known-safe window per sw-foundation-data § window-resolution (`start_date = first day of current_month - 3`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series. For "global rank" questions, pass `country: "ww"` and use the returned `country_rank` field (there is NO `global_rank` field per `website-rank-no-global-field`); for in-country rank, pass the ISO-2 country.
+Then execute. If a planned tool turns out inaccessible at runtime, drop it and note the skip in the Caveats block; do not exceed 3 calls for a typical direct-MCP question (the lead/contact enrichment carve-out below is the one exception, and it caps cost a different way). When the plan includes `get-websites-website-rank`, bound it to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series. For "global rank" questions, pass `country: "ww"` and use the returned `country_rank` field (there is NO `global_rank` field per `website-rank-no-global-field`); for in-country rank, pass the ISO-2 country.
 
 **Stop broadening once the answer is settled.** Branch C is a SHORT fallback, not an open-ended investigation. The moment a call returns the answer OR clearly establishes it is "not found", STOP and report what you have (including "not found"); note any early stop in Caveats. NEVER keep trying new domains, name variants, or filters hoping a later call lands. That broaden-and-retry loop (the failure that ran ~9 calls on a single lookup) is exactly what this guards against.
 
