@@ -35,28 +35,25 @@ Extend the `case` map above when a new alias is needed; recipes inherit by re-ci
 
 ### § window-resolution
 
-The Similarweb server clamps every date range to its most recent `meta.last_updated` (the latest published month). Passing `end_date: <today>` returns `VALIDATION_ERROR / Dates not in range`. Recipes that need a window MUST derive effective `end_date` from a cheap probe BEFORE issuing any windowed call.
+Windowed tools resolve relative date keywords server-side. Pass `start_date` and `end_date` as relative keywords (`latest`, `N_months_ago`, `N_days_ago`) directly to the real call: the server resolves them to concrete dates, clamps to its latest published month, and echoes the effective `start_date`/`end_date` plus `meta.last_updated` in the response. So recipes do NOT need a separate probe to resolve the window or learn freshness; the first real windowed call reports both. Live-grounded per `window-relative-keywords`.
 
-Canonical probe: `get-websites-website-rank` with the target domain and ISO-2 country. Doubles as a smoke test (null rank means abort) and returns `meta.last_updated` in YYYY-MM-DD. The probe is the cheapest tool in the catalog; recipes need it as Step 0 / 1 anyway.
+Canonical pattern (no client-side date math):
 
-**Bound the rank smoke to a known-safe window.** Default rank call returns a 36-month series at ~74 data credits. Only `meta.last_updated` is needed. Canonical pattern:
+- `end_date = "latest"` (server resolves to its latest published month).
+- `start_date = "N_months_ago"`, where N is the recipe's window length (default 3), CLAMPED to the tool's cap (rule 4).
 
-```bash
-START_DATE=$(date -d "$(date +%Y-%m-01) -3 month" +%Y-%m-%d)   # first day of current_month - 3
-END_DATE="latest"                                                # server resolves to meta.last_updated
-```
-
-`end_date="latest"` is the cleanest contract (~2-4 data credits per smoke call). If `"latest"` is ever rejected, fall back to `END_DATE=$(date -d "$(date +%Y-%m-01) -1 day" +%Y-%m-%d)` (last day of prior month). NEVER use `today`, first day of current month, or any value beyond the prior month's last day. The server 4xxs.
+Passing `end_date: <today>` or any month beyond the latest published month returns `VALIDATION_ERROR / Dates not in range`. `latest` and relative keywords sidestep this server-side; never compute and pass `today`.
 
 Rules:
 
-1. Set `end_date = meta.last_updated` from the rank smoke. Never `<today>`. Never a user-supplied future date.
-2. If the user supplied an explicit `end_date`, clamp to `meta.last_updated` (`end_date = min(user_end_date, meta.last_updated)`) and add a Caveat: "end_date clamped from <requested> to <meta.last_updated>; the server's latest published month is the ceiling."
-3. Default window length is rolling 3 months. Compute `start_date = end_date - 3 months` in YYYY-MM granularity. Recipes may override (e.g. 90 days) when they have a documented reason.
-4. Some tools (e.g. `get-keywords-seo-overview`, `get-websites-serp-players-agg`) reject windows wider than rolling 3 months with `VALIDATION_ERROR`. Do NOT widen past 3 months for those tools.
-5. **Single-month tools:** `get-websites-landing-pages-agg` with `granularity: "monthly"` accepts ONLY a one-calendar-month window (the most recent month). Pass `start_date = first day of effective_end_date's month`, `end_date = effective_end_date`. Use `granularity: "daily"` for the last 28 days when a finer window is needed. See `landing-pages-window-constraint`.
+1. Read the effective window and freshness from the first real call's `meta` (`meta.last_updated` plus the echoed `meta.request.start_date`/`end_date`). Use that `last_updated` for any client-side period math (period-over-period deltas) in the same turn.
+2. If the user named a specific historical month, pass it as an explicit `end_date`; the server still clamps to its latest published month. If `meta` shows a clamp, add a Caveat: "end_date clamped to <meta.last_updated>; the server's latest published month is the ceiling." Otherwise prefer `latest`.
+3. Default window length is rolling 3 months. Note `start_date="N_months_ago"` with `end_date="latest"` spans N+1 calendar months (both endpoints inclusive), so a 3-month window is `start_date="2_months_ago"`; a ~6-month window is `start_date="5_months_ago"`. Recipes may widen ONLY for tools without a 3-month cap.
+4. **Capped tools.** `get-keywords-overview`, `get-keywords-seo-overview`, `get-websites-serp-players-agg`, `get-websites-keywords-competitors-agg`, and `get-websites-similar-sites-agg` cap the window at rolling 3 months. The server resolves the relative keyword FIRST and enforces the cap SECOND, so anything over 3 months 400s (and `3_months_ago` is already 4 months, so it is rejected). Use `start_date="2_months_ago"` or narrower for these. Per `window-relative-keywords` and `keywords-overview-3-month-max`.
+5. **Single-month tools.** `get-websites-landing-pages-agg` with `granularity: "monthly"` accepts ONLY the most recent calendar month. Pass `start_date="latest"`, `end_date="latest"`, or use `granularity: "daily"` for the last 28 days. See `landing-pages-window-constraint`.
+6. **Shopper/categories family.** The schemas for `get-categories-performance-agg` and the shopper siblings (`get-categories-top-brands-agg`, `get-categories-top-keywords-agg`, `get-keywords-top-brands-agg`, `get-keywords-top-products-agg`) document explicit `YYYY-MM` dates only, but the server resolves relative keywords there too (live-confirmed). Pass `start_date="N_months_ago"`/`end_date="latest"` as elsewhere; if the relative form is ever rejected, fall back to explicit `YYYY-MM` derived from a prior call's `meta.last_updated`. Per `window-relative-keywords`.
 
-Recipes without a date-range surface (e.g. sw-audience-overlap, sw-competitive-teardown, sw-market-size's Amazon flow) ignore this section.
+Recipes whose first call has no date-range surface (e.g. sw-market-size's category-search) resolve dates only on their later windowed calls.
 
 ### § conversation-context
 
@@ -66,7 +63,7 @@ When a recipe runs in a conversation that already contains output from a prior r
 
 **Reuse rules:**
 
-1. **Rank smoke.** If a prior recipe was for the SAME target AND country AND its `last_updated` matches today's expected value (within the same monthly publish boundary), skip the `get-websites-website-rank` smoke call; reuse the cached rank from the prior recipe's output. Surface as a single-line Caveat: "Rank smoke skipped; reused from prior /sw-<recipe> for <target>."
+1. **Window and freshness.** If a prior recipe this session resolved a window for the SAME target AND country AND its `last_updated` matches today's expected publish boundary, reuse that window and `last_updated` rather than re-resolving on the current recipe's first call. Surface a single-line Caveat: "Window reused from prior /sw-<recipe> for <target>." Recipes that render rank (sw-competitive-teardown) may also reuse a prior rank value when present.
 
 2. **Competitor set.** If a prior recipe surfaced a competitor list (similar-sites discovery in /sw-competitive-teardown, --against in /sw-audience-overlap, --vs in /sw-competitive-teardown), and the current recipe needs competitors without explicit args supplied, reuse the prior set. Surface in a Caveat: "Competitor set reused from prior /sw-<recipe>: <list>." If explicit competitors are supplied this turn, ignore the prior set.
 
@@ -80,9 +77,9 @@ OPTIONAL; include only when the linkage is substantive (a SAME POND label connec
 
 **Hard rules:**
 - NEVER fabricate a prior-recipe finding. Only reference what literally appears in conversation context.
-- NEVER reuse rank data if the prior `last_updated` is older than the current expected last-published-month boundary.
+- NEVER reuse window or rank data if the prior `last_updated` is older than the current expected last-published-month boundary.
 - NEVER reference a prior recipe without naming it by slash-command form (e.g., "your earlier /sw-channel-mix run for adidas.com").
-- FAIL-SAFE: when in doubt, re-run the smoke. A redundant call is cheaper than a stale figure.
+- FAIL-SAFE: when in doubt, re-resolve via a fresh first call (or re-run the smoke for recipes that keep one). A redundant call is cheaper than a stale figure.
 - When no prior recipe ran in this session, skip this entire helper silently. Do NOT mention it.
 
 ## What this skill does NOT do
@@ -94,3 +91,4 @@ It does not call MCP tools, produce visible output, or override sw-config / any 
 This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
 
 - website-rank-no-global-field
+- window-relative-keywords
