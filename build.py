@@ -590,8 +590,8 @@ def emit_codex(manifest, version):
 
     Plugin payload: .codex-plugin/plugin.json with the full interface block, per-skill
     SKILL.md plus agents/openai.yaml (recipes get displayName + defaultPrompt; operators,
-    router, and foundations get policy-only), hooks/ with PLUGIN_ROOT path-var rewrite,
-    and .mcp.json.template with the standard {mcpServers: ...} wrapper. The optional
+    router, and foundations get policy-only), and .mcp.json.template with the standard
+    {mcpServers: ...} wrapper. The optional
     assets/codex-icon.png at repo root, when present, is embedded as the install-card
     composerIcon and logo (Codex-only; not rendered in the README).
 
@@ -642,7 +642,6 @@ def emit_codex(manifest, version):
         "license": manifest.get("license", "MIT"),
         "keywords": manifest.get("keywords", []),
         "skills": "./skills/",
-        "hooks": "./hooks/hooks.json",
         "interface": {
             "displayName": CODEX_DISPLAY_NAME,
             "shortDescription": manifest["description"],
@@ -674,10 +673,6 @@ def emit_codex(manifest, version):
         skill_target.mkdir()
         shutil.copy(path, skill_target / "SKILL.md")
         _write_codex_skill_openai_yaml(skill_target, name)
-
-    hooks_src = REPO_ROOT / "hooks"
-    if hooks_src.is_dir():
-        _copy_codex_hooks(hooks_src, plugin_root / "hooks")
 
     mcp_template = {
         "mcpServers": {
@@ -730,7 +725,6 @@ def _write_codex_readme(codex_root, plugin_name, version):
         f"    .codex-plugin/plugin.json          # plugin manifest with full interface block\n"
         f"    .mcp.json.template                 # MCP server shape (rename + fill in your key)\n"
         f"    assets/logo.png                    # Codex install-card icon\n"
-        f"    hooks/                             # SessionStart, UserPromptSubmit, Stop\n"
         f"    skills/                            # per-skill SKILL.md + agents/openai.yaml\n"
         f"```\n\n"
         f"## Do not edit by hand\n\n"
@@ -775,25 +769,6 @@ def _write_codex_skill_openai_yaml(skill_dir, skill_name):
     else:
         content = "policy:\n  allow_implicit_invocation: true\n"
     (agents_dir / "openai.yaml").write_text(content, encoding="utf-8")
-
-
-def _copy_codex_hooks(hooks_src, hooks_target):
-    """Copy hooks/ into the Codex bundle. hooks.json gets its CLAUDE_PLUGIN_ROOT
-    placeholder rewritten to PLUGIN_ROOT, the spec-canonical name per /codex/hooks
-    (Codex accepts both, but PLUGIN_ROOT is what the spec documents)."""
-    hooks_target.mkdir()
-    for item in hooks_src.iterdir():
-        if item.is_file():
-            content = item.read_text(encoding="utf-8")
-            if item.name == "hooks.json":
-                content = content.replace("${CLAUDE_PLUGIN_ROOT}", "${PLUGIN_ROOT}")
-            (hooks_target / item.name).write_text(content, encoding="utf-8")
-        elif item.is_dir():
-            sub = hooks_target / item.name
-            sub.mkdir()
-            for f in item.iterdir():
-                if f.is_file():
-                    shutil.copy(f, sub / f.name)
 
 
 def emit_codex_subagents(manifest, version):

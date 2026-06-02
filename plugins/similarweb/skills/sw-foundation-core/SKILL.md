@@ -291,3 +291,4 @@ This skill's behavior is live-validated against the following assertions in `tes
 - freshness-per-tool
 - cheap-probe-tool-per-category
 - website-rank-no-global-field
+- resource-reads-unavailable
