@@ -307,7 +307,7 @@ Persistent artifact per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL; mar
 5. Grid.js sortable table. Columns: `rank`, `brand`, `revenue_share`, `market_share` (alias for `total_views_share`), `total_clicks`, `conversion_rate`, `last_updated`.
 6. Optional Chart.js pie (top-10 + "all others") when brand count > 25.
 
-**MCP tools (prefix `mcp__b2421424-145a-4829-8eea-9a34e56b8ade__`):** `get-categories-top-brands-agg`, `get-categories-performance-agg`.
+**MCP tools (prefix `mcp__similarweb__`; substitute the prefix your session exposes for the Similarweb tools, which is connector-specific on Cowork):** `get-categories-top-brands-agg`, `get-categories-performance-agg`.
 
 **localStorage:** `sw-market-top-n`, `sw-market-sort-by`, `sw-market-sort-order`.
 
@@ -334,7 +334,7 @@ body{font:14px/1.4 system-ui;margin:0;padding:16px;background:#fff;color:#111}
 <div id="badge" class="b"></div>
 <canvas id="bar" height="320"></canvas><div id="grid"></div><canvas id="pie" height="280"></canvas>
 <script>
-const SW='mcp__b2421424-145a-4829-8eea-9a34e56b8ade__',CATEGORY_ID='10048700011',TLD='amazon.com';
+const SW='mcp__similarweb__',CATEGORY_ID='10048700011',TLD='amazon.com';
 const topN=parseInt(localStorage.getItem('sw-market-top-n')||'25',10);
 const tier=h=>h<1500?'fragmented':h<2500?'moderate':'concentrated';
 async function load(){

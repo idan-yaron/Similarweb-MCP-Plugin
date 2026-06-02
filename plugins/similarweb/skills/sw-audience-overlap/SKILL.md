@@ -241,7 +241,7 @@ Persistent artifact per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL; mar
 5. Chart.js horizontal bars of `total_deduplicated_audience` per domain. Sorted descending; bars labeled with absolute audience count.
 6. Toolbar: "view mode" (matrix / sankey / dedup-bars), "sort by" (dedup / overlap-with-target). State in `localStorage`.
 
-**MCP tools (prefix `mcp__b2421424-145a-4829-8eea-9a34e56b8ade__`):** `get-websites-audience-overlap-agg` (single batched call; `domains` is the comma-joined set), `get-websites-deduplicated-audience` (looped per domain; live tool takes a single `domain`).
+**MCP tools (prefix `mcp__similarweb__`; substitute the prefix your session exposes for the Similarweb tools, which is connector-specific on Cowork):** `get-websites-audience-overlap-agg` (single batched call; `domains` is the comma-joined set), `get-websites-deduplicated-audience` (looped per domain; live tool takes a single `domain`).
 
 Page derives `share_of_union = overlap_unique_visitors / union_unique_users` client-side (server does NOT supply it; same rule as markdown render).
 
@@ -275,7 +275,7 @@ body{font:14px/1.4 system-ui;margin:0;padding:16px;background:#fff;color:#111}
 <header><h1>Audience overlap: target.com + against-set</h1><span class="meta">US | last_updated 2026-04-30</span></header>
 <div id="badge" class="b"></div><div id="sankey"></div><div id="matrix" class="matrix"></div><canvas id="dedup" height="180"></canvas>
 <script>
-const SW='mcp__b2421424-145a-4829-8eea-9a34e56b8ade__';
+const SW='mcp__similarweb__';
 const DOMAINS=['target.com','rival-a.com','rival-b.com'],COUNTRY='us',START='2026-02-01',END='latest';
 const tier=s=>s>=0.40?'same-pond':s>=0.15?'adjacent':s>=0.05?'complementary':'disjoint';
 async function load(){

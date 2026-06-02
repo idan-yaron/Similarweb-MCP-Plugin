@@ -311,12 +311,12 @@ Per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL to the markdown answer; 
 
 **Data binding contract (page calls these tools via `window.cowork.callMcpTool`):**
 
-The Similarweb MCP server prefix in this user's setup is `mcp__b2421424-145a-4829-8eea-9a34e56b8ade__`. The page MUST pass exactly these fully-qualified tool names in the `mcp_tools` array of the `create_artifact` call (Cowork uses this for permission gating):
+The Similarweb MCP server prefix is environment-specific (`mcp__similarweb__` for a standard `.mcp.json` install; a connector-specific id on Cowork). Substitute the prefix your session actually exposes for the Similarweb tools. The page MUST pass exactly these fully-qualified tool names in the `mcp_tools` array of the `create_artifact` call (Cowork uses this for permission gating):
 
-- `mcp__b2421424-145a-4829-8eea-9a34e56b8ade__get-websites-website-rank`
-- `mcp__b2421424-145a-4829-8eea-9a34e56b8ade__get-websites-traffic-and-engagement`
-- `mcp__b2421424-145a-4829-8eea-9a34e56b8ade__get-traffic-channels-share`
-- `mcp__b2421424-145a-4829-8eea-9a34e56b8ade__get-websites-audience-overlap-agg`
+- `mcp__similarweb__get-websites-website-rank`
+- `mcp__similarweb__get-websites-traffic-and-engagement`
+- `mcp__similarweb__get-traffic-channels-share`
+- `mcp__similarweb__get-websites-audience-overlap-agg`
 
 Call pattern on page load: loop the per-domain tools in parallel (`Promise.all` over the comp set) and single-call the `-agg` tool. Cache results in `localStorage` (5-minute TTL; matches Cowork's read cache).
 
@@ -365,7 +365,7 @@ Call pattern on page load: loop the per-domain tools in parallel (`Promise.all` 
   <canvas id="overlap-bars" height="180"></canvas>
   <div id="sankey-wrap"></div>
   <script>
-    const SW = 'mcp__b2421424-145a-4829-8eea-9a34e56b8ade__';
+    const SW = 'mcp__similarweb__';
     const COMP_SET = ['target.com', 'rival-a.com', 'rival-b.com', 'rival-c.com'];
     const COUNTRY = 'us', START = '2026-02-01', END = 'latest';
     const sortBy = localStorage.getItem('sw-teardown-sort-by-column') || 'visits';

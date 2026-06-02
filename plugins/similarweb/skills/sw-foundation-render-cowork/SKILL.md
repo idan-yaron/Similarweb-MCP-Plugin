@@ -173,7 +173,7 @@ Skeleton (~60 lines, Chart.js + Grid.js + one MCP call on load):
     const SORT_KEY = localStorage.getItem('sw-teardown-sort') || 'visits';
     async function load() {
       const ranks = await Promise.all(COMPETITORS.map(d =>
-        window.cowork.callMcpTool('mcp__b2421424-145a-4829-8eea-9a34e56b8ade__get-websites-website-rank',
+        window.cowork.callMcpTool('mcp__similarweb__get-websites-website-rank',
           { domain: d, country: 'ww', start_date: '2026-01-01', end_date: 'latest' })));
       const rows = COMPETITORS.map((d, i) => ({ domain: d, rank: ranks[i]?.data?.[0]?.country_rank ?? null }));
       new gridjs.Grid({ columns: ['Domain', 'Global rank'], data: rows.map(r => [r.domain, r.rank]), sort: true })
@@ -185,7 +185,7 @@ Skeleton (~60 lines, Chart.js + Grid.js + one MCP call on load):
 </html>
 ```
 
-The runtime LLM fills in the actual SRI hashes (Cowork provides them in the iframe's CSP `integrity` directives), the real domain list, and the real call chain. The skeleton fixes the page STRUCTURE: head with three SRI-pinned CDN script tags, body with a toolbar + a Chart.js canvas + a Grid.js container, an async `load()` that pulls data via `window.cowork.callMcpTool`, and `localStorage` for user preferences.
+The runtime LLM fills in the actual SRI hashes (Cowork provides them in the iframe's CSP `integrity` directives), the real domain list, the real call chain, and the actual Similarweb MCP tool prefix (the skeleton uses the `mcp__similarweb__` placeholder; on Cowork the live prefix is connector-specific). The skeleton fixes the page STRUCTURE: head with three SRI-pinned CDN script tags, body with a toolbar + a Chart.js canvas + a Grid.js container, an async `load()` that pulls data via `window.cowork.callMcpTool`, and `localStorage` for user preferences.
 
 ## Failure handling
 
