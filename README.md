@@ -212,7 +212,7 @@ cp dist/similarweb-codex-subagents-0.1.10/*.toml ~/.codex/agents/
 
 #### Hooks limitation
 
-codex-cli 0.133.0-alpha.1 does not execute plugin hooks in `exec` sessions (verified live 2026-05-27). The `hooks/` directory ships for forward-compatibility; the capability-map summary the hooks would inject is discovered lazily by the foundation skills at runtime.
+codex-cli 0.133.0-alpha.1 does not execute plugin hooks in `exec` sessions (verified live 2026-05-27), and a later Codex build began running them at per-turn cost with no benefit, so the Codex bundle ships NO hooks as of v0.1.10. Hooks remain Cowork-only. The capability-map summary the hooks would inject is discovered lazily by the foundation skills at runtime.
 
 </details>
 

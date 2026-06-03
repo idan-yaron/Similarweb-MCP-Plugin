@@ -213,10 +213,6 @@ The Codex bundle is a spec-compliant Codex MARKETPLACE per [developers.openai.co
 plugins/similarweb/.codex-plugin/plugin.json                (plugin manifest with full interface block)
 plugins/similarweb/.mcp.json.template                       (template; rename to .mcp.json after filling)
 plugins/similarweb/assets/logo.png                          (install-card icon and logo)
-plugins/similarweb/hooks/hooks.json                         (SessionStart, UserPromptSubmit, Stop)
-plugins/similarweb/hooks/scripts/session-start.sh
-plugins/similarweb/hooks/scripts/user-prompt-hint.sh
-plugins/similarweb/hooks/scripts/stop.sh
 plugins/similarweb/skills/sw-aeo-audit/SKILL.md
 plugins/similarweb/skills/sw-aeo-audit/agents/openai.yaml
 ... (13 skills, each with its own agents/openai.yaml)
@@ -266,7 +262,7 @@ After install, the plugin appears in `codex plugin list` under marketplace `simi
 
 ### Install (fallback: per-skill copy)
 
-If your Codex version does not support local marketplaces, unzip the bundle and copy each `plugins/similarweb/skills/sw-*/` folder into `~/.codex/skills/`. This skips the install card, hooks, and marketplace registration. The skills still trigger via natural language; the per-skill `agents/openai.yaml` carries the `policy.allow_implicit_invocation` flag Codex needs.
+If your Codex version does not support local marketplaces, unzip the bundle and copy each `plugins/similarweb/skills/sw-*/` folder into `~/.codex/skills/`. This skips the install card and marketplace registration. The skills still trigger via natural language; the per-skill `agents/openai.yaml` carries the `policy.allow_implicit_invocation` flag Codex needs.
 
 Do NOT unzip the entire bundle into `~/.codex/plugins/sw/`. Codex's plugin loader resolves plugins only through marketplace registration; a manually-placed plugin directory under `~/.codex/plugins/` is silently ignored (no error, no listing in `codex plugin list`, no skill discovery).
 
@@ -310,7 +306,7 @@ Look for: the 10-channel taxonomy table, a delta column (current vs prior), an i
 - Codex slash-command surface varies by version; if `/sw-config` is not accepted, invoke by saying "run sw-config" or "show similarweb config" and let the router dispatch.
 - Per-skill `policy.allow_implicit_invocation: true` causes the router and recipes to fire on natural-language prompts. If your Codex policy disables implicit invocation, invoke each recipe by name.
 - Sub-agents are NOT bundled with the plugin (Codex spec puts them outside plugins). Install the companion artifact separately to get them.
-- **Hooks are no-ops on codex-cli 0.133.0-alpha.1**: the bundle ships `SessionStart`, `UserPromptSubmit`, and `Stop` hook scripts for forward-compatibility with future Codex versions and Cowork parity, but live probes against codex-cli 0.133.0-alpha.1 show no hook execution and no hook output in session rollouts. The capability-map summary those hooks would inject is instead discoverable lazily via the foundation skills at runtime. None of the OpenAI-bundled or curated plugins ship hooks today; we will revisit when Codex documents hook execution in `exec` mode.
+- **The Codex bundle ships no hooks (as of v0.1.10)**: hooks were no-ops on codex-cli 0.133.0-alpha.1 (live probes showed no hook execution or output in `exec` rollouts), and a later Codex build began running them at per-turn cost with no benefit, so the Codex bundle omits `hooks/` entirely. Hooks remain Cowork-only. The capability-map summary those hooks would inject is discovered lazily via the foundation skills at runtime. We will revisit Codex hooks if a future codex-cli documents and reliably executes hook output in `exec` mode.
 
 ### Troubleshooting
 
