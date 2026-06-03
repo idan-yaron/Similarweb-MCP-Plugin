@@ -263,17 +263,6 @@ Field semantics:
 - **`get-gen-ai-campaign-analysis-prompts` access-denied at runtime AND `--campaign-id` was supplied**: skip Step 5; OMIT the `## Direct AI-engine signal` section; add Caveat: "AEO direct-signal tool not accessible on this plan; continuing with proxy audit." `direct_ai_signal` is `null` in handoff.
 - **All keyword SERP calls fail with 5xx** (Step 3 entirely down): skip the `## Per-keyword SERP landscape` and `### Top 5 keywords to defend` sections; add Caveat. SEO context + AI-citation-worthy pages still ship.
 
-## Export options (Cowork-only)
-
-When the runtime is Cowork, the recipe output can be exported via connectors declared in `CONNECTORS.md`. The recipe does NOT bundle these targets; it calls them via the `Skill` tool at runtime. Each export is opt-in: the user must ask for it in natural language. The recipe never auto-exports.
-
-- "Build me a deck of this AEO audit" -> `~~deck` (pptx by default). Layouts: title slide, AEO-score breakdown, Per-keyword SERP landscape, AI-citation-worthy pages, Top 5 pages to optimize, Strategic insights.
-- "Export the AEO-score breakdown to a spreadsheet" -> `~~spreadsheet` (xlsx by default). Tabs: per-keyword SERP, landing-page candidates, brand SERP features.
-- "Send this AEO audit to my team in chat" -> `~~chat` (slack-by-salesforce by default).
-- "Save as PDF" -> `~~doc` (pdf by default).
-
-If a connector is not configured, the recipe surfaces a one-line fallback: "To export this to <category>, install a <category> plugin via Cowork Customize > Plugins."
-
 ## Grounded assertions
 
 This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.

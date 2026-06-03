@@ -100,7 +100,7 @@ CODEX_DEFAULT_PROMPTS = [
     "Audit chase.com Answer Engine Optimization posture",
 ]
 
-CODEX_MARKETPLACE_NAME = "similarweb"
+CODEX_MARKETPLACE_NAME = "Similarweb"
 CODEX_MARKETPLACE_DISPLAY = "Similarweb"
 
 CODEX_SKILL_INTERFACES = {
@@ -170,16 +170,66 @@ def load_plugin_manifest():
         return json.load(f)
 
 
-def list_skills():
-    """Return list of (skill_name, skill_md_path) tuples."""
+COWORK_ONLY_SKILLS = {"sw-foundation-render-cowork"}
+
+
+def list_skills(exclude_cowork_only=False):
+    """Return list of (skill_name, skill_md_path) tuples. Cowork-only skills are
+    included by default; non-Cowork bundles pass exclude_cowork_only=True."""
     skills = []
     for skill_dir in sorted(SKILLS_DIR.iterdir()):
         if not skill_dir.is_dir():
+            continue
+        if exclude_cowork_only and skill_dir.name in COWORK_ONLY_SKILLS:
             continue
         skill_md = skill_dir / "SKILL.md"
         if skill_md.exists():
             skills.append((skill_dir.name, skill_md))
     return skills
+
+
+def strip_cowork_sections(text):
+    """Drop Cowork-only tier sections from a skill body for non-Cowork bundles.
+    A Cowork section is any top-level heading that starts with "## Cowork" or carries a
+    "(Cowork-only)" tag (recipe Cowork sections, "## Export options (Cowork-only)", and
+    sw-config's schedule-grounding step); it runs to the line before the next top-level
+    heading (or EOF). Any standalone line carrying a "(Cowork-only)" tag (e.g. a routing
+    bullet that references a Cowork-only step) is also dropped. Frontmatter and
+    "## Grounded assertions" are not Cowork headings, so they pass through unchanged. Splitting and rejoining on the newline
+    character preserves the source line endings (any CR stays attached to its line)."""
+    out = []
+    skipping = False
+    for line in text.split("\n"):
+        if line.startswith("## "):
+            skipping = line.startswith("## Cowork") or "(Cowork-only)" in line
+            if skipping:
+                continue
+        if skipping:
+            continue
+        if "(Cowork-only)" in line:
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def _copy_skills(skills_target, exclude_cowork_only, strip_cowork, write_openai_yaml=False):
+    """Copy skill SKILL.md files into a bundle's skills dir (already created by the
+    caller). Non-Cowork bundles drop the Cowork-only skill and strip Cowork tier
+    sections from each body. The Cowork bundle copies raw bytes so its skills stay
+    byte-identical to source."""
+    for name, path in list_skills(exclude_cowork_only=exclude_cowork_only):
+        skill_target = skills_target / name
+        skill_target.mkdir()
+        dest = skill_target / "SKILL.md"
+        if strip_cowork:
+            with open(path, "r", encoding="utf-8", newline="") as f:
+                text = f.read()
+            with open(dest, "w", encoding="utf-8", newline="") as f:
+                f.write(strip_cowork_sections(text))
+        else:
+            shutil.copy(path, dest)
+        if write_openai_yaml:
+            _write_codex_skill_openai_yaml(skill_target, name)
 
 
 def parse_frontmatter(skill_md_path):
@@ -472,6 +522,29 @@ def cmd_validate():
                 f"hooks/ directory (Codex hooks dropped in v0.1.10; hooks are Cowork-only). "
                 f"Re-run build.py --build."
             )
+        skills_mirror = plugin_at.parent.parent / "skills"
+        for cw in COWORK_ONLY_SKILLS:
+            if (skills_mirror / cw).exists():
+                errors.append(
+                    f"{skills_mirror / cw}: Cowork-only skill must not ship in the Codex "
+                    f"bundle (v0.1.11; it is Cowork-only, filtered by emit_codex). "
+                    f"Re-run build.py --build."
+                )
+        for skill_md in sorted(skills_mirror.glob("*/SKILL.md")):
+            try:
+                _, body = parse_frontmatter(skill_md)
+            except ValueError:
+                body = skill_md.read_text(encoding="utf-8")
+            offenders = [
+                ln.strip()[:70] for ln in body.split("\n")
+                if ln.startswith("## Cowork") or "(Cowork-only)" in ln or "mcp__cowork__" in ln
+            ]
+            if offenders:
+                errors.append(
+                    f"{skill_md}: Codex bundle still carries Cowork-tier content (v0.1.11 "
+                    f"strips it from non-Cowork bundles): {offenders[:3]}. strip_cowork_sections "
+                    f"missed it; check the heading convention and re-run build.py --build."
+                )
 
     errors.extend(scan_personal_data())
 
@@ -548,10 +621,7 @@ def emit_cowork(manifest, version):
         json.dump(manifest, f, indent=2)
     skills_target = target_dir / "skills"
     skills_target.mkdir()
-    for name, path in list_skills():
-        skill_target = skills_target / name
-        skill_target.mkdir()
-        shutil.copy(path, skill_target / "SKILL.md")
+    _copy_skills(skills_target, exclude_cowork_only=False, strip_cowork=False)
     commands_src = REPO_ROOT / "commands"
     if commands_src.is_dir():
         shutil.copytree(commands_src, target_dir / "commands")
@@ -582,10 +652,7 @@ def emit_claude_code(manifest, version):
         json.dump(manifest, f, indent=2)
     skills_target = target_dir / "skills"
     skills_target.mkdir()
-    for name, path in list_skills():
-        skill_target = skills_target / name
-        skill_target.mkdir()
-        shutil.copy(path, skill_target / "SKILL.md")
+    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True)
     commands_src = REPO_ROOT / "commands"
     if commands_src.is_dir():
         shutil.copytree(commands_src, target_dir / "commands")
@@ -683,11 +750,7 @@ def emit_codex(manifest, version):
 
     skills_target = plugin_root / "skills"
     skills_target.mkdir()
-    for name, path in list_skills():
-        skill_target = skills_target / name
-        skill_target.mkdir()
-        shutil.copy(path, skill_target / "SKILL.md")
-        _write_codex_skill_openai_yaml(skill_target, name)
+    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True, write_openai_yaml=True)
 
     mcp_template = {
         "mcpServers": {
@@ -812,10 +875,7 @@ def emit_cursor(manifest, version):
         json.dump(marketplace, f, indent=2)
     skills_target = cursor_plugin_dir / "skills"
     skills_target.mkdir()
-    for name, path in list_skills():
-        skill_target = skills_target / name
-        skill_target.mkdir()
-        shutil.copy(path, skill_target / "SKILL.md")
+    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True)
     commands_src = REPO_ROOT / "commands"
     if commands_src.is_dir():
         shutil.copytree(commands_src, cursor_plugin_dir / "commands")
@@ -868,8 +928,9 @@ def emit_claude_ai(manifest, version):
     """claude-ai: per-skill zips, strip allowed-tools + argument-hint, enforce 1024-char description cap."""
     target_dir = DIST_DIR / f"similarweb-claude-ai-{version}"
     _prepare_target_dir(target_dir)
-    for name, path in list_skills():
+    for name, path in list_skills(exclude_cowork_only=True):
         fm, body = parse_frontmatter(path)
+        body = strip_cowork_sections(body)
         cleaned_fm = {k: v for k, v in fm.items() if k not in ("allowed-tools", "argument-hint")}
         desc = cleaned_fm.get("description", "")
         if len(desc) > CLAUDE_AI_DESCRIPTION_CAP:

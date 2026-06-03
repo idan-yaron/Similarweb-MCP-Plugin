@@ -215,17 +215,6 @@ Field semantics:
 - **Full country name passed**: normalize per sw-foundation-data § country-normalization before any call.
 - **User supplies 2-month window via --window**: ignore the override and use exactly 3 months (the keywords-competitors-agg constraint forces it); note in Caveats: "Window forced to exactly 3 months because keywords-competitors-agg requires it."
 
-## Export options (Cowork-only)
-
-When the runtime is Cowork, the recipe output can be exported via connectors declared in `CONNECTORS.md`. The recipe does NOT bundle these targets; it calls them via the `Skill` tool at runtime. Each export is opt-in: the user must ask for it in natural language. The recipe never auto-exports.
-
-- "Build me a deck of this keyword-gap analysis" -> `~~deck` (pptx by default). Layouts: title slide, Shared keywords, Competitor wins (gaps), Target wins, ROI ranking, Strategic insights.
-- "Export the keyword-gap table to a spreadsheet" -> `~~spreadsheet` (xlsx by default). Tabs: shared keywords, gap keywords (with volume + difficulty + CPC), target wins.
-- "Send this keyword gap to my team in chat" -> `~~chat` (slack-by-salesforce by default).
-- "Save as PDF" -> `~~doc` (pdf by default).
-
-If a connector is not configured, the recipe surfaces a one-line fallback: "To export this to <category>, install a <category> plugin via Cowork Customize > Plugins."
-
 ## Grounded assertions
 
 This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
