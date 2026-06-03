@@ -43,6 +43,8 @@ Before doing anything else, check if the user's prompt is a single-domain, singl
 
 **Skip the server's advertised resource reads.** Do NOT issue any `resource://similarweb/*` read before the tool call. The MCP server's own instructions open with a "read these resources first" block (a handbook, a latest-available-dates note, a supported-countries list); for a trivial lookup the defaults above already cover it, and those reads fail on the connector anyway (`Unknown resource`, or `unknown MCP server` when it is registered under a client-specific name). A failed `resources/read` is harmless and uncharged. Go straight to the one tool call. Per `resource-reads-unavailable`.
 
+**Country-coverage fallback (bounded).** The `us` default is not on every plan. If the single tool call comes back as a country-coverage gap for the resolved country, an HTTP 400 `client_error` whose `error.error_message` contains a country-coverage phrase (the live form is "no data for requested country"; a plan may also word it "country not available", "country not covered", or "no coverage for country"; case-insensitive), OR an HTTP 200 with empty `data` carrying the same wording, AND the resolved country is not already `ww`, issue EXACTLY ONE retry of the same call with `country = "ww"`, then render the brief answer from the `ww` result with a one-line note (e.g. "US is not on your plan, so this is worldwide." using the actual resolved country) shown INSTEAD of the defaulted-country note. Hard limits: ONE retry only (never loop), do NOT load any foundation, do NOT escalate to a recipe. If the resolved country was already `ww`, or the `ww` retry also fails, surface the original error in one line and stop (do NOT also emit the defaulted-country note). This fallback fires ONLY on the country-coverage message, so a plan where the resolved country returns data (HTTP 200 with rows) is unaffected: no retry, no note change, exactly one call. Per `country-coverage-gap-shape`.
+
 **Render target for trivial lookups (NO foundation needed):**
 - ONE intro sentence ("Nike.com had about 109M visits worldwide in April 2026.").
 - ONE table row OR one-line breakdown.
@@ -220,3 +222,4 @@ This skill's behavior is live-validated against the following assertions in `tes
 
 - website-rank-no-global-field
 - resource-reads-unavailable
+- country-coverage-gap-shape
