@@ -11,9 +11,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Validate
@@ -21,7 +21,7 @@ jobs:
       - name: Build all platform bundles
         run: python3 build.py --build
       - name: Create GitHub Release with the four platform zips as assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/similarweb-cowork-*.zip
