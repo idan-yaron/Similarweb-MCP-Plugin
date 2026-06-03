@@ -173,17 +173,6 @@ Field semantics:
 - **Full country name passed**: normalize per sw-foundation-data § country-normalization before any call.
 - **Nested folder rows in top 5 (parent + child both appear)**: render both rows; surface in Caveats: "Folder hierarchy contains nested rows (parent + child both surfaced); top-5 concentration may double-count parent traffic."
 
-## Export options (Cowork-only)
-
-When the runtime is Cowork, the recipe output can be exported via connectors declared in `CONNECTORS.md`. The recipe does NOT bundle these targets; it calls them via the `Skill` tool at runtime. Each export is opt-in: the user must ask for it in natural language. The recipe never auto-exports.
-
-- "Build me a deck of this content surface" -> `~~deck` (pptx by default). Layouts: title slide, Top URLs, Folder hierarchy, Concentration (HHI), Anchor pages, Strategic insights.
-- "Export the URL + folder table to a spreadsheet" -> `~~spreadsheet` (xlsx by default). Tabs: top URLs (share + visits), folder hierarchy, concentration metrics.
-- "Send this content surface to my team in chat" -> `~~chat` (slack-by-salesforce by default).
-- "Save as PDF" -> `~~doc` (pdf by default).
-
-If a connector is not configured, the recipe surfaces a one-line fallback: "To export this to <category>, install a <category> plugin via Cowork Customize > Plugins."
-
 ## Grounded assertions
 
 This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.

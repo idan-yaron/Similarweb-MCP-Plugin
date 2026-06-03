@@ -21,7 +21,6 @@ Inspect `$ARGUMENTS` (or whatever the AI client passes after `/sw-config`):
 - No args or `--show` => Step A
 - `--refresh` => Step B
 - `--reset` => Step C
-- `--schedule-grounding weekly` | `monthly` | `off` => Step D (Cowork-only)
 - Anything else => print usage hint and exit
 
 ## Step A: --show (default)
@@ -140,49 +139,6 @@ Refreshed. <N> tools accessible across <K> categories.
 ```
 Reset. Capability map cleared. Recipes will discover access lazily; run /sw-config --refresh for a thorough up-front probe.
 ```
-
-## Step D: --schedule-grounding [weekly|monthly|off] (Cowork-only)
-
-Opt-in. Default: no schedule active. Creates a Cowork scheduled task that re-validates the 10 highest-impact grounded assertions against a rotating pool of 20 public test domains. Drift is logged locally. No notifications fire unless the user explicitly enables them in Cowork settings.
-
-### When this sub-mode is appropriate
-
-- After installing the plugin in Cowork for production analysis work.
-- When unexplained MCP response-shape changes have appeared (e.g., a previously working tool returns null for a field a recipe expects).
-- After Similarweb announces an MCP server version bump.
-
-### What the scheduled task does
-
-A weekly (or monthly) cron that:
-
-1. Picks 10 grounded assertions from `tests/grounding-ledger.json` ordered by `fragility` (pending_manual first, then fragile, then validated).
-2. Rotates the test domain through this 20-brand public pool, diversified across 6 verticals (apparel, consumer tech, e-commerce SaaS, fintech, media/streaming, mass retail): nike.com, adidas.com, lululemon.com, underarmour.com, apple.com, samsung.com, bestbuy.com, sephora.com, shopify.com, stripe.com, payoneer.com, wise.com, revolut.com, monzo.com, spotify.com, netflix.com, amazon.com, ebay.com, walmart.com, target.com.
-3. Probes each assertion's documented MCP shape via the live `similarweb` MCP server, compares to `tests/grounded/<id>.md`.
-4. On drift, writes `~/.similarweb-plugin/drift-<YYYY-MM-DD>.md` containing: assertion id, observed shape, expected shape, fragility tier, and dependent recipes.
-5. NO push notifications. Drift surfaces silently in `~/.similarweb-plugin/`. `--show` summarizes the most recent drift report (if any) under the capability summary.
-
-### Implementation contract
-
-On `--schedule-grounding weekly` or `--schedule-grounding monthly`:
-
-1. Build a task payload: cadence ("every Monday 09:00 UTC" or "the 1st of each month 09:00 UTC") plus a natural-language probe script the Cowork agent re-interprets each fire.
-2. Call `mcp__scheduled-tasks__create_scheduled_task`. If the tool is unavailable (non-Cowork runtime), abort with: `Scheduled grounding requires Cowork. Use the manual checklist in CONTRIBUTING.md instead.`
-3. Write schedule metadata to `~/.similarweb-plugin/grounding-schedule.json` (`cadence`, `task_id`, `created_at`).
-4. Print: `Weekly (or monthly) grounding scheduled. Drift reports will appear in ~/.similarweb-plugin/drift-<date>.md when shape changes are detected.`
-
-On `--schedule-grounding off`:
-
-1. Read `grounding-schedule.json`. If missing, print `No grounding schedule active.` and exit.
-2. Cancel the Cowork scheduled task by `task_id`. If a cancel-style MCP tool is unavailable, instruct the user to remove the task from Cowork's scheduled-tasks UI.
-3. Move `grounding-schedule.json` to the recycle bin via the same SendToRecycleBin pattern as Step B.
-4. Print `Grounding schedule canceled.`
-
-### Failure handling
-
-- `create_scheduled_task` returns error: render one line citing the error, then suggest a different cadence or the manual `--refresh` path.
-- Cowork plugin uninstalled mid-schedule: the task survives at the Cowork level. The user cancels via `--schedule-grounding off` or Cowork's scheduled-tasks UI.
-- Drift report write fails (disk full, permission): emit a stderr warning; the schedule continues to run.
-- Non-Cowork runtime: abort per step 2 above. Never fall back to host-level cron, launchd, or Windows Task Scheduler; the contract is Cowork-only.
 
 ## Edge cases
 
