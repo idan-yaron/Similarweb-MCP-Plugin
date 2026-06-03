@@ -37,7 +37,7 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 - **Caveats.** One bullet per real caveat (clamped windows, access denials, structural-zero rollups, brand absence, fallback modes). Drop duplicated context (window, country) the header already states. Drop "opt-in flag X not supplied" promotional lines: users see opt-in flags via `argument-hint` completion. Caveats are not for advertising features.
 - **Strategic insights (DEFEND / EXPOSE / PLAY).** 3 bullets, ~25 words each, `(confidence: HIGH | MEDIUM | LOW)` at end.
 - **NEXT MOVES.** 2 backtick-quoted natural-language questions, one-sentence rationale max each. See § conversational-tone below. Do NOT emit slash-commands or `--flag` syntax in NEXT MOVES.
-- **Output-render targets (v0.1.11):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
+- **Output-render targets (v0.1.12):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
 **1. Sources (single line, NOT a table, NOT collapsible).** Format:
 
@@ -127,7 +127,7 @@ Four canonical patterns. Apply consistently:
       actually issued before the short-circuit took effect, not the full
       pre-planned call count).
 
-6. **Tool returned country-coverage gap (200 + empty data + "no data for requested country" envelope):** detect once per (tool, country) pair on the FIRST domain attempted. Render `n/a` in the affected country cells. Mark country-unavailable_this_run for this tool per § capability-gating. Pivot the recipe's country to ww for subsequent calls. Add ONE consolidated Caveats line: "Country `<X>` not on this plan; rendered worldwide. Affected tools: `<comma-separated list>`."
+6. **Tool returned country-coverage gap (HTTP 400 client_error, OR HTTP 200 with empty data, carrying a country-coverage message per sw-foundation-core § Country-coverage gap detection):** evaluated BEFORE Pattern 2 (a 400 carrying the country-coverage message is Pattern 6, not Pattern 2). Detect once per (tool, country) pair on the FIRST domain attempted. Render `n/a` in the affected country cells. Mark country-unavailable_this_run for this tool per § capability-gating. Pivot the recipe's country to ww for subsequent calls. Add ONE consolidated Caveats line: "Country `<X>` not on this plan; rendered worldwide. Affected tools: `<comma-separated list>`."
 
    If 2 or more required tools report country-coverage gap for the same country in this turn, ALSO add a higher-level header-line modifier: the recipe's header line context drops the country to `worldwide` instead of the user-supplied country, and the Executive read opens with a one-sentence acknowledgment that the country requested is not on this plan ("US data is not on your plan for the websites tools; this read is worldwide; reach out to your CSM if a country-specific view matters for the decision.").
 
@@ -142,7 +142,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -162,7 +162,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.11` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
+The `version` literal `0.1.12` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 
@@ -328,3 +328,4 @@ It does not call MCP tools, produce visible output, or override sw-config / any 
 This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
 
 - response-field-name-lookup
+- country-coverage-gap-shape

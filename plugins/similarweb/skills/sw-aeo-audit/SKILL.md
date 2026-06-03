@@ -51,6 +51,7 @@ Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in t
 2. **Branch**:
    - 200: cache the result; reuse this response for Step 4 Step 2 (the SEO overview for the first keyword) to avoid re-calling. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-website-rank` for the target domain, country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark `get-keywords-seo-overview` as inaccessible_this_run and ABORT (the recipe cannot ship an AEO audit without SEO-overview signal); render Caveat "AEO audit requires `get-keywords-seo-overview`; tool not accessible on this plan."
+   - Country-coverage gap (a 400 `client_error` or a 200-empty response carrying a country-coverage message, per sw-foundation-core § Country-coverage gap detection): do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat.
    - Other error: retry once. If still failing, mark `get-keywords-seo-overview` as fragile-this-run and proceed.
 3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
 
