@@ -75,7 +75,7 @@ Composing a NEXT MOVES bullet: derive from data findings in the render. Phrase a
 
 ### § error-rendering
 
-Six canonical patterns. Apply consistently:
+Seven canonical patterns. Apply consistently:
 
 1. **Tool returned null or empty payload:** render `n/a` in the affected
    cell. NEVER fabricate. NEVER infer from training data. The cell stays
@@ -102,9 +102,13 @@ Six canonical patterns. Apply consistently:
    social into Display Ads. Treat as structural-zero, not measured-zero."
 
 5. **Systemic auth failure.** Trigger: when the FIRST 2 required tools called
-   both return 403 with "missing the required claims" wording on the FIRST
-   domain attempted. This indicates an account-level claims problem, not a
-   per-domain restriction or transient error.
+   (drawn from the PRESENT subset per sw-foundation-core § tool-surface
+   presence) both return 403 with "missing the required claims" wording on
+   the FIRST domain attempted. This indicates an account-level claims
+   problem, not a per-domain restriction or transient error. When fewer than
+   2 REQUIRED tools are present-and-accessible in the first place (absences
+   and 403s counted together), this pattern's escalation fires via Pattern
+   7's aggregate-insufficiency clause instead.
 
    **Action:**
    1. Stop the recipe immediately. Do NOT continue with subsequent required tools.
@@ -131,6 +135,31 @@ Six canonical patterns. Apply consistently:
 
    If 2 or more required tools report country-coverage gap for the same country in this turn, ALSO add a higher-level header-line modifier: the recipe's header line context drops the country to `worldwide` instead of the user-supplied country, and the Executive read opens with a one-sentence acknowledgment that the country requested is not on this plan ("US data is not on your plan for the websites tools; this read is worldwide; reach out to your CSM if a country-specific view matters for the decision.").
 
+7. **Tool not exposed on this connector (planning-time absence per
+   sw-foundation-core § tool-surface presence, OR a call-time client-level
+   "No such tool available" / server-level "Unknown tool" error, message-gated
+   per `unknown-tool-error-shape`):** evaluated BEFORE Pattern 2, exactly as
+   Pattern 6 is (a client-level unknown-tool error is Pattern 7, never a
+   retryable Pattern 2 failure). Render "not exposed on this connector" in
+   the affected cell. Zero calls when detected at planning time; zero retries
+   when detected at call time; collapse sibling failures from the same batch
+   into ONE consolidated Caveats line: "Not exposed on this connector:
+   `<tool-1>`, `<tool-2>`. This can be a connector tool setting in your AI
+   client OR a plan module: check the connector's tool settings first; if the
+   tool is enabled there and still absent, ask your Similarweb account
+   contact about the module." Distinct from Pattern 3: a 403 denial means the
+   tool exists and the plan lacks claims (CSM remedy); absence is NOT proof
+   of a plan limitation, so the CSM line alone is the wrong remedy here. On
+   platforms where the unknown-tool wording is not yet grounded (per
+   `unknown-tool-error-shape-other-platforms`), call-time failures render the
+   hedged wording "could not reach `<tool>` in this session" under Pattern 2
+   handling with no absence claim; planning-time absence from a qualifying
+   enumeration still renders the full Pattern 7 text. Aggregate insufficiency:
+   when fewer than 2 of a recipe's REQUIRED tools are both present and
+   accessible (absences and 403s counted together), escalate per Pattern 5
+   semantics with the caveat naming BOTH causes instead of shipping a
+   multi-section-dropped report.
+
 A `## Caveats` block appears at the bottom of the recipe output if and only
 if any of these fired. If no errors, no Caveats block.
 
@@ -142,7 +171,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -162,7 +191,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.14` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
+The `version` literal `0.1.15` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 
@@ -329,3 +358,5 @@ This skill's behavior is live-validated against the following grounded assertion
 
 - response-field-name-lookup
 - country-coverage-gap-shape
+- unknown-tool-error-shape
+- unknown-tool-error-shape-other-platforms

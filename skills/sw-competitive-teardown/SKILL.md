@@ -36,14 +36,16 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-compe
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
+Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing (an unbounded call returns the multi-year series at ~10x the credits). Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 item 1; reuse it, never re-issue it.
-2. **Branch**:
+1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-websites-website-rank` absent: the smoke retargets to `get-websites-traffic-and-engagement` and rank rendering degrades; `get-websites-traffic-and-engagement` or `get-websites-traffic-channels` absent: drop the dependent sections and continue (the teardown never aborts on a single tool); OPTIONAL tools absent: skip with one consolidated caveat line. When fewer than 2 REQUIRED tools are present AND accessible (absences and 403s counted together), escalate INSUFFICIENT SIGNAL per § error-rendering Pattern 5 semantics instead of shipping a sections-dropped report. If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically.
+2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing (an unbounded call returns the multi-year series at ~10x the credits). Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 item 1; reuse it, never re-issue it.
+3. **Branch**:
    - 200: cache the rank result; this becomes the "rank smoke" data Step 4 references for end_date derivation. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-traffic-and-engagement` for the target, country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
+   - Client-level unknown-tool error ("No such tool available", or server "Unknown tool"; per `unknown-tool-error-shape`): the tool is not exposed on this connector. Do NOT retry; apply the item-1 outcomes (retarget the smoke, drop the tool) and add the consolidated caveat: "Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact." An "Input validation error" is NOT this case: the tool exists, fix the arguments.
    - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
-3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
+4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
 
 REQUIRED:
 - get-websites-website-rank
@@ -319,7 +321,7 @@ Per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL to the markdown answer; 
 
 **Data binding contract (page calls these tools via `window.cowork.callMcpTool`):**
 
-The Similarweb MCP server prefix is environment-specific (`mcp__similarweb__` for a standard `.mcp.json` install; a connector-specific id on Cowork). Substitute the prefix your session actually exposes for the Similarweb tools. The page MUST pass exactly these fully-qualified tool names in the `mcp_tools` array of the `create_artifact` call (Cowork uses this for permission gating):
+The Similarweb MCP server prefix is environment-specific (`mcp__similarweb__` for a standard `.mcp.json` install; a connector-specific id on Cowork). Substitute the prefix your session actually exposes for the Similarweb tools. Presence-filter the list per sw-foundation-core § tool-surface presence BEFORE substituting the prefix: drop any tool absent from the connector (the OPTIONAL overlap tool is the most commonly absent; its section then renders the "not exposed on this connector" placeholder); if `get-websites-website-rank` or `get-websites-traffic-and-engagement` is absent, skip the artifact entirely (stay Tier 1 with the skip caveat). Sections load independently (allSettled per sw-foundation-render-cowork). The page passes the surviving fully-qualified tool names in the `mcp_tools` array of the `create_artifact` call (Cowork uses this for permission gating):
 
 - `mcp__similarweb__get-websites-website-rank`
 - `mcp__similarweb__get-websites-traffic-and-engagement`
@@ -423,6 +425,7 @@ If a connector is not configured, the recipe surfaces a one-line fallback: "To e
 
 This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
+- unknown-tool-error-shape
 - mcp-tool-catalog-v1
 - agg-variant-cost-savings
 - partial-access-envelope-shape

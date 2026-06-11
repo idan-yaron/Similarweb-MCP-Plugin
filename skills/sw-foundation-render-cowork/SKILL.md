@@ -108,7 +108,7 @@ Field rules:
 - `id` is a kebab-case slug; must contain at least one letter or digit. Use the slug pattern `sw-<recipe>-<target>-<yyyymm>` so repeat invocations REUSE the same artifact via `mcp__cowork__update_artifact` instead of creating duplicates. Call `mcp__cowork__list_artifacts` first to detect an existing slug.
 - `html_path` is the absolute path the `Write` tool wrote. Do NOT pass content inline.
 - `description` is visible in the artifact panel header. Keep it under one line.
-- `mcp_tools` is the fully-qualified list of MCP tools the page will call via the JS bridge (see below). Cowork uses this for permission gating; missing tools fail at runtime.
+- `mcp_tools` is the fully-qualified list of MCP tools the page will call via the JS bridge (see below). Cowork uses this for permission gating; missing tools fail at runtime. Presence-filter this list at GENERATION time per sw-foundation-core § tool-surface presence (match unqualified names against the session's live list BEFORE substituting the prefix): never list a tool the connector does not expose. Minimum-viable-artifact rule: if the artifact's PRIMARY tool (the one its main section renders from) is absent, do NOT create the artifact; stay Tier 1 and emit the one-line skip caveat per Failure handling below.
 
 **CSP that the iframe enforces (verbatim):**
 
@@ -172,10 +172,11 @@ Skeleton (~60 lines, Chart.js + Grid.js + one MCP call on load):
     const COMPETITORS = ['target.com', 'rival-a.com', 'rival-b.com'];
     const SORT_KEY = localStorage.getItem('sw-teardown-sort') || 'visits';
     async function load() {
-      const ranks = await Promise.all(COMPETITORS.map(d =>
+      const results = await Promise.allSettled(COMPETITORS.map(d =>
         window.cowork.callMcpTool('mcp__similarweb__get-websites-website-rank',
           { domain: d, country: 'ww', start_date: '2026-01-01', end_date: 'latest' })));
-      const rows = COMPETITORS.map((d, i) => ({ domain: d, rank: ranks[i]?.data?.[0]?.country_rank ?? null }));
+      const rows = COMPETITORS.map((d, i) => ({ domain: d,
+        rank: results[i].status === 'fulfilled' ? (results[i].value?.data?.[0]?.country_rank ?? null) : null }));
       new gridjs.Grid({ columns: ['Domain', 'Global rank'], data: rows.map(r => [r.domain, r.rank]), sort: true })
         .render(document.getElementById('comp-grid'));
     }
@@ -186,6 +187,8 @@ Skeleton (~60 lines, Chart.js + Grid.js + one MCP call on load):
 ```
 
 The runtime LLM fills in the actual SRI hashes (Cowork provides them in the iframe's CSP `integrity` directives), the real domain list, the real call chain, and the actual Similarweb MCP tool prefix (the skeleton uses the `mcp__similarweb__` placeholder; on Cowork the live prefix is connector-specific). The skeleton fixes the page STRUCTURE: head with three SRI-pinned CDN script tags, body with a toolbar + a Chart.js canvas + a Grid.js container, an async `load()` that pulls data via `window.cowork.callMcpTool`, and `localStorage` for user preferences.
+
+Multi-section pages load each section independently (`Promise.allSettled` per section, never one `Promise.all` across sections): a tool that has vanished from the connector since the artifact was created rejects only its own section, which renders the placeholder "not exposed on this connector"; every other section still renders. The page-level catch is reserved for structural failures, never for a single tool's absence.
 
 ## Failure handling
 
@@ -200,6 +203,7 @@ If the Tier 2 `.jsx` write fails (no `Write` permission on the path, disk error)
 - Persistent artifacts MUST self-contain: no external network calls beyond the 3 whitelisted CDNs, no localhost references, no Tailwind CDN.
 - Persistent artifacts MUST route all data through `window.cowork.callMcpTool`. `fetch` / `XHR` are blocked by CSP.
 - Slug pattern is `sw-<recipe>-<target-slug>-<yyyymm>`. Check existing artifacts via `mcp__cowork__list_artifacts` before creating; prefer `update_artifact` for refreshes.
+- `mcp_tools` lists only tools present on the connector at generation time (presence-filtered on unqualified names per sw-foundation-core § tool-surface presence). The artifact's primary tool absent = no artifact (Tier 1 + skip caveat). Sections load independently; one vanished tool must never blank the page.
 
 ## What this skill does NOT do
 

@@ -42,11 +42,19 @@ version = caps.get("mcp_server_version", "unknown")
 state = caps.get("state", "lazy")
 tools = caps.get("tools_available", {})
 inaccessible = caps.get("tools_inaccessible", [])
+surface = caps.get("tool_surface", {})
+absent = caps.get("tools_absent", [])
+legacy = not surface
+legacy_absent = sorted(t for t, s in tools.items() if s is False and t not in inaccessible) if legacy else []
 print(f"Similarweb MCP capabilities (last updated {last_updated}, refresh_after {expires})")
 print(f"State: {state}")
+if surface:
+    print(f"Tool surface: {surface.get('count', '?')} tools observed {surface.get('observed_at', 'unknown')}")
 if tools:
     by_cat = collections.defaultdict(lambda: [0, 0])
     for tool, status in tools.items():
+        if tool in legacy_absent:
+            continue
         parts = tool.split("-")
         cat = parts[1] if len(parts) > 1 and parts[0] == "get" else "other"
         by_cat[cat][1] += 1
@@ -56,18 +64,27 @@ if tools:
         accessible, total = by_cat[cat]
         suffix = ""
         if accessible == 0:
-            suffix = " (not on plan)"
+            suffix = " (denied on this plan)"
         elif accessible < total:
             suffix = " (limited plan)"
-        print(f"  {cat:16s} {accessible}/{total} tools accessible{suffix}")
+        print(f"  {cat:16s} {accessible}/{total} probed tools accessible{suffix}")
 else:
     print("  (no full-probe data; lazy mode)")
 if inaccessible:
-    print(f"")
-    print(f"Tools observed as inaccessible during recipe runs:")
+    print("")
+    print("Denied during recipe runs or probes (403 claims; the tool exists on the connector):")
     for t in sorted(inaccessible):
         print(f"  - {t}")
-print(f"")
+if absent or legacy_absent:
+    print("")
+    print("Not exposed on this connector (absent from the tool list; NOT a claims denial):")
+    cur = surface.get("hash", "")
+    for e in sorted(absent, key=lambda x: x.get("name", "")):
+        stale = " [stale: tool surface changed; run /sw-config --refresh to re-check]" if e.get("observed_under") != cur else ""
+        print(f"  - {e.get('name', '?')}{stale}")
+    for t in legacy_absent:
+        print(f"  - {t} [legacy record; re-checked on the next enumerating run]")
+print("")
 print(f"MCP server version: {version}")
 PYEOF
 ```

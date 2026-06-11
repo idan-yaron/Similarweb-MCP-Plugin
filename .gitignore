@@ -8,6 +8,7 @@ dist/
 # Local-only authoring + planning artifacts (never push to public repo)
 CLAUDE.md
 docs/superpowers/
+docs/plans/
 docs/cowork-architecture-notes.md
 docs/codex-install-live-probe-*.md
 

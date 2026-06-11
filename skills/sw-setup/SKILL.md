@@ -19,7 +19,7 @@ Runs ONLY when `/sw-config --refresh` explicitly invokes it. No auto-trigger.
 
 ## Step 1: Probe one tool per category
 
-Call each of these MCP tools (sequentially is fine; the cost is six cheap calls one-time). FIRST check the client's live tool list: tool surfaces are module-gated and drift with server releases, so a probe tool may be ABSENT from the list entirely (observed live for the apps surface on plans without the Apps module). An absent tool is NOT called and NOT an error: record `tools_available[<tool>] = false`, note the category as `module_not_exposed` in working memory, and move on. If a category's documented probe tool is absent but a sibling tool for the same category exists in the live list (e.g. `get-apps-details` instead of `get-apps-search`), probe the sibling instead and record under the sibling's name.
+Call each of these MCP tools (sequentially is fine; the cost is six cheap calls one-time). FIRST resolve presence per sw-foundation-core § tool-surface presence: tool surfaces are module-gated and drift with server releases, so a probe tool may be ABSENT from the list entirely (observed live for the apps surface). An absent tool is NOT called and NOT an error: record it in `tools_absent` (stamped per the capability map schema; never `tools_available = false`, never `tools_inaccessible`) and move on. If a category's documented probe tool is absent but a sibling tool for the same category exists in the live list (e.g. `get-apps-details` instead of `get-apps-search`), probe the sibling instead and record the SIBLING's outcome in `tools_available` under the sibling's name; the absent canonical tool stays in `tools_absent`. `categories_available` includes a category iff some PRESENT tool for it returned 2xx; a category whose probe tool is absent with no present sibling is `module_not_exposed`, persisted as the `tools_absent` entry plus the category's exclusion from `categories_available` (no separate field).
 
 | Category | MCP tool | Params |
 |----------|----------|--------|
@@ -32,7 +32,10 @@ Call each of these MCP tools (sequentially is fine; the cost is six cheap calls 
 
 For each call:
 - Success (2xx with payload) => `tools_available[<tool>] = true`
-- Any non-2xx response (auth failure, access denied, validation error, server error) => record as `tools_available[<tool>] = false` if the response category is `client_error` (per `auth-invalid-envelope-shape`), AND append the tool name to `tools_inaccessible`. Mark `pending` if it's `server_error` or unparseable.
+- HTTP 403 carrying "missing the required claims" (or an equivalent access-denied message, per `auth-invalid-envelope-shape`) => `tools_available[<tool>] = false` AND append the tool name to `tools_inaccessible`. This is the ONLY outcome that appends to `tools_inaccessible` (the v0.1.13 rule in sw-foundation-core § capability-gating: a validation 400 recorded as a denial would poison the map).
+- Any other `client_error` response (e.g. a validation 400 such as "Dates not in range") => `tools_available[<tool>] = false` only; do NOT append to `tools_inaccessible`.
+- Client-level unknown-tool error on a name the list contained (message-gated per `unknown-tool-error-shape`) => treat as absence: record in `tools_absent`, leave it out of `tools_available`, never `tools_inaccessible`.
+- `server_error` or unparseable => `tools_available[<tool>] = "pending"`
 - Timeout or no response => `tools_available[<tool>] = "pending"`
 
 Recommended approach: invoke each MCP tool via the AI client's native MCP surface; record the outcome in working memory; parallelize when the client supports it.
@@ -54,15 +57,20 @@ caps = {
   "refresh_after": (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
   "state": "ready",  # one of: ready | auth_invalid | mcp_not_configured | probe_partial
   "tools_available": {
-    # populated from probe outcomes; example:
+    # populated from CALLED probe outcomes only; example (apps probed via the sibling get-apps-details):
     "get-websites-website-rank": True,
     "get-keywords-overview": True,
-    "get-apps-search": True,
+    "get-apps-details": True,
     "get-brands-search": False,
     "get-categories-search": True,
     "get-lead-enrichment-website": False,
   },
   "tools_inaccessible": ["get-brands-search", "get-lead-enrichment-website"],
+  "tools_absent": [
+    # absent-from-list tools observed this probe, stamped with the surface hash; example:
+    {"name": "get-apps-search", "observed_under": "<surface-hash>", "observed_at": "<now>"},
+  ],
+  "tool_surface": {"hash": "<surface-hash>", "count": 80, "observed_at": "<now>", "prefix": "<observed-prefix>"},
   "categories_available": ["websites", "keywords", "apps", "categories"],
 }
 path = os.path.expanduser("~/.similarweb-plugin/capabilities.json")
@@ -84,7 +92,7 @@ Exit silently. Return control to sw-config with no user-visible output; sw-confi
 
 - **`$HOME/.similarweb-plugin/` not writable**: catch the error from `mkdir`, log to stderr ("filesystem read-only; capabilities will not persist this session"), keep the probe results in conversation context only.
 - **All six probes return 5xx**: write capabilities.json with `tools_available: {}` and `state: "probe_partial"`. Next refresh retries fully.
-- **MCP server not configured in the client**: probe call raises a client-level error ("tool not found"). Skill catches, writes `capabilities.json` with `state: "mcp_not_configured"`, and exits. sw-config surfaces the configuration message.
+- **MCP server not configured in the client**: `mcp_not_configured` requires ZERO Similarweb-scoped names in the live enumeration, or enumeration impossible AND every probe raising the client-level unknown-tool error. When enumeration found a non-empty Similarweb surface or ANY probe returned 2xx, a client-level unknown-tool error on one probe means that TOOL is absent (record in `tools_absent` per Step 1), never `mcp_not_configured`. Only in the true not-configured case: write `capabilities.json` with `state: "mcp_not_configured"` and exit; sw-config surfaces the configuration message.
 - **Auth-invalid envelope** (any probe returns `error.category == "client_error"` with `status_code` in `{401, 403}` per `auth-invalid-envelope-shape`): write `capabilities.json` with `state: "auth_invalid"`. sw-config surfaces a re-auth prompt instead of attempting tool calls.
 
 ## Grounded assertions
@@ -95,3 +103,4 @@ This skill's behavior is live-validated against the following grounded assertion
 - partial-access-envelope-shape
 - cheap-probe-tool-per-category
 - mcp-tool-catalog-v1
+- unknown-tool-error-shape

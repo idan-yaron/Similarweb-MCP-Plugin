@@ -34,6 +34,7 @@ Every recipe issues exactly ONE single-call probe before any parallel batching b
 
 ### The smoke call
 
+- Presence first: before the smoke dispatches, the planning step applies § tool-surface presence (zero calls). A documented smoke tool that is absent from the live tool list retargets per that section's ladder; absence is NOT an error and NOT malformation.
 - ONE tool. ONE domain. ONE country. NO parallel siblings.
 - ALWAYS bounded: pass `start_date = "2_months_ago"`, `end_date = "latest"` (the known-safe rolling 3-month window). An unbounded `get-websites-website-rank` smoke returns the multi-year default series at roughly 10x the credits (~74 vs ~6).
 - Dispatch synchronously. Wait for the response before issuing any other call.
@@ -45,8 +46,9 @@ Every recipe issues exactly ONE single-call probe before any parallel batching b
 After the smoke probe returns:
 
 1. **200 OK**: proceed to the recipe's planned batching. Record the smoke result in conversation-context so the recipe does not re-fetch the same data later.
-2. **403 with "missing the required claims" wording**: do NOT proceed with the planned batches yet. Issue ONE secondary probe on a DIFFERENT required tool (one tool, one domain, one country). If that secondary probe also 403s with the same wording, treat as systemic auth failure: render sw-foundation-render § error-rendering Pattern 5 (INSUFFICIENT SIGNAL, capability-refresh as first NEXT MOVE) and STOP. If the secondary probe returns 200, proceed but mark the first tool as inaccessible_this_run (per § capability-gating).
-3. **Other non-2xx**: FIRST check for a country-coverage gap, a 400 `client_error` or a 200-empty response carrying a country-coverage message (per § Country-coverage gap detection / § Precedence). If so, do NOT retry; apply the § Skip + pivot rule (pivot to `ww`, re-smoke once at `ww`, surface the worldwide caveat). Otherwise (a genuine 5xx, timeout, or validation error WITHOUT a country-coverage message): retry once with a 2-second pause. On second failure, render the recipe's standard error path for that tool (§ error-rendering Pattern 2). The other planned batches may still proceed in case the failure was transient.
+2. **403 with "missing the required claims" wording**: do NOT proceed with the planned batches yet. Issue ONE secondary probe on a DIFFERENT required tool (one tool, one domain, one country; pick it from the PRESENT subset per § tool-surface presence). If that secondary probe also 403s with the same wording, treat as systemic auth failure: render sw-foundation-render § error-rendering Pattern 5 (INSUFFICIENT SIGNAL, capability-refresh as first NEXT MOVE) and STOP. If the secondary probe returns 200, proceed but mark the first tool as inaccessible_this_run (per § capability-gating).
+3. **Client-level unknown-tool error** (message-gated per `unknown-tool-error-shape`: the harness says "No such tool available", or the server says "Unknown tool" for an advertised name): the tool is not callable on this connector. Do NOT retry and do NOT issue a denial-confirmation probe for it; mark `absent_this_run[tool]`, retarget the smoke per § tool-surface presence, and continue. Evaluated BEFORE the country-coverage check in the next branch; the envelopes are disjoint (a client-level error carries no server envelope). An "Input validation error" is NOT this branch: the tool exists and the arguments are wrong; fix the call.
+4. **Other non-2xx**: FIRST check for a country-coverage gap, a 400 `client_error` or a 200-empty response carrying a country-coverage message (per § Country-coverage gap detection / § Precedence). If so, do NOT retry; apply the § Skip + pivot rule (pivot to `ww`, re-smoke once at `ww`, surface the worldwide caveat). Otherwise (a genuine 5xx, timeout, or validation error WITHOUT a country-coverage message): retry once with a 2-second pause. On second failure, render the recipe's standard error path for that tool (§ error-rendering Pattern 2). The other planned batches may still proceed in case the failure was transient.
 
 ### Anti-pattern (FORBIDDEN)
 
@@ -68,20 +70,67 @@ One synchronous round-trip (~1 second) on the success path. Negligible compared 
 | sw-keyword-opportunity | get-keywords-overview | the first keyword from the recipe args if supplied, else target's brand term; country=us |
 | sw-market-size | get-categories-search | the category-or-keyword-cluster argument; no country needed |
 
-If a recipe omits an explicit smoke tool, the planning step is malformed and the recipe should abort with a Caveats note pointing to this section.
+If a recipe omits an explicit smoke tool, the planning step is malformed and the recipe should abort with a Caveats note pointing to this section. (A documented smoke tool that is ABSENT from the live tool list is not malformation; it retargets per § tool-surface presence.)
 
 ## Capability map schema
 
 `$HOME/.similarweb-plugin/capabilities.json` is an OPTIONAL on-disk hint. Recipes proceed without it; the map is an APPEND-ONLY CACHE of observed access denials, built up lazily as recipes execute.
 
-Lazy-mode minimal shape: `{schema_version: 2, last_updated, tools_inaccessible: [...]}`. After `/sw-config --refresh` invokes sw-setup, the same file additionally carries `mcp_server_version`, `last_full_probe`, `refresh_after`, `state` (one of `ready | auth_invalid | mcp_not_configured | probe_partial` per `auth-invalid-envelope-shape`), `tools_available` (per-tool true/false/pending), and `categories_available`. Tools NOT in `tools_inaccessible` are assumed accessible until observed otherwise.
+Lazy-mode minimal shape: `{schema_version: 2, last_updated, tools_inaccessible: [...]}`. After `/sw-config --refresh` invokes sw-setup, the same file additionally carries `mcp_server_version`, `last_full_probe`, `refresh_after`, `state` (one of `ready | auth_invalid | mcp_not_configured | probe_partial` per `auth-invalid-envelope-shape`), `tools_available` (per-tool true/false/pending; CALLED probes only), and `categories_available`. Tools NOT in `tools_inaccessible` are assumed accessible until observed otherwise.
+
+**Presence fields (additive, schema_version stays 2; a missing field reads as empty):**
+
+- `tools_absent`: list of `{name, observed_under, observed_at}` entries: tools a recipe PLANNED and found absent from a qualifying live tool list (per § tool-surface presence). Planned-and-absent only, never the full catalog complement. One entry per unqualified name, upserted on re-observation (`observed_under` and `observed_at` refresh; no duplicate names). Absence is NEVER written to `tools_inaccessible` (that list is 403-claims only, per the v0.1.13 rule) and a claims denial is never written here.
+- `tool_surface`: `{hash, count, observed_at, prefix}`: a fingerprint of the observed surface. `hash` is sha256 over the newline-joined ASCII-ascending-sorted unique unqualified names (UTF-8); `count` is the unique-name count; `prefix` is informational only (never used for matching).
+
+**Read-path precedence (one contract; recipes, sw-setup, and sw-config all follow it):**
+
+1. Live list enumerable (qualifying evidence per § tool-surface presence): the live list is the SOLE presence authority; cached presence is ignored for gating and rewritten from observation.
+2. Not enumerable: presence is unknown. `tools_absent` entries whose `observed_under` matches the stored `tool_surface.hash` may advisorily skip OPTIONAL tools; they NEVER abort or skip a REQUIRED tool. Stamp-mismatched entries are quarantined by the mismatch itself (ignored; no separate quarantine pass, no deletion).
+3. A call-time unknown-tool error (per § tool-surface presence) overrides both for the current run.
+4. Legacy discriminator: a `tools_available` entry of `false` with no `tools_inaccessible` sibling, in a map that LACKS `tool_surface`, is a legacy absence record (the pre-presence sw-setup encoding): advisory-only, ignored when the live list is enumerable and contains the tool. In a map that carries `tool_surface`, false-without-sibling means a called probe failed for a non-denial reason (e.g. a validation 400) and is never read as absence.
+
+**Fingerprint maintenance (event-driven, never per-turn).** Compute the hash ONLY when: (a) the live unqualified-name count differs from the stored `tool_surface.count` (the count comparison is free in-context; the map is already read in Step 2), (b) a `tools_absent` write is about to happen, or (c) `/sw-config --show` or `--refresh` runs. An ordinary recipe turn on a stable surface computes nothing and writes nothing. The refresh suggestion ("The connector's tool surface changed since the last observation; claims denials may also be stale. Run /sw-config --refresh to re-probe.") renders ONCE per surface change: only when a prior non-empty hash exists and differs. A first write is silent. NEVER auto-probe; drift response stays user-consented. The map is account-agnostic: two different-plan connectors sharing one `$HOME` degrade the once-per-change suggestion to per-session; `/sw-config --refresh` is the recovery.
+
+**Canonical fingerprint snippet** (verbatim modulo the two REPLACE values; the bytes are pinned because the LLM re-writes code each run, the same reason the append-on-denial heredoc below is verbatim):
+
+```bash
+python3 - <<'PYEOF'
+import hashlib, json, os, tempfile, datetime
+NAMES = ["REPLACE_WITH_UNQUALIFIED_NAMES"]
+canon = "\n".join(sorted(set(NAMES)))
+h = hashlib.sha256(canon.encode("utf-8")).hexdigest()
+path = os.path.expanduser("~/.similarweb-plugin/capabilities.json")
+os.makedirs(os.path.dirname(path), exist_ok=True)
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        caps = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    caps = {"schema_version": 2, "tools_inaccessible": []}
+prev = caps.get("tool_surface", {}).get("hash", "")
+now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+caps["tool_surface"] = {"hash": h, "count": len(set(NAMES)), "observed_at": now,
+                        "prefix": "REPLACE_WITH_OBSERVED_PREFIX"}
+caps["last_updated"] = now
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    json.dump(caps, f, indent=2)
+os.replace(tmp, path)
+print("changed" if (prev and prev != h) else ("first" if not prev else "same"))
+PYEOF
+```
+
+Render the refresh suggestion only when the snippet prints `changed`. `tools_absent` upserts follow the same heredoc shape (read, upsert by `name`, atomic temp+rename); stamp each entry with the hash just computed.
 
 ## MCP tool catalog grouped by intent
 
 Note: the catalog below reflects the Similarweb MCP server as of the last
 grounded enumeration (2026-06-11, 80 tools) and drifts with server releases;
 the live tool list exposed by the client is always the source of truth for
-what exists. Tools the user lacks
+what exists. Presence is per-account and resolved at planning time per
+§ tool-surface presence (live list, zero calls); access denials are handled
+per § capability-gating. The catalog is a prior for intent mapping, quirks,
+and economics only. Tools the user lacks
 access to are filtered out at recipe execution time using
 `$HOME/.similarweb-plugin/capabilities.json`.
 
@@ -98,7 +147,7 @@ access to are filtered out at recipe execution time using
 | Audience overlap | `get-websites-audience-overlap-agg` | domain, domains (comma-joined string, 2-5 domains) | Returns 2^N-1 subset rows in a single batched call. |
 | Demographics | `get-websites-demographics-agg` | domain, country | Age + gender breakdown. |
 | Geography | `get-websites-geography-agg` | domain | Country share. |
-| Conversion rates | `get-websites-conversion-rates-agg` | domain, vertical | Vertical-specific. Presence varies by account: BOTH the -agg and non-agg variants were absent from the grounded connector's live tool list as of 2026-06-11 (present 2026-05-16). Verify the tool appears in the live tool list before planning it; if absent, treat as module_not_exposed and say so. |
+| Conversion rates | `get-websites-conversion-rates-agg` | domain, vertical | Vertical-specific. Presence varies by account (both variants absent from the grounded connector 2026-06-11, present 2026-05-16); resolve per § tool-surface presence. |
 | PPC spend | `get-websites-ppc-spend` | domain, country, window, currency | Returns estimated monthly PPC spend as a single scalar per month (no by-channel breakdown). |
 | SERP positions | `get-websites-serp-players-agg` | keyword, country | Domain rankings for a keyword. |
 | Landing pages | `get-websites-landing-pages-agg` | domain, source_channel | Top entry points by channel. |
@@ -115,10 +164,11 @@ access to are filtered out at recipe execution time using
 
 ### Apps-shaped queries
 
-The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (they are absent from the client's tool list rather than returning 403). On the grounded connector's live tool list (2026-06-11), `get-apps-details` was the ONLY `get-apps-*` tool exposed; the tools below were present on the 2026-05-16 enumeration and are expected only on plans with the full Apps module. Before planning any apps call, verify the tool name appears in the live tool list; if absent, treat the category as module_not_exposed and say so, do not attempt the call.
+The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (absent from the tool list rather than returning 403). On the grounded connector (2026-06-11) `get-apps-details` was the ONLY `get-apps-*` tool exposed; the remaining rows are full-Apps-module names from the 2026-05-16 enumeration. Resolve presence per § tool-surface presence before planning any apps call; absent means module_not_exposed, zero calls.
 
 | Intent | Tool | Key params |
 |--------|------|------------|
+| App metadata | `get-apps-details` | store (required, live-grounded 2026-06-11), plus the app identifier per the live schema |
 | Find an app | `get-apps-search` | term |
 | App downloads | `get-apps-downloads` | app_id, country, window |
 | App active users | `get-apps-active-users` | app_id, country, window |
@@ -173,6 +223,48 @@ If the user asks for "today" data and `meta.last_updated` is older than
 
 ## Helper sections (recipes reference these by name)
 
+### § tool-surface presence
+
+Presence ("does this tool exist on this connector?") is a gating axis SEPARATE from access (403 claims) and country coverage. It is the only axis that is free to detect: the AI client hands every session the connector's tool list at zero data credits. Detect it live at planning time; never spend a call to discover what the list already states. Grounded in `mcp-tool-catalog-v1` (the surface drifts per account and per release: 90 tools on 2026-05-16, 80 on 2026-06-11 on the same connector; plan-gating vs server drift is unresolved per `plan-gating-vs-server-drift`) and `unknown-tool-error-shape`.
+
+**Evidence rule (tri-state: present / absent / unknown).**
+
+- **Qualifying enumeration evidence** is a harness-provided artifact in the CURRENT session that lists the Similarweb server's tools as a closed list under one server prefix (on Claude Code: the session-start deferred-tools attachment, the same source `mcp-tool-catalog-v1` used). Qualification requires a sentinel quorum: at least 3 of these 4 unqualified names present in the artifact: `get-websites-website-rank`, `get-keywords-overview`, `get-brands-search`, `get-lead-enrichment-website`. Quorum failure, zero matching servers, or two-plus matching servers means presence is UNKNOWN (never absent) and no fingerprint is written.
+- **Discovery is asymmetric.** A successfully loaded tool schema (e.g. via the platform's tool-search mechanism) proves PRESENCE. A discovery miss proves NOTHING. Prior-session memory, `capabilities.json`, and this skill's catalog are never presence evidence in either direction.
+- **Canonical names.** Live names arrive platform-qualified (`mcp__similarweb__get-...`, or a client-specific id form). Match and store the UNQUALIFIED name (the substring after the last `__`), scoped to the one server that passed the quorum.
+
+**Ordering.** The presence pre-filter runs at planning time, BEFORE the capability-map read and BEFORE the smoke probe, consuming zero MCP calls. The claims filter (§ capability-gating) then quantifies over PRESENT tools only. (The sw-router Step 0 trivial path is exempt by design: it never runs a pre-filter; its only presence behavior is the call-time rule below.)
+
+**Outcomes.**
+
+- **Present**: plan normally.
+- **Absent** (qualifying evidence positively omits the name): the outcome inherits the recipe's documented DENIAL outcome for that same tool (degrade, pivot offer, ask-user, abort; each recipe's Step 2 pins these per REQUIRED tool), differing only in: zero calls, no denial-confirmation probe, no retry, Pattern 7 wording ("not exposed on this connector"), and persistence to `tools_absent` (capability map schema) instead of `tools_inaccessible`. Abort only where denial would abort.
+- **Unknown** (no qualifying evidence): skip the pre-filter entirely and proceed optimistically; call-time detection below is the only absence detector. Cached `tools_absent` entries may advisorily skip OPTIONAL tools, but NEVER abort or skip a REQUIRED tool from cache.
+
+**Smoke retarget ladder.** When the recipe's documented smoke tool is absent: promote the recipe's documented secondary-probe tool to smoke; if that is also absent, smoke the first PRESENT REQUIRED tool; when no REQUIRED tool is present, abort at planning time with zero calls (aggregate insufficiency below). The retarget preserves the claims-probe purpose of smoke-first; never skip the smoke because the documented tool is absent.
+
+**Call-time detection (message-gated per `unknown-tool-error-shape`).** A failed call whose error carries "No such tool available" (client-level) or "Unknown tool" (server-level, the advertised-but-not-callable case) is absence-equivalent for THIS RUN:
+
+- Record `absent_this_run[tool]`; skip all remaining calls to that tool this turn, all domains.
+- Collapse sibling failures from the same parallel batch into ONE consolidated caveat line ("Not exposed on this connector: tool-1, tool-2"), mirroring the country-gap consolidation rule.
+- Render every charged row already received; never discard data.
+- Zero retries, no denial-confirmation probe; evaluated BEFORE the country-gap check (disjoint envelopes: a client-level error carries no server envelope).
+- "Input validation error" is NOT absence: the tool exists and the call's arguments are wrong; fix the call (Pattern 2 territory; recorded nowhere).
+- The advertised-but-not-callable case stays in-run only; never persist it to `tools_absent` (the live list contains the name, so a stamped absence entry would contradict the quarantine reader).
+- On platforms whose error wording is not yet grounded (per `unknown-tool-error-shape-other-platforms`), do NOT claim absence from a failed call; render the hedged wording "could not reach that tool in this session" and handle per § error-rendering Pattern 2.
+
+**Aggregate insufficiency.** When fewer than 2 of the recipe's REQUIRED tools are both present and accessible (absences and 403s counted together), escalate per § error-rendering Pattern 5 semantics with a caveat naming BOTH causes, instead of shipping a multi-section-dropped report that reads like a verdict.
+
+**Per-platform evidence classes** (client-scoped; rows fill in as platforms are observed):
+
+| Platform | Qualifying closed-list artifact | Status |
+|----------|--------------------------------|--------|
+| Claude Code | Session-start deferred-tools attachment | Grounded 2026-06-11 |
+| Cowork | Not yet observed | Treat presence as unknown |
+| Codex | Not yet observed | Treat presence as unknown |
+| Cursor | Not yet observed | Treat presence as unknown |
+| Claude.ai | Recipes ship without foundations; the recipes' inline restatement plus call-time detection carry the discipline | Treat presence as unknown |
+
 ### § capability-gating
 
 The capability map at `~/.similarweb-plugin/capabilities.json` is an OPTIONAL hint, not a hard prerequisite. Recipes proceed without it.
@@ -181,7 +273,7 @@ The capability map at `~/.similarweb-plugin/capabilities.json` is an OPTIONAL hi
 
 1. Try to read `~/.similarweb-plugin/capabilities.json`. If present and not expired, use its `tools_inaccessible` list (and `tools_available` map if also present) to pre-filter the call plan (skip OPTIONAL tools known to be inaccessible; abort if REQUIRED tools are flagged inaccessible). Expiry applies only to full-probe maps via their `refresh_after` field; a lazy append-only map (no `refresh_after`) never expires, it is an advisory set of observed denials.
 2. If missing or expired, proceed with no prior knowledge. Execute the recipe's planned tool calls.
-3. Wrap each tool call in § error-rendering pattern 3 handling. Record a tool as access-denied ONLY on an actual access error: HTTP 403 carrying "missing the required claims" (or an equivalent auth/access-denied message), consistent with the in-run tracking and persistence rules below. Do NOT record other 4xx responses as denials: a validation error (a 400 such as "Dates not in range", "at most 3 months", or a bad metric or param) is a schema or transient problem (handle per § error-rendering Pattern 2), and a country-coverage gap (per § Country-coverage gap detection / § Precedence) is a per-(tool, country) plan limitation, NOT a tool denial. Recording a validation error or a country gap in `tools_inaccessible` would poison the map and wrongly skip a tool the plan actually grants.
+3. Wrap each tool call in § error-rendering pattern 3 handling. Record a tool as access-denied ONLY on an actual access error: HTTP 403 carrying "missing the required claims" (or an equivalent auth/access-denied message), consistent with the in-run tracking and persistence rules below. Do NOT record other 4xx responses as denials: a validation error (a 400 such as "Dates not in range", "at most 3 months", or a bad metric or param) is a schema or transient problem (handle per § error-rendering Pattern 2), and a country-coverage gap (per § Country-coverage gap detection / § Precedence) is a per-(tool, country) plan limitation, NOT a tool denial. Recording a validation error or a country gap in `tools_inaccessible` would poison the map and wrongly skip a tool the plan actually grants. An ABSENT tool (per § tool-surface presence) is likewise never recorded here; absence persists to `tools_absent` per the capability map schema.
 4. At the end of the recipe (whether success, partial, or aborted), if any access-denied was observed, APPEND those tool names to `tools_inaccessible` in `~/.similarweb-plugin/capabilities.json`. Create the file with minimal shape if missing. Never overwrite known-accessible status; only append observed denials.
 5. The recipe NEVER blocks on capability map state. If the map says nothing about a tool, try it. If it says inaccessible, skip (optional) or abort with a clear message (required).
 
@@ -269,6 +361,7 @@ This rule pairs with § smoke-first sequencing. Recipes whose smoke probe runs a
 
 | Envelope | What it means | In-run map | Skip rule |
 |----------|---------------|------------|-----------|
+| Tool name absent from a qualifying live tool list, OR call-time "No such tool available" / server "Unknown tool" (message-gated per `unknown-tool-error-shape`) | Not exposed on this connector (module gating or surface drift) | `absent_this_run[tool]` | Zero calls, no retry, no denial-confirmation probe; outcome inherits the tool's documented denial outcome; smoke retargets per § tool-surface presence; one consolidated caveat; NEVER recorded in `tools_inaccessible` |
 | HTTP 403 + "missing required claims" | Account/tool gated | `inaccessible_this_run[tool]` | Skip ALL domains for that tool; fall back to optional probes; if 2+ required tools 403 trigger Pattern 5 |
 | HTTP 400 client_error OR HTTP 200 empty data, WITH a "no data for requested country" message | Country not on plan for that tool | `country_unavailable_this_run[(tool, country)]` | Skip remaining domains for that (tool, country); pivot to ww; if 2+ tools country-gap for same country, propagate to subsequent tools |
 | HTTP 200 + empty data for one specific domain (no country-coverage message) | That domain has no traffic for the window | NO tracking; just render n/a for that cell | None; per-domain absence is a real result |
@@ -301,3 +394,6 @@ This skill's behavior is live-validated against the following grounded assertion
 - resource-reads-unavailable
 - country-coverage-gap-shape
 - similar-sites-window-constraint
+- unknown-tool-error-shape
+- unknown-tool-error-shape-other-platforms
+- plan-gating-vs-server-drift

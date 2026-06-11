@@ -55,10 +55,11 @@ esac
 
 ## Step 2: smoke-first probe + lazy capability gating (MANDATORY)
 
-Per sw-foundation-core § smoke-first sequencing AND § capability-gating:
+Per sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating:
 
-1. **Smoke (one call, sequential)**: `get-categories-search`, `domain=$AMAZON_TLD`, `search_term=$INPUT`. Wait. No other call yet. On 200, cache and go to 2A. On 403, secondary probe `get-categories-performance-agg` (`domain=$AMAZON_TLD`, `category="1"`, smallest window); if also 403, render § error-rendering Pattern 5 and STOP; if 200, abort with Caveat "Cannot resolve category without `get-categories-search`; pass a numeric category ID, or pivot to `--web-companion`." Other error: retry once; if still failing, mark fragile-this-run and proceed.
-2. **2A**: apply § capability-gating using the smoke result plus any persisted entries. Per-call denial via § error-rendering pattern 3, appended to `tools_inaccessible` at end of run.
+1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-categories-search` absent: the smoke retargets to `get-categories-performance-agg` and the recipe aborts with the existing pivot offer ("pass a numeric category ID, or pivot to `--web-companion`"); any other REQUIRED shopper tool absent: abort offering `--web-companion` only (a numeric ID cannot replace a missing data tool); OPTIONAL tools absent: skip with one consolidated caveat line. If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically; at call time, an error saying "No such tool available" (or server "Unknown tool"; per `unknown-tool-error-shape`) means not exposed: apply the same outcomes with the consolidated caveat ("Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact."), zero retries; an "Input validation error" means the tool exists, fix the arguments.
+2. **Smoke (one call, sequential)**: `get-categories-search`, `domain=$AMAZON_TLD`, `search_term=$INPUT`. Wait. No other call yet. On 200, cache and go to 2A. On 403, secondary probe `get-categories-performance-agg` (`domain=$AMAZON_TLD`, `category="1"`, smallest window); if also 403, render § error-rendering Pattern 5 and STOP; if 200, abort with Caveat "Cannot resolve category without `get-categories-search`; pass a numeric category ID, or pivot to `--web-companion`." Other error: retry once; if still failing, mark fragile-this-run and proceed.
+3. **2A**: apply § capability-gating using the smoke result plus any persisted entries. Per-call denial via § error-rendering pattern 3, appended to `tools_inaccessible` at end of run; per-call absence via § error-rendering Pattern 7, NEVER appended to `tools_inaccessible`.
 
 REQUIRED (Amazon flow):
 - `get-categories-search`
@@ -292,6 +293,7 @@ Field semantics:
 
 This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
+- unknown-tool-error-shape
 - categories-search-resolution
 - categories-performance-shape
 - categories-top-brands-shape

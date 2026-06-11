@@ -35,15 +35,16 @@ echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-page-
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
+Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the Step 4 row 0 rank call; reuse it, never re-issue it.
-2. **Branch**:
+1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-websites-website-rank` absent: the smoke retargets to `get-pages-popular-pages-agg` and rank rendering degrades; ONE pages tool absent: drop its section (the DEGRADABLE semantics below, same as denial); BOTH pages tools absent: abort with the caveat (nothing to render). If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically; at call time, an error saying "No such tool available" (or server "Unknown tool"; per `unknown-tool-error-shape`) means not exposed: apply the same outcomes with the consolidated caveat ("Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact."), zero retries; an "Input validation error" means the tool exists, fix the arguments.
+2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the Step 4 row 0 rank call; reuse it, never re-issue it.
+3. **Branch**:
    - 200: cache the rank result; this becomes the Step 0 "rank smoke" data Step 4 references for end_date derivation. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-pages-popular-pages-agg` for the target, country=`$COUNTRY`, single-month window, `web_source: total`, `limit: 5`. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
    - Country-coverage gap (a 400 `client_error` or a 200-empty response carrying a country-coverage message, per sw-foundation-core § Country-coverage gap detection): do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat.
    - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
-3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
+4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
 
 REQUIRED: `get-websites-website-rank`. DEGRADABLE: `get-pages-popular-pages-agg`, `get-pages-leading-folders-agg` (if ONE pages tool returns access-denied at runtime, the recipe drops that section and notes the skip in Caveats rather than aborting; if BOTH pages tools are denied there is nothing to render, so abort per sw-foundation-render § error-rendering Pattern 5 semantics with a clear Caveat).
 
@@ -178,6 +179,7 @@ Field semantics:
 
 This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
+- unknown-tool-error-shape
 - pages-popular-pages-shape
 - pages-leading-folders-shape
 - pages-tools-web-source-total

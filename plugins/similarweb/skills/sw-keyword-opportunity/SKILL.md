@@ -43,15 +43,16 @@ echo "$COMPETITOR" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Invalid comp
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
+Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain, country=us. Wait synchronously for the response. Do NOT issue any other call yet.
-2. **Branch**:
+1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-keywords-overview` (the documented smoke, itself OPTIONAL) absent: retarget the smoke to `get-website-analysis-keywords-agg` and ship the gap table without enrichment (the claims probe is preserved; never skip the smoke); `get-website-analysis-keywords-agg` absent: ABORT with the caveat (it IS the gap table); `get-websites-website-rank` absent: degrade the headline and derive end_date from the smoke's `meta.last_updated`; `get-websites-keywords-competitors-agg` absent: skip Step 1 with its documented denial caveat. If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically; at call time, an error saying "No such tool available" (or server "Unknown tool"; per `unknown-tool-error-shape`) means not exposed: apply the same outcomes with the consolidated caveat ("Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact."), zero retries; an "Input validation error" means the tool exists, fix the arguments.
+2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain, country=us. Wait synchronously for the response. Do NOT issue any other call yet.
+3. **Branch**:
    - 200: cache the result; reuse it as the first enrichment row in Step 4 row 4 if the seed term ends up in the gap-keywords list. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-website-analysis-keywords-agg` for the target domain, country=us, single-month window, `limit: 5`. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark `get-keywords-overview` as inaccessible_this_run and ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
    - Country-coverage gap (a 400 `client_error` or a 200-empty response carrying a country-coverage message, per sw-foundation-core § Country-coverage gap detection): do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat.
    - Other error: retry once. If still failing, mark `get-keywords-overview` as fragile-this-run and proceed.
-3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
+4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
 
 REQUIRED: `get-websites-website-rank`, `get-website-analysis-keywords-agg`. OPTIONAL: `get-websites-keywords-competitors-agg` (surfaces alternative competitors; if denied the recipe still computes the gap from the explicit `--vs` competitor), `get-keywords-overview` (enriches the gap keywords with volume / difficulty / CPC; if denied the recipe ships the gap table without enrichment).
 
@@ -222,6 +223,7 @@ Field semantics:
 
 This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
+- unknown-tool-error-shape
 - keywords-competitors-shape
 - keywords-analysis-shape
 - keywords-competitors-exact-3-months

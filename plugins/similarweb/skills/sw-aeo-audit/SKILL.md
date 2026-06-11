@@ -45,15 +45,16 @@ fi
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
+Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-seo-overview` for the FIRST keyword from `--keywords` if supplied, else a clear prompt-derived seed term, country=us. If NO keywords were supplied AND the prompt carries no clear seed term, run Step 3 (keyword acquisition) BEFORE this smoke so the smoke spends on a keyword the audit will actually use; fall back to the target's brand term only when the prompt implies a brand-level audit. Wait synchronously for the response. Do NOT issue any other call yet.
-2. **Branch**:
+1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-keywords-seo-overview` absent: ABORT (the audit cannot ship without SEO-overview signal; same outcome as its denial rule); `get-websites-serp-players-agg` or `get-websites-landing-pages-agg` absent: drop their sections and continue (the documented 5xx precedent); `get-websites-website-rank` absent: degrade the rank context and derive end_date from the smoke's `meta.last_updated` (the seo-overview response carries it). No smoke retarget exists here: an absent `get-keywords-seo-overview` aborts outright, which supersedes retargeting. If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically; at call time, an error saying "No such tool available" (or server "Unknown tool"; per `unknown-tool-error-shape`) means not exposed: apply the same outcomes with the consolidated caveat ("Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact."), zero retries; an "Input validation error" means the tool exists, fix the arguments.
+2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-seo-overview` for the FIRST keyword from `--keywords` if supplied, else a clear prompt-derived seed term, country=us. If NO keywords were supplied AND the prompt carries no clear seed term, run Step 3 (keyword acquisition) BEFORE this smoke so the smoke spends on a keyword the audit will actually use; fall back to the target's brand term only when the prompt implies a brand-level audit. Wait synchronously for the response. Do NOT issue any other call yet.
+3. **Branch**:
    - 200: cache the result; reuse this response for Step 4 Step 2 (the SEO overview for the first keyword) to avoid re-calling. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-website-rank` for the target domain, country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark `get-keywords-seo-overview` as inaccessible_this_run and ABORT (the recipe cannot ship an AEO audit without SEO-overview signal); render Caveat "AEO audit requires `get-keywords-seo-overview`; tool not accessible on this plan."
    - Country-coverage gap (a 400 `client_error` or a 200-empty response carrying a country-coverage message, per sw-foundation-core § Country-coverage gap detection): do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat.
    - Other error: retry once. If still failing, mark `get-keywords-seo-overview` as fragile-this-run and proceed.
-3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
+4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
 
 REQUIRED (proxy audit):
 - `get-websites-website-rank`
@@ -268,6 +269,7 @@ Field semantics:
 
 This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
+- unknown-tool-error-shape
 - aeo-tool-availability
 - aeo-seo-overview-shape
 - aeo-serp-players-shape

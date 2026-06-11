@@ -36,14 +36,16 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-audie
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
+Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 row 1; reuse it, never re-issue it.
-2. **Branch**:
+1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-websites-website-rank` absent: the smoke retargets to `get-websites-audience-overlap-agg` and rank rendering degrades; `get-websites-audience-overlap-agg` absent: ABORT with the caveat (this recipe IS the overlap analysis); OPTIONAL tools absent: drop their sections with one consolidated caveat line (similar-sites absent with no supplied competitors keeps its documented ask-once-then-abort semantics). If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically.
+2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 row 1; reuse it, never re-issue it.
+3. **Branch**:
    - 200: cache the rank result for reuse in Step 4 row 1; proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-audience-overlap-agg` for `domains = "<target>,<first --against domain>"` (2-domain batched call), country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
+   - Client-level unknown-tool error ("No such tool available", or server "Unknown tool"; per `unknown-tool-error-shape`): the tool is not exposed on this connector. Do NOT retry; apply the item-1 outcomes and add the consolidated caveat: "Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact." An "Input validation error" is NOT this case: the tool exists, fix the arguments.
    - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
-3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
+4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
 
 REQUIRED: `get-websites-website-rank`, `get-websites-audience-overlap-agg`. OPTIONAL: `get-websites-demographics-agg`, `get-websites-geography-agg`, `get-websites-audience-interests-agg` (Step 5b Persona overlap section; if not accessible, omit the Persona overlap section and note in Caveats), `get-websites-deduplicated-audience`, `get-websites-similar-sites-agg` (used by Step 3 fallback when `--against` was not supplied AND no competitor list was found in context; if not accessible, the recipe asks the user once for competitors and aborts if none provided).
 
@@ -229,6 +231,7 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
 
 This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
+- unknown-tool-error-shape
 - similar-sites-window-constraint
 - audience-overlap-tool-shape
 - audience-overlap-recipe-shape
