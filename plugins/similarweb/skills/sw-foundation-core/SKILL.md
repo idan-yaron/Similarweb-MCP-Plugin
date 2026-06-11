@@ -79,8 +79,9 @@ Lazy-mode minimal shape: `{schema_version: 2, last_updated, tools_inaccessible: 
 ## MCP tool catalog grouped by intent
 
 Note: the catalog below reflects the Similarweb MCP server as of the last
-grounded probe and drifts with server releases; the live tool list exposed by
-the client is always the source of truth for what exists. Tools the user lacks
+grounded enumeration (2026-06-11, 80 tools) and drifts with server releases;
+the live tool list exposed by the client is always the source of truth for
+what exists. Tools the user lacks
 access to are filtered out at recipe execution time using
 `$HOME/.similarweb-plugin/capabilities.json`.
 
@@ -97,7 +98,7 @@ access to are filtered out at recipe execution time using
 | Audience overlap | `get-websites-audience-overlap-agg` | domain, domains (comma-joined string, 2-5 domains) | Returns 2^N-1 subset rows in a single batched call. |
 | Demographics | `get-websites-demographics-agg` | domain, country | Age + gender breakdown. |
 | Geography | `get-websites-geography-agg` | domain | Country share. |
-| Conversion rates | `get-websites-conversion-rates-agg` | domain, vertical | Vertical-specific. Module-gated: absent from many plans' tool lists entirely; verify the tool is present in the live tool list before planning it. |
+| Conversion rates | `get-websites-conversion-rates-agg` | domain, vertical | Vertical-specific. Presence varies by account: BOTH the -agg and non-agg variants were absent from the grounded connector's live tool list as of 2026-06-11 (present 2026-05-16). Verify the tool appears in the live tool list before planning it; if absent, treat as module_not_exposed and say so. |
 | PPC spend | `get-websites-ppc-spend` | domain, country, window, currency | Returns estimated monthly PPC spend as a single scalar per month (no by-channel breakdown). |
 | SERP positions | `get-websites-serp-players-agg` | keyword, country | Domain rankings for a keyword. |
 | Landing pages | `get-websites-landing-pages-agg` | domain, source_channel | Top entry points by channel. |
@@ -114,7 +115,7 @@ access to are filtered out at recipe execution time using
 
 ### Apps-shaped queries
 
-The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (they are absent from the client's tool list rather than returning 403). Before planning any apps call, verify the tool name appears in the live tool list; if absent, treat the category as module_not_exposed and say so, do not attempt the call.
+The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (they are absent from the client's tool list rather than returning 403). On the grounded connector's live tool list (2026-06-11), `get-apps-details` was the ONLY `get-apps-*` tool exposed; the tools below were present on the 2026-05-16 enumeration and are expected only on plans with the full Apps module. Before planning any apps call, verify the tool name appears in the live tool list; if absent, treat the category as module_not_exposed and say so, do not attempt the call.
 
 | Intent | Tool | Key params |
 |--------|------|------------|
@@ -162,7 +163,7 @@ Cadences observed in production (subject to drift; re-grounded each release):
 
 | Bucket | Approximate cadence | Example tools |
 |--------|---------------------|---------------|
-| Near-real-time | Updated within the last 24 hours | `get-apps-*` (active users, downloads) |
+| Near-real-time | Updated within the last 24 hours | `get-apps-*` active users, downloads (Apps module only; absent from the grounded connector's tool list 2026-06-11) |
 | Monthly | Updated at month boundary | `get-websites-traffic-and-engagement`, `get-brands-sales-performance-agg`, `get-categories-performance-agg` [^cat-perf-window] |
 
 [^cat-perf-window]: `get-categories-performance-agg` rolls its `meta.last_updated` monthly but its data window defaults to a 3-year aggregate (`2023-04-01` through last-completed-month), NOT a rolling 30-day window. Pass explicit `start_date` / `end_date` to override.

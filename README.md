@@ -17,7 +17,7 @@
 
 ## The problem this solves
 
-The Similarweb MCP exposes roughly 90 tools (the exact surface varies by plan and server release) across web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
+The Similarweb MCP exposes roughly 80 tools (the exact surface varies by plan and server release) across web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
 
 This plugin is the expert layer that sits between your LLM and the Similarweb MCP. Install it once, ask anything Similarweb-shaped in natural language, and get a structured analyst-grade response.
 
@@ -249,7 +249,7 @@ For click-by-click instructions, smoke-test prompts, known per-platform limitati
                                        │
                                        ▼
                       ┌──────────────────────────────────┐
-                      │     Similarweb MCP (90 tools)     │
+                      │     Similarweb MCP (80 tools)     │
                       └──────────────────────────────────┘
 ```
 
