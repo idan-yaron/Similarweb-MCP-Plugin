@@ -87,7 +87,7 @@ if os.path.isfile(sched_path):
         created = sched.get("created_at", "unknown")
         print(f"Grounding schedule: active ({cadence}, task {task_id}, created {created})")
     except (ValueError, OSError):
-        print("Grounding schedule: state file unreadable; consider /sw-config --schedule-grounding off then re-enable.")
+        print("Grounding schedule: state file unreadable; on Cowork, turn scheduled grounding off and on again to repair.")
 else:
     print("Grounding schedule: not active.")
 drift_dir = os.path.expanduser("~/.similarweb-plugin/")
@@ -100,7 +100,7 @@ PYEOF
 
 ## Step B: --refresh
 
-Invoke sw-setup explicitly to perform a thorough proactive probe across all 6 categories and OVERWRITE `capabilities.json` with a fresh known-state map (replacing any lazy-built append-only state).
+Apply the sw-setup skill inline (it ships in this plugin; follow its Step 1 to Step 3 directly in this conversation, or invoke it through the platform's skill mechanism if it is listed) to perform a thorough proactive probe across all 6 categories and OVERWRITE `capabilities.json` with a fresh known-state map (replacing any lazy-built append-only state). Never attempt to run sw-setup as a slash command; it has none.
 
 ```bash
 CAPS_PATH="$HOME/.similarweb-plugin/capabilities.json"
@@ -125,7 +125,7 @@ PYEOF
 fi
 ```
 
-Then trigger sw-setup. sw-setup performs the proactive probe and writes the new `capabilities.json`. After it completes, print:
+Then follow sw-setup's probe steps. sw-setup performs the proactive probe and writes the new `capabilities.json`. After it completes, print:
 
 ```
 Refreshed. <N> tools accessible across <K> categories.
@@ -155,9 +155,9 @@ Opt-in. Default: no schedule active. Creates a Cowork scheduled task that re-val
 
 A weekly (or monthly) cron that:
 
-1. Picks 10 grounded assertions from `tests/grounding-ledger.json` ordered by `fragility` (pending_manual first, then fragile, then validated).
+1. Re-validates the 10 highest-impact grounded shape assumptions the recipes depend on, in priority order: the partial-access envelope, the auth-invalid envelope, the country-coverage-gap message (HTTP 400 form), the website-rank field set (no global_rank), the traffic-channels 10-channel taxonomy with absolute visits, the audience-overlap subset-row shape with absolute counts, the similar-sites exact-3-month window plus affinity field, the keywords-competitors exact-3-month window, the landing-pages single-month constraint, and the ppc-spend row shape.
 2. Rotates the test domain through this 20-brand public pool, diversified across 6 verticals (apparel, consumer tech, e-commerce SaaS, fintech, media/streaming, mass retail): nike.com, adidas.com, lululemon.com, underarmour.com, apple.com, samsung.com, bestbuy.com, sephora.com, shopify.com, stripe.com, payoneer.com, wise.com, revolut.com, monzo.com, spotify.com, netflix.com, amazon.com, ebay.com, walmart.com, target.com.
-3. Probes each assertion's documented MCP shape via the live `similarweb` MCP server, compares to `tests/grounded/<id>.md`.
+3. Probes each assumption's documented MCP shape via the live `similarweb` MCP server and compares against the expected shape as documented in the foundation skills (the source of truth that ships with the plugin).
 4. On drift, writes `~/.similarweb-plugin/drift-<YYYY-MM-DD>.md` containing: assertion id, observed shape, expected shape, fragility tier, and dependent recipes.
 5. NO push notifications. Drift surfaces silently in `~/.similarweb-plugin/`. `--show` summarizes the most recent drift report (if any) under the capability summary.
 
@@ -189,4 +189,4 @@ On `--schedule-grounding off`:
 - **capabilities.json corrupted**: catch JSON parse error in Step A, print "Capability map is corrupted; run /sw-config --reset (then optionally --refresh)."
 - **MCP server changed since last probe**: detected by `mcp_server_version` field; print one line "Note: MCP server version changed since last probe; consider /sw-config --refresh." Do not auto-refresh.
 - **--reset on a clean state**: idempotent; print "Already reset."
-- **--schedule-grounding weekly when a schedule is already active**: cancel the prior task first (Step D off-path), then create the new one. Print `Replaced existing <old-cadence> schedule with <new-cadence>.`
+- **--schedule-grounding weekly when a schedule is already active**: cancel the prior task first (Step D off-path), then create the new one. Print `Replaced existing <old-cadence> schedule with <new-cadence>.` (Cowork-only)

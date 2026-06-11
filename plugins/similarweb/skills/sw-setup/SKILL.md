@@ -19,7 +19,7 @@ Runs ONLY when `/sw-config --refresh` explicitly invokes it. No auto-trigger.
 
 ## Step 1: Probe one tool per category
 
-Call each of these MCP tools (sequentially is fine; the cost is six cheap calls one-time):
+Call each of these MCP tools (sequentially is fine; the cost is six cheap calls one-time). FIRST check the client's live tool list: tool surfaces are module-gated and drift with server releases, so a probe tool may be ABSENT from the list entirely (observed live for the apps surface on plans without the Apps module). An absent tool is NOT called and NOT an error: record `tools_available[<tool>] = false`, note the category as `module_not_exposed` in working memory, and move on. If a category's documented probe tool is absent but a sibling tool for the same category exists in the live list (e.g. `get-apps-details` instead of `get-apps-search`), probe the sibling instead and record under the sibling's name.
 
 | Category | MCP tool | Params |
 |----------|----------|--------|
@@ -32,7 +32,7 @@ Call each of these MCP tools (sequentially is fine; the cost is six cheap calls 
 
 For each call:
 - Success (2xx with payload) => `tools_available[<tool>] = true`
-- Any non-2xx response (auth failure, access denied, validation error, server error) => record as `tools_available[<tool>] = false` if the response category is `client_error` (per `tests/grounded/auth-invalid-envelope-shape.md`), AND append the tool name to `tools_inaccessible`. Mark `pending` if it's `server_error` or unparseable.
+- Any non-2xx response (auth failure, access denied, validation error, server error) => record as `tools_available[<tool>] = false` if the response category is `client_error` (per `auth-invalid-envelope-shape`), AND append the tool name to `tools_inaccessible`. Mark `pending` if it's `server_error` or unparseable.
 - Timeout or no response => `tools_available[<tool>] = "pending"`
 
 Recommended approach: invoke each MCP tool via the AI client's native MCP surface; record the outcome in working memory; parallelize when the client supports it.
@@ -89,7 +89,7 @@ Exit silently. Return control to sw-config with no user-visible output; sw-confi
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - auth-invalid-envelope-shape
 - partial-access-envelope-shape

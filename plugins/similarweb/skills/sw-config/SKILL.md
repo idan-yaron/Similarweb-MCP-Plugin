@@ -86,7 +86,7 @@ if os.path.isfile(sched_path):
         created = sched.get("created_at", "unknown")
         print(f"Grounding schedule: active ({cadence}, task {task_id}, created {created})")
     except (ValueError, OSError):
-        print("Grounding schedule: state file unreadable; consider /sw-config --schedule-grounding off then re-enable.")
+        print("Grounding schedule: state file unreadable; on Cowork, turn scheduled grounding off and on again to repair.")
 else:
     print("Grounding schedule: not active.")
 drift_dir = os.path.expanduser("~/.similarweb-plugin/")
@@ -99,7 +99,7 @@ PYEOF
 
 ## Step B: --refresh
 
-Invoke sw-setup explicitly to perform a thorough proactive probe across all 6 categories and OVERWRITE `capabilities.json` with a fresh known-state map (replacing any lazy-built append-only state).
+Apply the sw-setup skill inline (it ships in this plugin; follow its Step 1 to Step 3 directly in this conversation, or invoke it through the platform's skill mechanism if it is listed) to perform a thorough proactive probe across all 6 categories and OVERWRITE `capabilities.json` with a fresh known-state map (replacing any lazy-built append-only state). Never attempt to run sw-setup as a slash command; it has none.
 
 ```bash
 CAPS_PATH="$HOME/.similarweb-plugin/capabilities.json"
@@ -124,7 +124,7 @@ PYEOF
 fi
 ```
 
-Then trigger sw-setup. sw-setup performs the proactive probe and writes the new `capabilities.json`. After it completes, print:
+Then follow sw-setup's probe steps. sw-setup performs the proactive probe and writes the new `capabilities.json`. After it completes, print:
 
 ```
 Refreshed. <N> tools accessible across <K> categories.
@@ -145,4 +145,3 @@ Reset. Capability map cleared. Recipes will discover access lazily; run /sw-conf
 - **capabilities.json corrupted**: catch JSON parse error in Step A, print "Capability map is corrupted; run /sw-config --reset (then optionally --refresh)."
 - **MCP server changed since last probe**: detected by `mcp_server_version` field; print one line "Note: MCP server version changed since last probe; consider /sw-config --refresh." Do not auto-refresh.
 - **--reset on a clean state**: idempotent; print "Already reset."
-- **--schedule-grounding weekly when a schedule is already active**: cancel the prior task first (Step D off-path), then create the new one. Print `Replaced existing <old-cadence> schedule with <new-cadence>.`

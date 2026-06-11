@@ -13,13 +13,15 @@ python3 build.py --build
 
 ```
 .claude-plugin/plugin.json        plugin manifest (name + description + version + author; optional license, keywords, homepage, repository)
+.claude-plugin/marketplace.json   Claude Code marketplace manifest (repo root doubles as a marketplace)
 skills/<name>/SKILL.md            per-skill body + frontmatter
 commands/<name>.md                slash-command delegate for user-invocable skills (Cowork, Claude Code, Cursor)
 agents/<name>.md                  Cowork-only autonomous subprocesses
 hooks/                            Cowork-only event-driven automation (hooks.json + scripts/)
 build.py                          translator + packager (Python 3 stdlib only)
-docs/cowork-architecture-notes.md Cowork-specific contract + the three rendering tiers
-docs/superpowers/{specs,plans}/   design specs + implementation plans
+docs/install-and-smoke-test.md    per-platform install + smoke-test guide (tracked)
+docs/cowork-architecture-notes.md Cowork contract + rendering tiers (maintainer-local, gitignored)
+docs/superpowers/{specs,plans}/   design specs + implementation plans (maintainer-local, gitignored)
 ```
 
 The Similarweb MCP server is not bundled with this plugin. Users configure it separately in their AI client per Similarweb's official install instructions. See the README "Prerequisite" section.
@@ -37,7 +39,7 @@ Tests live under `tests/` locally; they are gitignored. Each contributor maintai
 
    Body is a one-line wrapper directing the harness to follow the corresponding skill (see existing files for the canonical wording).
 4. Use the `/sw-*` namespace prefix.
-5. If the skill makes new claims about MCP behavior (status codes, response shapes, parameter semantics, freshness, rate limits, tool availability), add `tests/grounded/<assertion-id>.md` AND list the id in a `## Grounded assertions` body block at the END of the SKILL.md. Frontmatter `depends_on:` is REJECTED by Cowork's validator; only the body block works. `build.py --validate` parses the body block and fails on unknown citations.
+5. If the skill makes new claims about MCP behavior (status codes, response shapes, parameter semantics, freshness, rate limits, tool availability), list a new assertion id in a `## Grounded assertions` body block at the END of the SKILL.md, and supply the grounding evidence. `tests/` is gitignored, so external contributors paste the evidence (exact calls made plus observed response envelopes) into the PR description; the maintainer lands the `tests/grounded/<assertion-id>.md` file and ledger entry locally. Frontmatter `depends_on:` is REJECTED by Cowork's validator; only the body block works. On maintainer machines, `build.py --validate` parses the body block and fails on unknown citations (the check no-ops on clones without `tests/`).
 6. If the recipe outputs richer-than-text data (3+ entities, multi-period, dashboards), optionally add a `## Cowork persistent artifact` section (Tier 3, via `mcp__cowork__create_artifact`) or a `## Cowork chat-side panel` section (Tier 2, via a `.jsx` file written through the Write tool). Reference `docs/cowork-architecture-notes.md` for the contract and CSP rules.
 7. Run `python3 build.py --validate` locally; it fails on description violations, grounding-ledger mismatches, and frontmatter `depends_on:` regressions.
 
@@ -69,16 +71,16 @@ Before tagging a release:
 3. Re-run each grounded assertion's "Re-validation notes" block manually against the live MCP (or via an AI client session with MCP access). Update `tests/grounding-ledger.json` if any assertion's shape drifted. The `build.py --ground` mode is a stub today; the manual re-run is the contract.
 4. `python3 build.py --build` produces clean per-platform zips.
 5. The personal-data/secrets gate runs automatically inside `build.py --validate` (step 1) and in CI, scanning every tracked file. The optional `tests/translator/lint-pii.sh` (gitignored, local) remains as a convenience for scanning a single directory against `.pii-blocklist` only; the `--validate` gate is the enforced contract and covers more (connector ids, emails, paths, secrets, identity, plus the blocklist).
-6. Bump `version` in `.claude-plugin/plugin.json` per semver. Do NOT bump for failed install attempts.
+6. Bump the version per semver in THREE places (the validator enforces all three staying in sync): `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` (plugins[0].version), and the handoff-JSON version literal in `skills/sw-foundation-render/SKILL.md`. Do NOT bump for failed install attempts.
 7. Confirm grounding ledger has no `status: pending_manual` assertions blocking ship. The three acknowledged operator-required gaps (`auth-invalid-envelope-shape`, `partial-access-envelope-shape`, `aeo-tool-availability`) ship with caveats. Five additional forward-looking pending_manual entries (`keywords-competitors-exact-3-months`, `pages-tools-web-source-total`, `apps-tool-constraints`, `clicks-share-per-brand-only`, `keywords-overview-3-month-max`) do not block (their `depended_on_by` is empty). Document the acknowledged caveats in release notes.
 8. When uploading a new version of a same-named plugin to Cowork, UNINSTALL the old one first. Cowork uploads with `overwrite=false` and the marketplace API rejects same-name uploads, surfacing as the generic "Plugin validation failed."
 9. `git tag v<version>` and push (with user approval per the commit rule above).
 
 CI (`.github/workflows/release.yml`) runs `--validate` and `--build`, then publishes the platform zips as release assets. Because the personal-data/secrets gate lives in `--validate`, a leak fails the workflow before any bundle is attached.
 
-## Phase 3 prep notes
+## Refactor watchlist
 
-- Recipe body sizes grew steadily across Phase 2: competitive 4.5k, audience 6.7k, channel 12.5k, market 20.3k, aeo 19.8k. Cross-recipe patterns now appear in multiple bodies: ISO-2 country normalization (full-name to alpha-2 + lowercase), rolling-3-month window clamp derived from a rank smoke probe, and cost-transparency rendering in the Sources block. Consider promoting these into sw-foundation helpers (`§ country-normalization`, `§ end-date-clamp`, `§ cost-transparency`) if a 2nd recipe would benefit, so recipes shrink to their unique tool sequence + analysis logic.
+- When a pattern appears in two or more recipe bodies (normalization rules, window derivations, rendering contracts), promote it into the matching sw-foundation helper section and have the recipes cite the section, so recipe bodies shrink to their unique tool sequence plus analysis logic.
 
 ## Reporting issues
 

@@ -14,8 +14,8 @@ description: URL and folder level content surface for a single domain. Use when 
 
 - NEVER pass `web_source: "desktop"` or `web_source: "mobile_web"` to either pages tool. Per `pages-tools-web-source-total` and the live tool schemas (`const: total`), only `total` is supported. Server returns HTTP 400 VALIDATION_ERROR on any other value.
 - NEVER pass a full country name (`"United States"`) to either tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize per sw-foundation-data § country-normalization before any call.
-- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` (currently `2026-04-30`) and rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution from the Step 0 rank smoke's `meta.last_updated`.
-- NEVER fabricate a traffic_share for a folder or page when the response row's `share` is null or absent. Render `n/a` per sw-foundation-render § error-rendering pattern 4.
+- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` (e.g. `2026-04-30` at grounding time) and rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution from the Step 0 rank smoke's `meta.last_updated`.
+- NEVER fabricate a traffic_share for a folder or page when the response row's `share` is null or absent. Render `n/a` per sw-foundation-render § error-rendering pattern 1 (null payload; pattern 4 is reserved for structural-zero `0.0` values).
 - NEVER sum top-N folder shares as if they were disjoint when parent/child folders both appear in the response. Per `pages-leading-folders-shape`, the server does NOT dedupe (`nike.com/launch` and `nike.com/launch/t` coexist). The recipe computes HHI on the returned rows AS-IS for the concentration verdict but documents the nesting in the strategic insights, not by quietly collapsing rows.
 - NEVER call `get-pages-popular-pages-agg` with the `page` parameter set when summarizing the surface; that filters the response to a single page only, which is a per-page drill-in, not a top-page survey.
 
@@ -37,7 +37,7 @@ echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-page-
 
 Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=`$COUNTRY` (user-supplied or default `us`). Wait synchronously for the response. Do NOT issue any other call yet.
+1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the Step 4 row 0 rank call; reuse it, never re-issue it.
 2. **Branch**:
    - 200: cache the rank result; this becomes the Step 0 "rank smoke" data Step 4 references for end_date derivation. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-pages-popular-pages-agg` for the target, country=`$COUNTRY`, single-month window, `web_source: total`, `limit: 5`. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
@@ -45,7 +45,7 @@ Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in t
    - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
 3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
 
-REQUIRED: `get-websites-website-rank`, `get-pages-popular-pages-agg`, `get-pages-leading-folders-agg`. If either pages tool returns access-denied at runtime, the recipe drops that section and notes the skip in Caveats; it does NOT abort the entire run.
+REQUIRED: `get-websites-website-rank`. DEGRADABLE: `get-pages-popular-pages-agg`, `get-pages-leading-folders-agg` (if ONE pages tool returns access-denied at runtime, the recipe drops that section and notes the skip in Caveats rather than aborting; if BOTH pages tools are denied there is nothing to render, so abort per sw-foundation-render § error-rendering Pattern 5 semantics with a clear Caveat).
 
 ## Step 3: Pick up bulk inputs from context
 
@@ -55,7 +55,7 @@ Per sw-foundation-core § bulk-input-from-context. sw-page-mix is single-domain.
 
 | Step | Tool | Purpose |
 |------|------|---------|
-| 0 | `get-websites-website-rank` | Smoke + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. |
+| 0 | `get-websites-website-rank` | The Step 2 smoke (reused, not re-called) + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. |
 | 1 | `get-pages-popular-pages-agg` | Top URLs by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 25`. 3-month window. ~75 sw_coins. |
 | 2 | `get-pages-leading-folders-agg` | Top folders by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 15`. 3-month window. ~45 sw_coins. |
 
@@ -88,7 +88,7 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
 
 ## Step 7: Render
 
@@ -124,7 +124,7 @@ Sections in order:
 
   Reference specific URLs, folders, or concentration numbers surfaced in THIS run.)
 - `## Caveats` (per sw-foundation-render § error-rendering, only if any tool returned null / was unavailable / was skipped / `end_date` was clamped / pages tool returned fewer than `limit` rows for a domain with thin coverage / nested-folder rows present).
-- `## Sources` (collapsible). Last element of the output unless `intent=handoff`.
+- Sources line per sw-foundation-render § citation block (single line, NOT a table, NOT collapsible). Last element of the output unless `intent=handoff`.
 - `[optional] ## Handoff` (JSON, only when intent=handoff).
 
 ## Step 8: Citation + caveats + optional handoff
@@ -187,7 +187,7 @@ If a connector is not configured, the recipe surfaces a one-line fallback: "To e
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - pages-popular-pages-shape
 - pages-leading-folders-shape

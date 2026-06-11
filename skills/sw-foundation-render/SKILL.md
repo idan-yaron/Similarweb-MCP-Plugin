@@ -1,11 +1,11 @@
 ---
 name: sw-foundation-render
-description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries Similarweb MCP output rendering priors: intent-aware modes, citation block, error rendering, handoff JSON, expert heuristics, Unicode-bar visualizations. Helper sections cited by recipes are section citation block, section error-rendering, section handoff-json-schema, section expert-heuristics, section derived-metric glossing, section visualizations. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Cowork-specific rich-rendering tiers (chat-side jsx panels, persistent HTML artifacts) live in the separate sw-foundation-render-cowork skill. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
+description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries Similarweb MCP output rendering priors such as intent-aware modes, citation block, error rendering, handoff JSON, expert heuristics, and Unicode-bar visualizations. Helper sections cited by recipes are section citation block, section error-rendering, section handoff-json-schema, section expert-heuristics, section derived-metric glossing, section visualizations. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Rich rendering beyond markdown is platform-specific and ships in a separate Cowork-only helper skill on platforms that support it. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
 user-invocable: false
 ---
 # sw-foundation-render: Similarweb MCP output rendering priors
 
-Loads on every Similarweb-shaped turn. Does NOT call MCP tools. Carries the canonical render contract every user-invocable recipe delegates to.
+Loads via each recipe's Inherits block and via sw-router dispatch. Does NOT call MCP tools. Carries the canonical render contract every user-invocable recipe delegates to.
 
 ## Intent-aware output rendering rules
 
@@ -36,8 +36,8 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 - **Sources.** SINGLE LINE per-tool rollup (see part 1). No per-call table.
 - **Caveats.** One bullet per real caveat (clamped windows, access denials, structural-zero rollups, brand absence, fallback modes). Drop duplicated context (window, country) the header already states. Drop "opt-in flag X not supplied" promotional lines: users see opt-in flags via `argument-hint` completion. Caveats are not for advertising features.
 - **Strategic insights (DEFEND / EXPOSE / PLAY).** 3 bullets, ~25 words each, `(confidence: HIGH | MEDIUM | LOW)` at end.
-- **NEXT MOVES.** 2 backtick-quoted natural-language questions, one-sentence rationale max each. See § conversational-tone below. Do NOT emit slash-commands or `--flag` syntax in NEXT MOVES.
-- **Output-render targets (v0.1.13):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
+- **NEXT MOVES.** 2 backtick-quoted natural-language questions, one-sentence rationale max each. See the conversational-tone rule below in this section. Do NOT emit slash-commands or `--flag` syntax in NEXT MOVES.
+- **Output-render targets (v0.1.14):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
 **1. Sources (single line, NOT a table, NOT collapsible).** Format:
 
@@ -75,7 +75,7 @@ Composing a NEXT MOVES bullet: derive from data findings in the render. Phrase a
 
 ### § error-rendering
 
-Four canonical patterns. Apply consistently:
+Six canonical patterns. Apply consistently:
 
 1. **Tool returned null or empty payload:** render `n/a` in the affected
    cell. NEVER fabricate. NEVER infer from training data. The cell stays
@@ -142,7 +142,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -162,7 +162,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.13` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
+The `version` literal `0.1.14` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 
@@ -233,7 +233,7 @@ Any metric the plugin DERIVES (computes client-side, not returned verbatim by th
 **Where the gloss appears:**
 
 - **Markdown.** A one-line footnote on the metric's FIRST appearance (the `$/visit is a CAC proxy ...` footnote pattern already in sw-competitive-teardown is the model). One footnote per metric per output; do not repeat it on every row.
-- **Tier 2 / Tier 3 artifacts (Cowork rich-render tiers).** Every KPI card, ladder section, or chart axis that shows a derived metric MUST carry the gloss as a caption / subtitle directly under the label, AND in the chart tooltip. A KPI card titled "Best engagement" with a bare `3.23` is the exact failure this rule prevents: render the card as label + value + one-line gloss (e.g., subtitle "Engagement quality = pages-per-visit x non-bounce share; unitless, higher = stickier").
+- **Tier 2 / Tier 3 artifacts (Cowork-only).** Every KPI card, ladder section, or chart axis that shows a derived metric MUST carry the gloss as a caption / subtitle directly under the label, AND in the chart tooltip. A KPI card titled "Best engagement" with a bare `3.23` is the exact failure this rule prevents: render the card as label + value + one-line gloss (e.g., subtitle "Engagement quality = pages-per-visit x non-bounce share; unitless, higher = stickier").
 - **Handoff JSON.** No gloss needed; the `data` schema documents the field. Glossing is a human-rendering concern only.
 
 **Hard rules:**
@@ -290,7 +290,7 @@ Referrals       -0.4%  ░                      (NOISE)
 Audience map (US, April 2026, total 30.68M)
   Nike-only     19.57M ████████████████████████████████
   Adidas-only    8.03M █████████████
-  Shared         3.08M ████ (10.0% of union, ADJACENT)
+  Shared         3.08M ████ (10.0% of union, COMPLEMENTARY)
 ```
 
 **Top-N by share (replaces Mermaid pie for top brands / top sites).** Bar width scales to leader.
@@ -325,7 +325,7 @@ It does not call MCP tools, produce visible output, or override sw-config / any 
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - response-field-name-lookup
 - country-coverage-gap-shape

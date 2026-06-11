@@ -12,16 +12,16 @@ description: Market size profile for a category or keyword cluster. Use when the
 
 ## Hard rules (NEVER violate)
 
-- NEVER auto-pick `data[0]` from `get-categories-search`. Resolution is ambiguous (99 hits for `"technology"` in T11 probe), and the first row may be a Books subcategory instead of the intended retail category. Disambiguate by presenting top matches at shallowest `category_depth` in retail-relevant root trees, OR accept a `category_id` directly. See `tests/grounded/categories-search-resolution.md`.
+- NEVER auto-pick `data[0]` from `get-categories-search`. Resolution is ambiguous (99 hits for `"technology"` in the live grounding probe), and the first row may be a Books subcategory instead of the intended retail category. Disambiguate by presenting top matches at shallowest `category_depth` in retail-relevant root trees, OR accept a `category_id` directly. Per `categories-search-resolution`.
 - NEVER pass `country` to `get-categories-search`. The schema does not accept it; categories are Amazon-domain-scoped (6-entry TLD enum). To get country-specific Amazon demand, pass `domain: "amazon.de"` instead of `country: "de"`.
 - NEVER pass `query` to `get-categories-search`. The actual parameter is `search_term`; the docstring is wrong.
 - NEVER translate an Amazon `category_id` to the Web `category` slug or vice versa. They are completely disjoint enums. Amazon ID `10048700011` returns `400 VALIDATION_ERROR: Selected category is not supported.` from `get-websites-top-sites-by-category-agg`. The two surfaces are bridged ONLY by matching the user's free-text input independently against each enum.
-- NEVER fabricate `total_clicks` as the sum of all 4 click-breakdown fields. The empirical equation is `total_clicks = category_paid_clicks + category_organic_clicks` ONLY. `brand_paid_clicks` and `brand_organic_clicks` are a parallel attribution dimension (which brand the click landed on), NOT additive to category clicks. See `tests/grounded/categories-performance-shape.md`.
+- NEVER fabricate `total_clicks` as the sum of all 4 click-breakdown fields. The empirical equation is `total_clicks = category_paid_clicks + category_organic_clicks` ONLY. `brand_paid_clicks` and `brand_organic_clicks` are a parallel attribution dimension (which brand the click landed on), NOT additive to category clicks. Per `categories-performance-shape`.
 - NEVER fabricate a single "market share" without committing to a basis. Commit to `revenue_share` as the canonical metric; render `total_views_share` and `units_sold_share` as adjacent columns for transparency. Top-10 sums to ~80% of revenue, ~64% of views, ~36% of units sold (long tail differs by basis).
 - NEVER conflate `top_brand` (winner of clicks for the keyword) with `associated_brand` (brand the keyword refers to; null when non-branded). For `"smart watch"`, `associated_brand = null` and `top_brand = "SAMSUNG"`. Render both columns and footnote the distinction.
 - NEVER claim `get-websites-top-sites-by-category-agg` returns a "market size" or any traffic number. It returns ONLY `{domain, rank}` per row. To get visits, fan out into `get-websites-traffic-and-engagement` per domain (expensive, capability-gated, opt-in via `--enrich-traffic`).
 - NEVER assume a `rank` field on `-agg` rows. Top-brands and top-keywords are pre-sorted server-side; order IS rank. Add `rank = i+1` client-side.
-- NEVER trust the docstring's "last 28 days" default window. Empirical default for every `-agg` variant probed in T11 is 3 years (`2023-04-01` through last-completed-month). Document the actual window from `meta.request`.
+- NEVER trust the docstring's "last 28 days" default window. Empirical default for every `-agg` variant probed in the live grounding is 3 years (`2023-04-01` through last-completed-month). Document the actual window from `meta.request`.
 - NEVER attempt Web subcategory slugs with `/` (e.g. `Computers_Electronics_and_Technology/Search_Engines`). Returns `400 VALIDATION_ERROR` even for hierarchies the Similarweb web UI exposes. Top-level slugs only.
 - NEVER allow `--enrich-traffic` without `--web-companion`. Exit with usage hint.
 
@@ -93,7 +93,7 @@ Per sw-foundation-core § bulk-input-from-context. sw-market-size is single-cate
 | 6 (if `--web-companion`) | `get-websites-top-sites-by-category-agg` | Web industry leaderboard. Params: `category` (PascalCase slug matched from user input against hardcoded list), `country` (ISO-2), `limit: 10`. Returns ONLY `{domain, rank}` per row. |
 | 7 (if `--web-companion --enrich-traffic`) | `get-websites-traffic-and-engagement` | Looped per ranked domain from Step 6 (up to 10 calls). Returns visits + engagement metrics. Expensive: ~10-20 data credits per domain. |
 
-Hardcoded Web slug list (top-level only, case-sensitive, confirmed working in T11 probe):
+Hardcoded Web slug list (top-level only, case-sensitive, confirmed working in the live grounding probe):
 `Computers_Electronics_and_Technology`, `Health`, `Finance`, `Sports`, `News_and_Media`, `E-Commerce_and_Shopping`. If user input does not match exactly, the recipe asks one disambiguation question with the closest 3-5 slugs from the list.
 
 ## Step 5: Execute
@@ -110,7 +110,7 @@ Client-side derivations after responses arrive:
 3. Compute `top_5_revenue_share = sum(revenue_share for first 5 brands)`.
 4. Compute `top_10_revenue_share = sum(revenue_share for first 10 brands)`.
 5. Compute HHI from top-10 `revenue_share` values: `hhi = sum(s * s for s in revenue_shares) * 10000`. Note: top-10 covers only ~80% of revenue, so HHI is an underestimate (call this out in the rendered section).
-6. Verify the click identity from Step 2: `total_clicks == category_paid_clicks + category_organic_clicks`. If the identity fails by more than 1 unit (rounding), flag with `[!gap]` in the rendered output (the assumption from T11 grounding has shifted).
+6. Verify the click identity from Step 2: `total_clicks == category_paid_clicks + category_organic_clicks`. If the identity fails by more than 1 unit (rounding), flag with `[!gap]` in the rendered output (the grounded assumption has shifted).
 
 Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. For Step 6, distinguish `400 VALIDATION_ERROR` (unrecognized slug; ask the user to re-pick from the hardcoded list) from `404 NOT_FOUND` (recognized slug but no data for the country+window; report empty Web companion section with Caveat).
 
@@ -143,7 +143,7 @@ The list is intentionally narrow; document its scope in the rendered subsection.
 
 ## Step 6: Classify output intent
 
-Per sw-foundation intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
 
 ## Step 7: Render
 
@@ -187,7 +187,7 @@ Sections in order:
   `"What's the audience overlap between <top_amazon_brand>.com and <top_web_domain>?"`
   with one sentence on how the Amazon shopper population differs from the broad-web population.)
 - `## Caveats` (per sw-foundation-render § error-rendering, only if any tool returned null / was unavailable / was skipped / fell back to web-only mode / disambiguation took place / a Web slug mapping was ambiguous).
-- `## Sources` (collapsible). Last element of the output unless `intent=handoff`.
+- Sources line per sw-foundation-render § citation block (single line, NOT a table, NOT collapsible). Last element of the output unless `intent=handoff`.
 - `[optional] ## Handoff` (JSON, only when intent=handoff).
 
 ## Step 8: Citation + caveats + optional handoff
@@ -255,7 +255,7 @@ Keys are parent names; values carry the matched constituent list (subset of the 
 
 Field semantics:
 - `category.web_slug` is `null` unless `--web-companion` succeeded.
-- `performance.window.note` records that the default window is 3-year aggregate per T11 grounding, NOT 28 days as the docstring claims.
+- `performance.window.note` records that the default window is 3-year aggregate per the live grounding, NOT 28 days as the docstring claims.
 - `top_brands` rows pre-sorted by revenue desc as returned; `rank` is the client-side `i+1`.
 - `top_keywords` rows pre-sorted by `keyword_total_clicks` desc; `associated_brand` may be `null`.
 - `concentration.hhi_from_top_10` computed as `sum(revenue_share ** 2) * 10000` over the top-10 rows.
@@ -283,7 +283,7 @@ Field semantics:
 - **Web tool returns `404 NOT_FOUND`**: recognized slug but no data for the country + window. Render empty Web companion section with Caveat: "No Web-industry data for slug `<slug>` in country `<country>` for the rolling-3-month window."
 - **`--enrich-traffic` passed without `--web-companion`**: exit with usage hint at Step 1.
 - **User passes a non-default Amazon TLD** (e.g. `--amazon-tld amazon.de`): accept any of the 6 enum values. `revenue` will be in native currency (EUR); `revenue_in_usd` is the USD-normalized field per `categories-top-brands-shape`. Recipe always uses `revenue_in_usd` for the rendered revenue column to keep cross-domain sums consistent.
-- **`total_clicks != category_paid_clicks + category_organic_clicks`** (identity drift from T11 grounding): flag with `[!gap]` in the Total demand section: "Click identity from grounding does not hold; the click breakdown semantics may have shifted server-side."
+- **`total_clicks != category_paid_clicks + category_organic_clicks`** (identity drift from the grounding): flag with `[!gap]` in the Total demand section: "Click identity from grounding does not hold; the click breakdown semantics may have shifted server-side."
 - **`get-categories-sales-performance-agg` access-denied at runtime**: skip Step 5; skip the Sales performance section; note in Caveats: "Sales performance not accessible on this plan."
 - **`get-websites-top-sites-by-category-agg` access-denied at runtime** (and `--web-companion` supplied): skip Step 6; skip the Web companion section; note in Caveats: "Web companion not accessible on this plan; Amazon shopper sizing only." If the entire user request was Web-only (no Amazon match), exit with "Neither Amazon shopper nor Web industry data is accessible for `<input>` on this plan."
 - **`get-websites-traffic-and-engagement` access-denied at runtime** (and `--enrich-traffic` supplied): skip Step 7; render the Web companion top-sites table without the Traffic enrichment subsection; note in Caveats: "Traffic enrichment not accessible on this plan; Web companion rendered as domain leaderboard only."
@@ -370,7 +370,7 @@ If a connector is not configured, the recipe surfaces a one-line fallback: "To e
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - categories-search-resolution
 - categories-performance-shape

@@ -20,4 +20,4 @@ Recipes' `## Export options` blocks (one per recipe) cite the connectors by plac
 This plugin does not bundle the connector targets. Users must install the upstream plugins separately:
 
 - pptx, xlsx, pdf, docx: Anthropic-shipped via the SkillsPlugin registry (auto-available in Cowork).
-- slack-by-salesforce, salesforce-crm, data: install from the cowork.com plugin marketplace.
+- slack-by-salesforce, salesforce-crm, data: install from Cowork's in-app plugin marketplace (Customize, then Plugins).

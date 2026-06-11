@@ -1,0 +1,26 @@
+{
+  "name": "similarweb-mcp-plugin",
+  "owner": {
+    "name": "Idan Yaron",
+    "url": "https://github.com/idan-yaron"
+  },
+  "plugins": [
+    {
+      "name": "similarweb",
+      "source": "./",
+      "description": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output.",
+      "version": "0.1.14",
+      "author": {
+        "name": "Similarweb"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/idan-yaron/similarweb-mcp-plugin",
+      "keywords": [
+        "similarweb",
+        "mcp",
+        "competitive-intelligence",
+        "marketing-analytics"
+      ]
+    }
+  ]
+}

@@ -12,9 +12,9 @@ description: Proxy AEO audit for a brand domain. Use when the user asks about An
 
 ## Hard rules (NEVER violate)
 
-- NEVER promise direct AI-engine measurement without `--campaign-id`. The audit IS a proxy by default. Per `aeo-tool-availability` (T15), `get-gen-ai-campaign-analysis-prompts` returns HTTP 400 `VALIDATION_ERROR: Requested campaign is unknown for your account` for any ad-hoc campaign_id because the customer must pre-configure an AI Tracker campaign in the Similarweb product UI by an account admin, AND the MCP catalog exposes no way to discover, enumerate, or create those campaigns. Recipe substitutes SEO + SERP + landing-pages as proxy. The proxy framing ships in the Executive read AND in an always-on Caveat.
+- NEVER promise direct AI-engine measurement without `--campaign-id`. The audit IS a proxy by default. Per `aeo-tool-availability`, `get-gen-ai-campaign-analysis-prompts` returns HTTP 400 `VALIDATION_ERROR: Requested campaign is unknown for your account` for any ad-hoc campaign_id because the customer must pre-configure an AI Tracker campaign in the Similarweb product UI by an account admin, AND the MCP catalog exposes no way to discover, enumerate, or create those campaigns. Recipe substitutes SEO + SERP + landing-pages as proxy. The proxy framing ships in the Executive read AND in an always-on Caveat.
 - NEVER use `get-keywords-top-brands-agg` for AEO. That tool is Amazon-shopper-only (returns Amazon brand rankings inside the Amazon shopper graph, NOT general-web SERP brand presence). The general-web equivalent does not exist; recipe uses `get-websites-serp-players-agg` for share-of-voice via SERP-ranked-domains-by-keyword.
-- NEVER pass a date range wider than the rolling 3 months to `get-keywords-seo-overview` or `get-websites-serp-players-agg`. Server returns HTTP 400 `VALIDATION_ERROR` per `aeo-seo-overview-shape`, `aeo-serp-players-shape`. Recipe derives effective `end_date` per sw-foundation-data § window-resolution (Step 1 rank smoke's `meta.last_updated`) and clamps `start_date = end_date - 3 months`. Wider windows are rejected server-side.
+- NEVER pass a date range wider than the rolling 3 months to `get-keywords-seo-overview` or `get-websites-serp-players-agg`. Server returns HTTP 400 `VALIDATION_ERROR` per `aeo-seo-overview-shape`, `aeo-serp-players-shape`. Recipe derives effective `end_date` per sw-foundation-data § window-resolution (the Step 4 rank call's `meta.last_updated`; this recipe's Step 2 smoke is `get-keywords-seo-overview`, not rank) and uses the relative-keyword window `start_date = "2_months_ago"`, `end_date = "latest"` (a 3-month INCLUSIVE span; computing end_date minus a literal 3 months yields a 4-month span the server rejects, per § window-resolution rule 3). Wider windows are rejected server-side.
 - NEVER pass a 3-month window to `get-websites-landing-pages-agg` with `granularity: "monthly"`. Per `landing-pages-window-constraint`, monthly granularity returns LAST MONTH ONLY (not 3 months); the server either truncates silently or returns `VALIDATION_ERROR`. Step 4 MUST special-case this window: `start_date = first day of effective_end_date's month`, `end_date = effective_end_date`. This is one calendar month, the most recent one.
 - NEVER widen the AEO-worthiness scoring set beyond `{related_questions, featured_snippet, featured_answer, organic_sitelinks, organic_expanded_sitelinks}` without updating the rendered footnote AND `tests/grounded/serp-features-enum.md`. The 5-feature set is the answer-box-adjacent enum; `featured_answer` was added in the 2026-05-17 grounding pass after the live MCP returned it on lululemon.com (gift card, returns and refunds) and a broader cross-domain probe (apple.com, webmd.com, clevelandclinic.org). `featured_snippet` is kept for forward-compat; the live server currently labels the answer-box as `featured_answer`.
 - NEVER skip the proxy-vs-direct caveat. It ships in EVERY run, even when `--campaign-id` succeeded with 200. The user must always understand the proxy-vs-direct distinction.
@@ -47,7 +47,7 @@ fi
 
 Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-seo-overview` for the FIRST keyword from `--keywords` if supplied, else the user's prompt-derived seed term (or the target domain's brand term), country=us. Wait synchronously for the response. Do NOT issue any other call yet.
+1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-seo-overview` for the FIRST keyword from `--keywords` if supplied, else a clear prompt-derived seed term, country=us. If NO keywords were supplied AND the prompt carries no clear seed term, run Step 3 (keyword acquisition) BEFORE this smoke so the smoke spends on a keyword the audit will actually use; fall back to the target's brand term only when the prompt implies a brand-level audit. Wait synchronously for the response. Do NOT issue any other call yet.
 2. **Branch**:
    - 200: cache the result; reuse this response for Step 4 Step 2 (the SEO overview for the first keyword) to avoid re-calling. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-website-rank` for the target domain, country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark `get-keywords-seo-overview` as inaccessible_this_run and ABORT (the recipe cannot ship an AEO audit without SEO-overview signal); render Caveat "AEO audit requires `get-keywords-seo-overview`; tool not accessible on this plan."
@@ -78,7 +78,7 @@ Per sw-foundation-core § bulk-input-from-context. If `--keywords` was not suppl
 
 | Step | Tool | Purpose |
 |------|------|---------|
-| 1 | `get-websites-website-rank` | Smoke + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series |
+| 1 | `get-websites-website-rank` | Headline rank + derive effective `end_date` from `meta.last_updated` (NOT this recipe's smoke; the Step 2 smoke is `get-keywords-seo-overview`). Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits vs ~74 for the default 36-month series |
 | 2 | `get-keywords-seo-overview` | Branded vs unbranded clicks split + intent mix; addressable AEO market context |
 | 3 | `get-websites-serp-players-agg` | LOOPED per keyword (5-10 calls); brand's `traffic_share` + `serp_features` per keyword; competitive set |
 | 4 | `get-websites-landing-pages-agg` | Brand's organic landing pages; AEO-worthiness score per URL from answer-box-adjacent `serp_features` |
@@ -88,7 +88,7 @@ Per-keyword fanout: Step 3 fans out to N keywords (default 5-10, capped at 10). 
 
 ## Step 5: Execute
 
-Step 1 runs first. Derive effective window per sw-foundation-data § window-resolution: `end_date = meta.last_updated` (currently `2026-04-30`; clamp here even if user-supplied `end_date` differs); `start_date = end_date - 3 months` in YYYY-MM granularity (e.g., `end_date = 2026-04`, `start_date = 2026-02`).
+Step 1 runs first. Derive the effective window per sw-foundation-data § window-resolution: pass `start_date = "2_months_ago"`, `end_date = "latest"`; the server clamps to its latest published month and echoes the effective dates (a 3-month inclusive span, e.g. effective `end_date = 2026-04` gives `start_date = 2026-02`). NEVER compute `end_date - 3 months` client-side; per § window-resolution rule 3 that yields a 4-month span the capped tools reject.
 
 **Window special-case for Step 4 (per `landing-pages-window-constraint`):** Steps 2 and 3 use the rolling 3-month window. Step 4 (`get-websites-landing-pages-agg`) is monthly-only-last-month: pass `start_date = first day of effective_end_date's month`, `end_date = effective_end_date`. Concretely if `end_date = 2026-04-30`, Step 4 uses `start_date = 2026-04-01, end_date = 2026-04-30` (the single most recent month) while Steps 2 and 3 use `start_date = 2026-02-01, end_date = 2026-04-30` (the rolling 3-month window). Passing a 3-month window to landing-pages-agg with monthly granularity returns last-month-only data anyway (silent truncation) or a VALIDATION_ERROR; this special-case avoids both failure modes.
 
@@ -127,7 +127,7 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
 
 ## Step 7: Render
 
@@ -165,10 +165,10 @@ Sections in order:
 
   Reference specific keywords, competitor domains, or AI-cited domains surfaced in THIS run.)
 - `## Caveats` (ALWAYS includes the proxy-vs-direct caveat; additional entries per sw-foundation-render § error-rendering for null / unavailable / capability-skipped / inferred keywords / brand absent from any keyword's top-10 / `end_date` clamped / window narrower than 3 months for new domains).
-- `## Sources` (collapsible). Last element of the output unless `intent=handoff`.
+- Sources line per sw-foundation-render § citation block (single line, NOT a table, NOT collapsible). Last element of the output unless `intent=handoff`.
 - `[optional] ## Handoff` (JSON, only when intent=handoff).
 
-Proxy-vs-direct caveat exact text class: "This audit approximates AEO from traditional SEO + SERP + landing-pages signals (the proxy). Direct AI-engine measurement requires a pre-configured AI Tracker campaign in the Similarweb product UI. If you have a campaign UUID, share it with me and I'll lift this from proxy to direct measurement. See `tests/grounded/aeo-tool-availability.md`."
+Proxy-vs-direct caveat exact text class: "This audit approximates AEO from traditional SEO + SERP + landing-pages signals (the proxy). Direct AI-engine measurement requires a pre-configured AI Tracker campaign in the Similarweb product UI. If you have a campaign UUID, share it with me and I'll lift this from proxy to direct measurement."
 
 ## Step 8: Citation + caveats + optional handoff
 
@@ -277,7 +277,7 @@ If a connector is not configured, the recipe surfaces a one-line fallback: "To e
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - aeo-tool-availability
 - aeo-seo-overview-shape

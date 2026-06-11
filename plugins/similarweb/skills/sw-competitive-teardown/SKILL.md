@@ -38,7 +38,7 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-compe
 
 Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww. Wait synchronously for the response. Do NOT issue any other call yet.
+1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing (an unbounded call returns the multi-year series at ~10x the credits). Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 item 1; reuse it, never re-issue it.
 2. **Branch**:
    - 200: cache the rank result; this becomes the "rank smoke" data Step 4 references for end_date derivation. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-traffic-and-engagement` for the target, country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
@@ -66,20 +66,23 @@ already in conversation context and not covered by --vs args, offer enrichment.
 If `--vs` was NOT supplied AND no competitor list was found in conversation
 context, call `get-websites-similar-sites-agg(domain=target, limit=4)` to
 auto-discover the top 4 competitors and use them as the implicit comp set.
+Window rule per `similar-sites-window-constraint`: either omit start_date/end_date
+entirely, or pass EXACTLY a 3-month span (`start_date = "2_months_ago"`,
+`end_date = "latest"`); any other explicit span 400s.
 Surface them in a one-line Caveat: "No competitors supplied; using top 4
 similar sites: X, Y, Z, W. Name a different set if you want me to compare against specific competitors."
-Cost: ~5-10 data credits for the discovery call (Step 4 would have called
+Cost: ~20 data credits at limit 4 (~5 per returned row). Step 4 would have called
 similar-sites-agg anyway, so the marginal cost when this fires before
-Step 4 is zero; the call is reused).
+Step 4 is zero; the call is reused.
 
 ## Step 4: Plan the call sequence
 
 Always-included (filter against capabilities):
 
-1. `get-websites-website-rank` per domain TWICE per domain: once with `country: "ww"` to populate the Global rank column (no `global_rank` field exists in the response; use `country_rank` from the `ww` call per `website-rank-no-global-field`), and once with `country: "<user-country>"` to populate the Country rank column. Bound EACH call to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits per call. Total: ~4-8 data credits per domain. When the user-supplied country IS `ww`, make only ONE call and use that response for both the Global and Country columns (the Country rank column collapses to "n/a" in that case; surface in Caveats).
+1. `get-websites-website-rank` TWICE per domain: once with `country: "ww"` to populate the Global rank column (no `global_rank` field exists in the response; use `country_rank` from the `ww` call per `website-rank-no-global-field`), and once with `country: "<user-country>"` to populate the Country rank column. For the TARGET, the Step 2 smoke already IS the `ww` call; reuse its cached result and issue only the user-country call. Bound EACH call to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per bounded call (~2 per month of window). Total: ~12 data credits per domain (~6 for the target thanks to smoke reuse). When the user-supplied country IS `ww`, make only ONE call per domain (none for the target) and use that response for both the Global and Country columns (the Country rank column collapses to "n/a" in that case; surface in Caveats).
 2. `get-websites-traffic-and-engagement` per domain.
 3. `get-websites-traffic-channels` per domain (absolute visits per channel). If a share % view is needed for the Channel breakdown table, derive client-side from these visits: `share[ch] = visits[ch] / sum(visits)`. Do NOT call `get-traffic-channels-share` for the rollup; ~200 data credits per call avoided, ~800 data credits for a 4-domain teardown.
-4. `get-websites-similar-sites-agg` for target.
+4. `get-websites-similar-sites-agg` for target (omit dates, or pass exactly the 3-month `2_months_ago`/`latest` span per `similar-sites-window-constraint`; reuse the Step 3 result if discovery already ran).
 
 Opt-in only when `--with-rank-delta` is supplied (default false):
 
@@ -96,12 +99,13 @@ Opt-in only when `--with-amazon-context` was supplied:
 
 ## Step 5: Execute calls
 
-Parallelize independent calls when supported. Per sw-foundation tool-call
+Parallelize independent calls when supported. Per sw-foundation-core tool-call
 economy rule #1, loop the non-agg tools (1, 2, 3, 6) across domains; only
 step 5 batches entities. Step 1 makes two calls per domain (one with
 `country: "ww"` for global rank, one with the user country for in-country
 rank) per `website-rank-no-global-field`; parallelize both within the
-per-domain loop. Per sw-foundation-core § capability-gating country-coverage
+per-domain loop (the target needs only the user-country call; its ww data
+is the Step 2 smoke). Per sw-foundation-core § Country-coverage gap
 detection, the (tool, $country) batch is skipped if a prior call for any
 tool in this turn detected the country-coverage gap envelope for $country;
 fall back to the ww-only data for those domains. Step 7 (`get-keywords-top-brands-agg`) is the opt-in
@@ -119,7 +123,7 @@ does not abort on a single tool's failure.
 
 ## Step 6: Classify output intent
 
-Use sw-foundation's intent-aware rules table; the result drives whether
+Use sw-foundation-render's intent-aware rules table; the result drives whether
 § citation block emits the handoff JSON appendix.
 
 ## Step 7: Render
@@ -144,7 +148,7 @@ Numbers-LIGHT. Maximum 3 sentences. Lead with the verdict label (MAJOR / MATERIA
 
 When the current recipe builds materially on a prior recipe in this conversation, prepend the Executive read with the "Connecting back" line per sw-foundation-data § conversation-context.
 
-LEDE: the BIGGEST DELTA across the comp set when any period-over-period data was fetched (label as `WITHIN NOISE` / `MATERIAL CHANGE` / `MAJOR CHANGE` per sw-foundation-render § expert-heuristics). If no PoP data, lede on the biggest current asymmetry. Static volume rank is the second sentence, NOT the lede.
+LEDE: the BIGGEST DELTA across the comp set when any period-over-period data is available in THIS run (the multi-month window already fetched, `--with-rank-delta`, or figures reused via § conversation-context; the teardown plans no extra prior-window calls). Label it `WITHIN NOISE` / `MATERIAL CHANGE` / `MAJOR CHANGE` per sw-foundation-render § expert-heuristics. If no PoP data, lede on the biggest current asymmetry. Static volume rank is the second sentence, NOT the lede.
 
 Engagement quality score (`(1 - bounce_rate) * pages_per_visit`) renders as a per-domain line BELOW the executive read, not inside it.
 
@@ -190,7 +194,7 @@ bullets. NEVER ship a generic recommendation.
 ### NEXT MOVES
 
 EXACTLY 2 bullets, each a backtick-quoted natural-language question the
-user might ask in chat, derived from THIS run's findings. Per sw-foundation
+user might ask in chat, derived from THIS run's findings. Per sw-foundation-render
 § citation block conversational-tone rule, NEVER emit `/sw-X` slash-commands
 or `--flag` syntax here. The router auto-dispatches free-form questions.
 
@@ -255,6 +259,10 @@ country is `ww`, only one call is made and `country` is set to `null`.
 parameters passed (always `"ww"` for global; the user country for
 country, or `null` when collapsed).
 
+`similar_sites[].similarity_score` maps from the live response field
+`affinity` (0..1 scale; the response has NO `similarity_score` field, per
+`response-field-name-lookup` and `similar-sites-window-constraint`).
+
 `rank_table.<domain>.delta_yoy` is optional. It is `null` by default and
 only populated for the TARGET when `--with-rank-delta` was supplied AND
 Step 1b returned a 12-month series. Competitors always have
@@ -290,7 +298,7 @@ returned data. Shape when populated:
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - mcp-tool-catalog-v1
 - agg-variant-cost-savings
@@ -300,3 +308,4 @@ This skill's behavior is live-validated against the following assertions in `tes
 - website-rank-no-global-field
 - ppc-spend-shape
 - response-field-name-lookup
+- similar-sites-window-constraint

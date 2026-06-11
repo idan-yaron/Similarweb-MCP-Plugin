@@ -5,7 +5,7 @@
 **Turn the Similarweb MCP server into deterministic, analyst-grade playbooks across Cowork, Claude Code, Codex, Cursor, and Claude.ai.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.13-blue.svg)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.1.14-blue.svg)](.claude-plugin/plugin.json)
 [![Platforms](https://img.shields.io/badge/platforms-Cowork%20%7C%20Claude%20Code%20%7C%20Codex%20%7C%20Cursor%20%7C%20Claude.ai-blueviolet.svg)](#install)
 [![Python](https://img.shields.io/badge/python-3.x%20stdlib-blue.svg)](build.py)
 
@@ -17,7 +17,7 @@
 
 ## The problem this solves
 
-The Similarweb MCP exposes 90 tools across web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
+The Similarweb MCP exposes roughly 90 tools (the exact surface varies by plan and server release) across web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
 
 This plugin is the expert layer that sits between your LLM and the Similarweb MCP. Install it once, ask anything Similarweb-shaped in natural language, and get a structured analyst-grade response.
 
@@ -39,7 +39,7 @@ nike.com vs adidas.com | us | Feb-Apr 2026 | last_updated 2026-04-30
 MATERIAL CHANGE: adidas's Display Ads spiked +54.4% over the last quarter
 while nike's channel mix held flat, narrowing the static volume lead from
 1.8x to 1.5x. Engagement quality at nike 3.7 stays ahead of adidas 2.9.
-Audience overlap places the pair at 10.9% of union (SAME POND tier).
+Audience overlap places the pair at 10.9% of union (COMPLEMENTARY tier).
 
 ## Rank + reach
 
@@ -66,7 +66,7 @@ adidas.com
 
 27.7% of adidas visits also go to nike   ███████████████▏
 13.6% of nike visits also go to adidas   ███████▏
-10.9% share of union, SAME POND tier.
+10.9% share of union, COMPLEMENTARY tier.
 
 ## Strategic insights
 
@@ -108,11 +108,11 @@ What the plugin did under the hood: one batched `get-websites-audience-overlap-a
 ### Auto-trigger background skills
 
 - **`sw-router`** classifies any free-form Similarweb-shaped prompt that did NOT invoke a specific `/sw-*` command, dispatches to the best-fit recipe in one line, or asks one crisp clarifier with explicit options.
-- **`sw-foundation-core`**, **`sw-foundation-data`**, **`sw-foundation-render`** auto-load together on every Similarweb-shaped turn. They carry the MCP tool catalog with quirks, country and window normalization, freshness rules, citation block, error rendering patterns, and Unicode visualizations.
+- **`sw-foundation-core`**, **`sw-foundation-data`**, **`sw-foundation-render`** load via each recipe's Inherits block (and via sw-router when it dispatches to a recipe); trivial single-metric lookups intentionally skip them for latency. They carry the MCP tool catalog with quirks, country and window normalization, freshness rules, citation block, error rendering patterns, and Unicode visualizations.
 
 ### Operator skills
 
-- **`/sw-setup`** runs a thorough probe across all six tool categories and writes a known-state capability map to `~/.similarweb-plugin/capabilities.json`. Recipes do not require this map; they run lazily and discover access at runtime.
+- **`sw-setup`** (a background skill with no slash command of its own; `/sw-config --refresh` invokes it for you) runs a thorough probe across all six tool categories and writes a known-state capability map to `~/.similarweb-plugin/capabilities.json`. Recipes do not require this map; they run lazily and discover access at runtime.
 - **`/sw-config`** inspects, refreshes, or wipes the capability map; on Cowork it can schedule weekly or monthly grounding re-validation.
 
 ## Quickstart
@@ -123,13 +123,13 @@ Pick the easiest path for your stack. Full per-platform details are in [`docs/in
 
 ```
 1. Configure the Similarweb MCP in Cowork (see Prerequisite)
-2. Download similarweb-cowork-0.1.13.zip from the Releases page:
+2. Download similarweb-cowork-0.1.14.zip from the Releases page:
    https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest
 3. Open Cowork: Customize > Plugins > Upload plugin, select the file
 4. Type: "compare nike.com and adidas.com on similarweb"
 ```
 
-You should see the recipe surface in the slash menu, the three sub-agents in the agent palette, and the UserPromptSubmit hook suggesting recipes on Similarweb-shaped prompts.
+You should see the recipe commands in the slash menu (possibly namespaced under similarweb), the three sub-agents in the agent palette, and the UserPromptSubmit hook suggesting recipes on Similarweb-shaped prompts. Natural language always works regardless of the slash surface; the router dispatches it.
 
 ### Claude Code, Codex, Cursor, Claude.ai
 
@@ -148,9 +148,9 @@ Grab the bundle for your AI client from the [Releases page](https://github.com/i
 <details>
 <summary><b>Cowork (Claude Desktop)</b></summary>
 
-Open Cowork, click **Customize > Plugins > Upload plugin**, select `similarweb-cowork-0.1.13.zip`. The validator should accept the bundle on first try.
+Open Cowork, click **Customize > Plugins > Upload plugin**, select `similarweb-cowork-0.1.14.zip`. The validator should accept the bundle on first try.
 
-After install: `/sw-config --show` confirms the bundle is live, the seven recipes appear in the `/` menu, three sub-agents appear in the agent palette, and Similarweb-shaped free-form prompts auto-suggest recipes via the UserPromptSubmit hook.
+After install: the seven recipe commands appear in the `/` menu (possibly namespaced under similarweb), three sub-agents appear in the agent palette, and Similarweb-shaped free-form prompts auto-suggest recipes via the UserPromptSubmit hook. To confirm the bundle is live, pick the sw-config command from the menu with `--show`, or just ask "show my similarweb plugin config".
 
 Requires the Similarweb MCP connector enabled in Cowork (see Prerequisite).
 
@@ -159,14 +159,14 @@ Requires the Similarweb MCP connector enabled in Cowork (see Prerequisite).
 <details>
 <summary><b>Claude Code</b></summary>
 
-Install via the plugin marketplace flow:
+Install via the plugin marketplace flow (the repo root doubles as a Claude Code marketplace):
 
 ```bash
-/plugin marketplace add <git-url>
-/plugin install similarweb@<marketplace>
+/plugin marketplace add idan-yaron/Similarweb-MCP-Plugin
+/plugin install similarweb@similarweb-mcp-plugin
 ```
 
-Or drop `similarweb-claude-code-0.1.13.zip` into your Claude Code plugins directory and reload. After install: `/sw-config --show` confirms the bundle is live. Skills-only subset (no sub-agents, hooks, or HTML artifacts). Requires the Similarweb MCP server registered in your Claude Code MCP config (see Prerequisite).
+This installs from the git tree, which carries the full source surface (skills, commands, agents, hooks; the Cowork-only render helper stays inert outside Cowork). After install, plugin commands are namespaced: run `/similarweb:sw-config --show` to confirm the bundle is live, or just ask "show my similarweb plugin config" in natural language. Requires the Similarweb MCP server registered in your Claude Code MCP config (see Prerequisite).
 
 </details>
 
@@ -181,7 +181,7 @@ The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.co
 2. Click the marketplace dropdown next to the search bar (it defaults to **Built by OpenAI**) and choose **+ Add more**.
 3. In the **Add marketplace** dialog:
    - **Source**: `idan-yaron/Similarweb-MCP-Plugin`
-   - **Git ref**: `v0.1.13` (or `main` for the latest)
+   - **Git ref**: `v0.1.14` (or `main` for the latest)
    - **Sparse paths**: leave blank
 4. Click **Add marketplace**. The marketplace registers and the Similarweb plugin appears under the dropdown.
 5. Open a new chat and type `compare nike.com and adidas.com on similarweb`. The `sw-router` skill auto-dispatches to `sw-competitive-teardown`.
@@ -190,7 +190,7 @@ The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.co
 
 ```bash
 # From the directory containing the downloaded zip:
-unzip similarweb-codex-0.1.13.zip -d ./similarweb-codex
+unzip similarweb-codex-0.1.14.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
 codex plugin add similarweb@Similarweb
 ```
@@ -203,11 +203,11 @@ The Codex bundle ships `plugins/similarweb/.mcp.json.template` for the MCP shape
 
 #### Sub-agents companion (optional, source-build only)
 
-Per the Codex spec, sub-agents live in `~/.codex/agents/` outside any plugin. The three TOMLs are NOT attached to the GitHub release to keep the downloads page focused on the four installable AI environments. To get them, clone the repo and run `python3 build.py --build`; the TOMLs will appear under `dist/similarweb-codex-subagents-0.1.13/`. Then:
+Per the Codex spec, sub-agents live in `~/.codex/agents/` outside any plugin. The three TOMLs are NOT attached to the GitHub release to keep the downloads page focused on the four installable AI environments. To get them, clone the repo and run `python3 build.py --build`; the TOMLs will appear under `dist/similarweb-codex-subagents-0.1.14/`. Then:
 
 ```bash
 mkdir -p ~/.codex/agents
-cp dist/similarweb-codex-subagents-0.1.13/*.toml ~/.codex/agents/
+cp dist/similarweb-codex-subagents-0.1.14/*.toml ~/.codex/agents/
 ```
 
 #### Hooks limitation
@@ -219,14 +219,14 @@ codex-cli 0.133.0-alpha.1 does not execute plugin hooks in `exec` sessions (veri
 <details>
 <summary><b>Cursor</b></summary>
 
-Install via `/add-plugin` from a local path pointing at `similarweb-cursor-0.1.13.zip`, or via cursor.com/marketplace if published. After install, `/sw-config` should be available in the command palette and chat. Skills-only subset. Requires the Similarweb MCP server in Cursor's MCP settings (see Prerequisite).
+Cursor's plugin surface is the newest of the five targets and still shifting; treat this bundle as experimental. Unzip `similarweb-cursor-0.1.14.zip` and install per your Cursor version's plugin flow (command palette, plugin settings, or its marketplace when published). After install, the sw-config command should be available (possibly namespaced under similarweb); natural-language prompts route via sw-router either way. Skills plus commands subset. Requires the Similarweb MCP server in Cursor's MCP settings (see Prerequisite).
 
 </details>
 
 <details>
 <summary><b>Claude.ai</b></summary>
 
-Claude.ai installs skills one at a time: **Settings > Features > Skills > upload** each of the 13 per-skill zips from `similarweb-claude-ai-0.1.13/` individually.
+Claude.ai installs skills one at a time: **Settings > Features > Skills > upload** each of the 13 per-skill zips from `similarweb-claude-ai-0.1.14/` individually.
 
 Claude.ai has no slash command surface, so invocation is by name in natural language: "run sw-competitive-teardown on apple.com vs samsung.com" or just "compare apple.com and samsung.com on similarweb" (the router handles the natural-language dispatch). Skills-only subset. Requires the Similarweb MCP connector enabled in your Claude.ai account (see Prerequisite).
 
@@ -255,7 +255,7 @@ For click-by-click instructions, smoke-test prompts, known per-platform limitati
 
 Four moving parts:
 
-1. **Foundation layer**. Three silent skills (`sw-foundation-core`, `sw-foundation-data`, `sw-foundation-render`) auto-load on every Similarweb-shaped turn. They carry the MCP tool catalog with quirks, country and window resolution, freshness rules, citation block, error rendering, and intent-aware output rules so the LLM does not rediscover the surface each session.
+1. **Foundation layer**. Three silent skills (`sw-foundation-core`, `sw-foundation-data`, `sw-foundation-render`) load through each recipe's Inherits block and through router dispatch (trivial lookups skip them for latency). They carry the MCP tool catalog with quirks, country and window resolution, freshness rules, citation block, error rendering, and intent-aware output rules so the LLM does not rediscover the surface each session.
 2. **Recipes**. Seven deterministic multi-tool playbooks for the high-value analyses. Each one enforces hard rules: no fabrication, no N looped calls when an `-agg` batched variant exists, ISO-2 country normalization, citation block, expert-heuristic confidence tags on every insight.
 3. **Router**. Classifies any free-form Similarweb-shaped prompt to the best-fit recipe in one line, asks one crisp clarifier with explicit options when multiple recipes fit, or plans a direct 1-to-3-tool MCP sequence when no recipe fits.
 4. **Lazy capability discovery**. Recipes never hard-stop on a missing capability map. When a tool returns 403 or a partial-access envelope, the recipe degrades gracefully (skipping optional steps, aborting only if a required tool is gated) and appends the observation to `~/.similarweb-plugin/capabilities.json`. Future runs pre-filter. Run `/sw-config --refresh` for a proactive probe.

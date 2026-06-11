@@ -19,5 +19,7 @@ jobs:
         run: python3 build.py --validate
       - name: Build all platform bundles
         run: python3 build.py --build
+      - name: Codex mirror must match source (rebuild produced no diff)
+        run: git diff --exit-code -- .agents plugins
       - name: List build artifacts
         run: ls -la dist/

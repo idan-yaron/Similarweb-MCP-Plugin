@@ -12,7 +12,7 @@ description: Channel mix breakdown for a target domain with optional period over
 
 ## Hard rules (NEVER violate)
 
-- NEVER call `get-segments-traffic-sources` for the "top referral sources" section. That tool requires a `segment` ID (a user-defined audience segment), NOT a `domain`, and returns per-segment marketing-channel mix, NOT a referrer list. The right tool is `get-traffic-referrals-incoming`. See `tests/grounded/traffic-sources-shape.md`.
+- NEVER call `get-segments-traffic-sources` for the "top referral sources" section. That tool requires a `segment` ID (a user-defined audience segment), NOT a `domain`, and returns per-segment marketing-channel mix, NOT a referrer list. The right tool is `get-traffic-referrals-incoming`. Per `traffic-sources-shape`.
 - NEVER pass a full country name (`"United States"`) to any tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize before any call.
 - NEVER pass `end_date: <today>`. The server rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution (Step 0 rank smoke's `meta.last_updated`; currently `2026-04-30`).
 - NEVER fabricate a per-channel breakdown of PPC spend from `get-websites-ppc-spend` output alone. The tool returns ONE `ppc_spend` scalar per month with NO Paid Search vs Paid Social vs Display split. If per-channel paid attribution is required, compose with `get-websites-traffic-channels` Paid Search + Paid Social + Display Ads visits and qualify the result as "estimated allocation by paid-channel visit share."
@@ -43,7 +43,7 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-chann
 
 Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=`$COUNTRY` (user-supplied or default `us`). Wait synchronously for the response. Do NOT issue any other call yet.
+1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the Step 4 row 0 rank call; reuse it, never re-issue it.
 2. **Branch**:
    - 200: cache the rank result; this becomes the Step 0 "rank smoke" data Step 4 references for end_date derivation. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-traffic-channels` for the target, country=`$COUNTRY`, single-month window. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
@@ -61,7 +61,7 @@ Per sw-foundation-core § bulk-input-from-context. sw-channel-mix is single-doma
 
 | Step | Tool | Purpose |
 |------|------|---------|
-| 0 | `get-websites-website-rank` | Smoke + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. If the Rank + reach section needs an explicit global rank column too, make a SECOND call with `country: "ww"` (also bounded the same way). |
+| 0 | `get-websites-website-rank` | The Step 2 smoke (reused, not re-called) + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. If the Rank + reach section needs an explicit global rank column too, make a SECOND call with `country: "ww"` (also bounded the same way). |
 | 1 | `get-websites-traffic-channels` | Current window |
 | 2 | `get-websites-traffic-channels` | Prior window (only if `--vs-period`) |
 | 3 | `get-traffic-channels-share` | OPT-IN ONLY (when `--with-share-tool` supplied). Long-tail referrer rows the traffic-channels tool does not surface. Default OFF: ~200 data credits per call avoided; for a typical single-domain run that's ~200 data credits saved. Share % view of the 10 channels is derived client-side from Step 1 visits (see Step 5 derivation). The long-tail-referrer data is partially recovered from Step 4 (`get-traffic-referrals-incoming`) which this recipe already calls, so skipping it does not lose unique signal. |
@@ -71,13 +71,13 @@ Per sw-foundation-core § bulk-input-from-context. sw-channel-mix is single-doma
 
 ## Step 5: Execute
 
-Step 0 runs first; derive effective `end_date` from its `meta.last_updated` per sw-foundation-data § window-resolution (`start_date = end_date - window_length`). Steps 1, 4, 5, 6 are independent given the resolved date range; parallelize. Step 2 only runs if `--vs-period`; can parallelize with Steps 4-6 since its params are independent. Step 3 only runs if `--with-share-tool` was supplied.
+Step 0 runs first; derive the effective `end_date` from its `meta.last_updated`, then derive the current and prior windows with relative keywords per sw-foundation-data § window-resolution rule 7 (default 3-month window: current = `2_months_ago` through `latest`; prior = `5_months_ago` through `3_months_ago`; never client-side date arithmetic). Steps 1, 4, 5, 6 are independent given the resolved date range; parallelize. Step 2 only runs if `--vs-period`; can parallelize with Steps 4-6 since its params are independent. Step 3 only runs if `--with-share-tool` was supplied.
 
 Compute period-over-period deltas client-side:
 1. From Step 1 (current window): aggregate `data` into `dict[source_type] -> sum(visits)` across all returned month rows.
 2. From Step 2 (prior window): same aggregation.
 3. For each channel in the 10-channel taxonomy: `delta_visits = current[ch] - prior[ch]`, `pct_change = (current[ch] - prior[ch]) / prior[ch]` (guard division by zero, render `n/a` if `prior[ch]` is zero or null).
-4. **Apply the verdict ladder per sw-foundation-render § expert-heuristics to the OVERALL traffic delta** (sum across channels): `|delta_pct| < 5%` -> `WITHIN NOISE`; `5% <= |delta_pct| < 15%` -> `MATERIAL`; `|delta_pct| >= 15%` -> `MAJOR`. The verdict label becomes the first word of the Executive read lede. When the verdict is WITHIN NOISE, the recipe outputs ONLY the headline + Sources block and STOPS rendering downstream narrative sections; do NOT invent root causes for noise. The data tables (channel breakdown, share, referrals, PPC) still render at the user's request, but the Strategic insights / NEXT MOVES sections are replaced by a one-line "Within-noise verdict; no root-cause hypothesis warranted at this delta."
+4. **Apply the verdict ladder per sw-foundation-render § expert-heuristics to the OVERALL traffic delta** (sum across channels): `|delta_pct| < 5%` -> `WITHIN NOISE`; `5% <= |delta_pct| < 15%` -> `MATERIAL`; `|delta_pct| >= 15%` -> `MAJOR`. The verdict label becomes the first word of the Executive read lede. When the verdict is WITHIN NOISE, suppress the NARRATIVE sections only; do NOT invent root causes for noise. The data tables (channel breakdown, share, referrals, PPC) STILL render in this same response (the user invoked the recipe; the tables are the requested deliverable). The Strategic insights and NEXT MOVES sections are replaced by a one-line "Within-noise verdict; no root-cause hypothesis warranted at this delta."
 5. If user supplies asymmetric windows (e.g. `--window quarter --vs-period previous-month`), normalize to average-visits-per-month per window and compare those, not raw sums.
 6. Suppress channels below a visit-count floor (1% of total target traffic) from "biggest mover" candidacy in the executive read; % changes on small-base channels are not interesting.
 
@@ -92,7 +92,7 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
 
 ## Step 7: Render
 
@@ -137,7 +137,7 @@ Sections in order:
 
   Under WITHIN NOISE verdict, replace with: "NEXT MOVES skipped under WITHIN NOISE; re-run later if a trend matters.")
 - `## Caveats` (per sw-foundation-render § error-rendering, only if any tool returned null / was unavailable / was skipped / `end_date` was clamped).
-- `## Sources` (collapsible). Last element of the output unless `intent=handoff`.
+- Sources line per sw-foundation-render § citation block (single line, NOT a table, NOT collapsible). Last element of the output unless `intent=handoff`.
 - `[optional] ## Handoff` (JSON, only when intent=handoff).
 
 ## Step 8: Citation + caveats + optional handoff
@@ -289,7 +289,7 @@ If a connector is not configured, the recipe surfaces a one-line fallback: "To e
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - traffic-channels-tool-shape
 - channel-mix-period-comparison

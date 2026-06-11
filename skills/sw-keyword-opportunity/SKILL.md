@@ -47,7 +47,7 @@ Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in t
 
 1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain, country=us. Wait synchronously for the response. Do NOT issue any other call yet.
 2. **Branch**:
-   - 200: cache the result; reuse it as the first enrichment row in Step 4 Step 4 if the seed term ends up in the gap-keywords list. Proceed to Step 2A.
+   - 200: cache the result; reuse it as the first enrichment row in Step 4 row 4 if the seed term ends up in the gap-keywords list. Proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-website-analysis-keywords-agg` for the target domain, country=us, single-month window, `limit: 5`. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark `get-keywords-overview` as inaccessible_this_run and ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
    - Country-coverage gap (a 400 `client_error` or a 200-empty response carrying a country-coverage message, per sw-foundation-core § Country-coverage gap detection): do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat.
    - Other error: retry once. If still failing, mark `get-keywords-overview` as fragile-this-run and proceed.
@@ -63,13 +63,13 @@ Per sw-foundation-core § bulk-input-from-context. If `--vs` was not supplied an
 
 | Step | Tool | Purpose |
 |------|------|---------|
-| 0 | `get-websites-website-rank` | Smoke + headline rank for BOTH target and competitor + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution; ~2-4 data credits per call (2 calls = ~5-8 total). |
+| 0 | `get-websites-website-rank` | Headline rank for BOTH target and competitor + derive effective `end_date` from `meta.last_updated` (NOT this recipe's smoke; the Step 2 smoke is `get-keywords-overview`). Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per call (2 calls = ~12 total). |
 | 1 | `get-websites-keywords-competitors-agg` | Top organic competitors of target, sanity-check that `--vs <competitor>` actually shares keywords. EXACT 3-month window required. ~3 sw_coins. |
 | 2 | `get-website-analysis-keywords-agg` | Target's top organic keywords (limit=25). 3-month window. ~2 sw_coins. |
 | 3 | `get-website-analysis-keywords-agg` | Competitor's top organic keywords (limit=25). 3-month window. ~2 sw_coins. |
 | 4 | `get-keywords-overview` | LOOPED per top-10 gap keyword (where competitor wins but target doesn't), enriches with volume + difficulty + CPC + intent volumes. ~1 sw_coin per keyword (10 calls = ~10 sw_coins). |
 
-Default total cost: ~25-30 sw_coins per run.
+Default total cost: ~30-40 data credits per run.
 
 ## Step 5: Execute
 
@@ -88,6 +88,8 @@ Client-side derivations after responses arrive:
    - `shared_keywords`: keywords where BOTH target and competitor rank (both present in intersection)
    - `target_wins`: keywords where target ranks but competitor does NOT
 
+   MANDATORY caveat rendered with the Gap table: "Gap = absent from `<target>`'s top-25 organic keywords (the limit=25 pull); the target may still rank below that cutoff for these terms. Treat gaps as priority candidates, not proof of zero presence."
+
 3. **ROI score per gap keyword** (after Step 4 enriches volume / difficulty / CPC):
    ```
    roi_score = volume_competitor_position_factor / max(difficulty, 1)
@@ -104,13 +106,13 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
 
 ## Step 7: Render
 
 Apply token compression per sw-foundation-render § citation block. Body output target ~2500-3500 chars.
 
-**Header (FIRST line of output, ONE italic line):** `*{target} vs {competitor} | {country} | Feb-Apr 2026 | last_updated {meta.last_updated}*`. Drop duplicate parentheticals from every subsequent section header.
+**Header (FIRST line of output, ONE italic line):** `*{target} vs {competitor} | {country} | {window} | last_updated {meta.last_updated}*`. Drop duplicate parentheticals from every subsequent section header.
 
 Visualizations per sw-foundation-render § visualizations (Unicode-first):
 - **Gap keyword ROI bars:** Unicode horizontal bars over top-10 gap keywords sorted by ROI desc (cap width 16). Pair with the table.
@@ -139,7 +141,7 @@ Sections in order:
 
   Reference specific gap keywords, intent clusters, or competitor names surfaced in THIS run.)
 - `## Caveats` (per sw-foundation-render § error-rendering, only if any tool returned null / was unavailable / was skipped / the `--vs` competitor doesn't appear in target's keyword competitors / overview enrichment was partial / nested issues).
-- `## Sources` (collapsible). Last element of the output unless `intent=handoff`.
+- Sources line per sw-foundation-render § citation block (single line, NOT a table, NOT collapsible). Last element of the output unless `intent=handoff`.
 - `[optional] ## Handoff` (JSON, only when intent=handoff).
 
 ## Step 8: Citation + caveats + optional handoff
@@ -229,7 +231,7 @@ If a connector is not configured, the recipe surfaces a one-line fallback: "To e
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - keywords-competitors-shape
 - keywords-analysis-shape

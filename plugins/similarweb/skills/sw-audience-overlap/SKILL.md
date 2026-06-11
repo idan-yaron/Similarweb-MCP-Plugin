@@ -38,9 +38,9 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-audie
 
 Apply sw-foundation-core § smoke-first sequencing AND § capability-gating in this exact order:
 
-1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww. Wait synchronously for the response. Do NOT issue any other call yet.
+1. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 row 1; reuse it, never re-issue it.
 2. **Branch**:
-   - 200: cache the rank result for reuse in Step 4 Step 1; proceed to Step 2A.
+   - 200: cache the rank result for reuse in Step 4 row 1; proceed to Step 2A.
    - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-audience-overlap-agg` for `domains = "<target>,<first --against domain>"` (2-domain batched call), country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
    - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
 3. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run.
@@ -54,19 +54,22 @@ Per sw-foundation-core § bulk-input-from-context. If no --against args, check c
 If `--against` was NOT supplied AND no competitor list was found in conversation
 context, call `get-websites-similar-sites-agg(domain=target, limit=4)` to
 auto-discover the top 4 competitors and use them as the implicit `--against`
-set. Surface them in a one-line Caveat: "No competitors supplied; using top 4
+set. Window rule per `similar-sites-window-constraint`: either omit
+start_date/end_date entirely, or pass EXACTLY the 3-month span
+(`start_date = "2_months_ago"`, `end_date = "latest"`); any other explicit
+span 400s. Surface them in a one-line Caveat: "No competitors supplied; using top 4
 similar sites: X, Y, Z, W. Name a different set if you want me to compare against specific competitors."
-Cost: ~5-10 data credits for the discovery call.
+Cost: ~20 data credits at limit 4 (~5 per returned row).
 
 ## Step 4: Plan the call sequence
 
 | Step | Tool | Per-call scope |
 |------|------|----------------|
-| 1 | `get-websites-website-rank` | Looped per domain (target + each --against), TWO calls per domain per `website-rank-no-global-field`: once with `country: "ww"` for global rank and once with `country: "<user-country>"` for country rank. Bound each call to a single month per sw-foundation-data § window-resolution; ~2-4 data credits per call (~4-8 per domain). When the user-supplied country is `ww`, make only one call per domain and set the Country rank column to `n/a`. |
+| 1 | `get-websites-website-rank` | Looped per domain (target + each --against), TWO calls per domain per `website-rank-no-global-field`: once with `country: "ww"` for global rank and once with `country: "<user-country>"` for country rank. The TARGET's ww call is the Step 2 smoke; reuse it and issue only the user-country call for the target. Bound each call to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-data § window-resolution; ~6 data credits per call (~12 per domain, ~6 for the target). When the user-supplied country is `ww`, make only one call per domain (none for the target) and set the Country rank column to `n/a`. |
 | 2 | `get-websites-audience-overlap-agg` | Single batched call, `domains` comma-joined (2-5 total). Returns 2^N - 1 rows |
 | 3 | `get-websites-demographics-agg` | Single call for target, `country` is ISO-2 |
-| 4 | `get-websites-geography-agg` | Single call for target. MAY pass `limit: 10` to cut cost from 699 to ~70 data credits |
-| 5 | `get-websites-deduplicated-audience` | **Looped per domain** (one call per target + each --against); live tool takes a SINGLE `domain` |
+| 4 | `get-websites-geography-agg` | Single call for target. ALWAYS pass `limit: 10` (the render uses top 10 only); the unbounded call costs ~699 data credits, the limit-10 form is estimated ~10x cheaper (estimate not yet re-grounded; treat surprises per § citation block cost note). Omit the limit ONLY if the user explicitly asks for full country coverage. |
+| 5 | `get-websites-deduplicated-audience` | **Looped per domain** (one call per target + each --against); live tool takes a SINGLE `domain`. BUDGET GATE: ~259 data credits per domain (`deduplicated-audience-shape`), the dominant cost of this recipe. Run by default only when the analysis set is 2 domains; for 3+ domains, skip by default and offer in ONE line ("Deduplicated reach for N domains adds ~259xN data credits; want it?"), running it only on user consent. When skipped, render the section per the budget-skip edge case. |
 | 5b | `get-websites-audience-interests-agg` | **Looped per domain** (one call per target + each --against); `limit: 15`. ~60 data credits per call per `audience-interests-shape`. Feeds the Persona overlap (Jaccard) section. Skipped if not accessible; omit section + note in Caveats. |
 
 Steps 1-4 are independent; parallelize. Step 5 loops; parallelize within the loop. Step 5b also loops; parallelize within the loop and parallel with Step 5.
@@ -110,7 +113,7 @@ Render rows for each k in order. If `marginal_pct[k] < 0.02`, append a "near zer
 
 ## Step 6: Classify output intent
 
-Per sw-foundation intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
 
 ## Step 7: Render
 
@@ -124,14 +127,14 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 
 Sections in order:
 
-- `## Executive read` (numbers-LIGHT, max 3 sentences. LEDE on the MOST DISTINCT pair AND the MOST SIMILAR pair in one sentence with the audience-overlap label for each pair per sw-foundation-render § expert-heuristics (e.g., "Nike <-> Adidas = 10.9% SAME POND tier; Nike <-> ASICS = 2.9% DISJOINT"). Demographic asymmetry, geographic concentration, and deduplicated reach delta land in subsequent sentences only if material. When the current recipe builds materially on a prior recipe in this conversation, prepend the Executive read with the "Connecting back" line per sw-foundation-data § conversation-context.).
+- `## Executive read` (numbers-LIGHT, max 3 sentences. LEDE on the MOST DISTINCT pair AND the MOST SIMILAR pair in one sentence with the audience-overlap label for each pair per sw-foundation-render § expert-heuristics (e.g., "Nike <-> Adidas = 10.9% COMPLEMENTARY tier; Nike <-> ASICS = 2.9% DISJOINT"). Demographic asymmetry, geographic concentration, and deduplicated reach delta land in subsequent sentences only if material. When the current recipe builds materially on a prior recipe in this conversation, prepend the Executive read with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## Rank + reach` (table: domain, global rank, country rank).
 - `## Subset overlap`. NORMALIZE every row by splitting `domains` on comma, sorting, rejoining as canonical key. Server row order is NOT trusted; **derive `share_of_union`** as `overlap_unique_visitors / union_unique_users` (server does NOT supply it). **Apply the audience-overlap label per sw-foundation-render § expert-heuristics** to EVERY pairwise (2-element) row: `share_of_union >= 40%` -> `SAME POND`; `15% <= share_of_union < 40%` -> `ADJACENT`; `5% <= share_of_union < 15%` -> `COMPLEMENTARY`; `share_of_union < 5%` -> `DISJOINT`. The label is added as a column on the Pairwise subsets table. Then organize rows into visual subsection groups (instead of one flat table) in this fixed order:
   - `### All-N intersection` (the single row covering all input domains)
   - `### N-1 way subsets` (rows that drop exactly one domain; for N=4, that is 4 rows)
   - `### Pairwise subsets` (rows of exactly 2 domains; for N=4, that is 6 rows). Columns: `Domains in subset`, `Overlap unique visitors`, `Union unique users`, `Share of union`, `Label`. Label values are from the § expert-heuristics enum.
   - `### Singletons (for reference)` (1-element subsets, one per input domain)
-  Within each subsection, sort rows alphabetically by the canonical subset key. The All-N, N-1 way, and Singletons subsections render their tables WITHOUT the `Label` column (the audience-overlap label is defined for pairwise overlaps only). For N=2 or N=3 input domains, some subsection groups will be empty; omit those subsections entirely. For singletons, append the `[*]` footnote to the `Share of union` cell per Round 1 fix R1.4; the value will always be `100%` by definition. After the last subsection, render the footnote: "[*] Singleton subset rows render `share_of_union = 100%` by definition (overlap of a 1-element set is the set itself). This is correct math; the meaningful comparison is across 2+ element subsets." Plus a second footnote: "Label thresholds come from sw-foundation-render § expert-heuristics. SAME POND = duplicative audiences (>=40%); ADJACENT = meaningful overlap with distinct audiences (15-39%); COMPLEMENTARY = efficient incremental reach (5-14%); DISJOINT = essentially independent (<5%)."
+  Within each subsection, sort rows alphabetically by the canonical subset key. The All-N, N-1 way, and Singletons subsections render their tables WITHOUT the `Label` column (the audience-overlap label is defined for pairwise overlaps only). For N=2 or N=3 input domains, some subsection groups will be empty; omit those subsections entirely. For singletons, append the `[*]` footnote to the `Share of union` cell; the value will always be `100%` by definition. After the last subsection, render the footnote: "[*] Singleton subset rows render `share_of_union = 100%` by definition (overlap of a 1-element set is the set itself). This is correct math; the meaningful comparison is across 2+ element subsets." Plus a second footnote: "Label thresholds come from sw-foundation-render § expert-heuristics. SAME POND = duplicative audiences (>=40%); ADJACENT = meaningful overlap with distinct audiences (15-39%); COMPLEMENTARY = efficient incremental reach (5-14%); DISJOINT = essentially independent (<5%)."
 - `## Target audience demographics`. TWO adjacent tables: age (6 buckets) and gender (male + female). NOT a crossed matrix; age and gender are independent dimensions in the server response. Shares as % to 1 decimal.
 - `## Target audience geography`. Top 10 countries by `share` (defensively re-sort descending before slicing). Aggregate the remainder into one "Rest of world" row. Render `country_name` as label. Render `rank: 0` as `n/a` (server sentinel for "not ranked", not a true zero).
 - `## Deduplicated audience`. Per-domain latest-row headline (since looped). For each domain: latest-month `total_deduplicated_audience` and the three device-mix shares (desktop-only, mobile-only, cross-device). If section skipped: "Deduplicated audience not accessible on this plan."
@@ -217,15 +220,16 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
 - **>4 --against supplied**: drop to top 4 by global rank (Step 1); note in Caveats.
 - **Full country name passed**: normalize per sw-foundation-data § country-normalization before any call. If not resolvable, ask one disambiguation question.
 - **`audience-overlap-agg` returns access-denied at runtime**: treat as runtime capability mismatch; suggest refreshing the capability map (a `/sw-config --refresh` run) in Caveats so the next session pre-filters this tool.
-- **`deduplicated-audience` skipped for budget**: render section as "Deduplicated audience skipped (~259 data credits per domain x {{N}} domains)."; note in Caveats.
+- **`deduplicated-audience` skipped for budget** (default for 3+ domains per the Step 4 budget gate, until the user consents): render section as "Deduplicated audience skipped (~259 data credits per domain x {{N}} domains). Say the word and I'll run it."; note in Caveats.
 - **`audience-interests-agg` access-denied at runtime**: skip Step 5b; OMIT the `## Persona overlap` section; render a single-line note: "Persona overlap skipped: get-websites-audience-interests-agg not accessible on this plan." Add to Caveats. `persona_overlap` is `null` in handoff.
 - **N=1 (target only, no --against supplied AND no auto-discovered set)**: skip Step 5b entirely; omit the `## Persona overlap` and `## Incremental reach decay` sections (pairwise Jaccard and marginal-reach are undefined for a single domain). The recipe still renders the rest.
 - **Step 2 subset row missing for a (d_1, ..., d_k) combination**: render `marginal[k] = n/a` for that row in the Incremental reach decay section; surface in Caveats. Continue rendering subsequent rows (they consume the next subset row).
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
+- similar-sites-window-constraint
 - audience-overlap-tool-shape
 - audience-overlap-recipe-shape
 - audience-demographics-shape

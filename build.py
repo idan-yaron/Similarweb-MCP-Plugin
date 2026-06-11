@@ -4,7 +4,7 @@ build.py: translator and packager for similarweb-mcp-plugin.
 
 Modes:
   --validate  Structural validation (frontmatter, description cap, file presence). CI-safe.
-  --build     Emit four per-platform bundles to dist/.
+  --build     Emit five platform bundles plus the codex sub-agents companion to dist/.
   --test      Run local tests (requires tests/ directory).
   --ground    Stub: re-grounding is a manual process today (see CONTRIBUTING.md).
 
@@ -356,6 +356,23 @@ def scan_personal_data():
     return errors
 
 
+def scan_em_dashes():
+    """No-em-dash hard rule: U+2014 may not appear in any shipped file."""
+    errors = []
+    for relpath, path in _shipped_files():
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for i, line in enumerate(lines, start=1):
+            if chr(0x2014) in line:
+                errors.append(
+                    f"EM DASH: {relpath}:{i} contains U+2014; use commas, colons, "
+                    f"parentheses, or a sentence break."
+                )
+    return errors
+
+
 def cmd_validate():
     """Frontmatter present, descriptions under Claude.ai cap, file presence per target,
     grounding citations resolve, fragility-aware dependency check.
@@ -400,6 +417,12 @@ def cmd_validate():
                 f"the description (bisect-confirmed 2026-05-19). Rewrite as plain prose. "
                 f"CLI flag syntax belongs in commands/<name>.md `argument-hint`, not in "
                 f"skill descriptions."
+            )
+        if ": " in desc:
+            errors.append(
+                f"{path}: description contains a colon followed by a space; strict YAML "
+                f"parsers (PyYAML, js-yaml) reject plain scalars containing ': '. "
+                f"Reword without the colon (e.g. 'such as' instead of ':')."
             )
     if not PLUGIN_MANIFEST.exists():
         errors.append(f"missing {PLUGIN_MANIFEST}")
@@ -451,6 +474,17 @@ def cmd_validate():
                         f"{name} depends on '{dep}' (fragility: fragile, "
                         f"n_observations: {n_obs})"
                     )
+
+    commands_dir = REPO_ROOT / "commands"
+    if commands_dir.is_dir():
+        for cmd_md in sorted(commands_dir.glob("*.md")):
+            try:
+                cmd_fm, _ = parse_frontmatter(cmd_md)
+            except ValueError as e:
+                errors.append(f"{cmd_md}: command frontmatter malformed: {e}")
+                continue
+            if "description" not in cmd_fm:
+                errors.append(f"{cmd_md}: command missing required frontmatter key 'description'")
 
     agents_dir = REPO_ROOT / "agents"
     if agents_dir.is_dir():
@@ -546,7 +580,34 @@ def cmd_validate():
                     f"missed it; check the heading convention and re-run build.py --build."
                 )
 
+    cc_marketplace = REPO_ROOT / ".claude-plugin" / "marketplace.json"
+    if not cc_marketplace.is_file():
+        errors.append(
+            ".claude-plugin/marketplace.json is missing. The Claude Code "
+            "'/plugin marketplace add <git-url>' install path documented in the "
+            "README requires it at repo root."
+        )
+    else:
+        try:
+            mp = json.loads(cc_marketplace.read_text(encoding="utf-8"))
+            entries = mp.get("plugins", [])
+            entry = entries[0] if entries else {}
+            if entry.get("name") != load_plugin_manifest().get("name"):
+                errors.append(
+                    ".claude-plugin/marketplace.json plugins[0].name does not match "
+                    "plugin.json name"
+                )
+            if entry.get("version") != manifest_version:
+                errors.append(
+                    f".claude-plugin/marketplace.json plugins[0].version "
+                    f"({entry.get('version')}) != plugin.json version ({manifest_version}); "
+                    f"bump both on release"
+                )
+        except (json.JSONDecodeError, OSError) as e:
+            errors.append(f".claude-plugin/marketplace.json unreadable or invalid JSON: {e}")
+
     errors.extend(scan_personal_data())
+    errors.extend(scan_em_dashes())
 
     if errors:
         for e in errors:
@@ -882,12 +943,6 @@ def emit_cursor(manifest, version):
     zip_path = DIST_DIR / f"similarweb-cursor-{version}.zip"
     _zip_target_dir(target_dir, zip_path)
     print(f"  cursor: {zip_path}")
-
-
-def _format_fm_value(value):
-    if isinstance(value, list):
-        return value
-    return value
 
 
 def _rebuild_frontmatter(fm):

@@ -16,7 +16,7 @@ labels: bug
 3.
 
 **Environment**
-- AI client (Claude Code / Codex / Cursor / Claude.ai) and version:
+- AI client (Cowork / Claude Code / Codex / Cursor / Claude.ai) and version:
 - Plugin version (check `.claude-plugin/plugin.json`):
 - OS:
-- Similarweb MCP server version (visible via `/sw-config --show`):
+- Similarweb MCP server version (run the sw-config command with `--show`, or ask "show my similarweb plugin config"):

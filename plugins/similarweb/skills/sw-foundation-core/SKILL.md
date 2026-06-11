@@ -1,11 +1,11 @@
 ---
 name: sw-foundation-core
-description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries the Similarweb MCP server core priors: tool catalog, capability map, tool-call economy, freshness rules. Helper sections cited by recipes are section capability-gating and section bulk-input-from-context. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Does not call MCP tools itself; pairs with sw-foundation-data and sw-foundation-render.
+description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries the Similarweb MCP server core priors such as the tool catalog, capability map, tool-call economy, and freshness rules. Helper sections cited by recipes are section capability-gating and section bulk-input-from-context. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Does not call MCP tools itself; pairs with sw-foundation-data and sw-foundation-render.
 user-invocable: false
 ---
 # sw-foundation-core: Similarweb MCP catalog and tool-call economy
 
-Loads on every Similarweb-shaped turn. Does NOT call MCP tools. Teaches the model the surface and the cheap-vs-expensive rules.
+Loads via each recipe's Inherits block and via sw-router dispatch. Does NOT call MCP tools. Teaches the model the surface and the cheap-vs-expensive rules.
 
 ## Hard rules (NEVER violate)
 
@@ -35,8 +35,10 @@ Every recipe issues exactly ONE single-call probe before any parallel batching b
 ### The smoke call
 
 - ONE tool. ONE domain. ONE country. NO parallel siblings.
+- ALWAYS bounded: pass `start_date = "2_months_ago"`, `end_date = "latest"` (the known-safe rolling 3-month window). An unbounded `get-websites-website-rank` smoke returns the multi-year default series at roughly 10x the credits (~74 vs ~6).
 - Dispatch synchronously. Wait for the response before issuing any other call.
 - The recipe documents which tool is its smoke (see the per-recipe Step 2 sections).
+- The smoke result IS charged data. Recipes MUST reuse it for any later step that needs the same (tool, domain, country, window) instead of re-calling.
 
 ### Branch logic
 
@@ -77,7 +79,8 @@ Lazy-mode minimal shape: `{schema_version: 2, last_updated, tools_inaccessible: 
 ## MCP tool catalog grouped by intent
 
 Note: the catalog below reflects the Similarweb MCP server as of the last
-grounded probe (see `tests/grounding-ledger.json`). Tools the user lacks
+grounded probe and drifts with server releases; the live tool list exposed by
+the client is always the source of truth for what exists. Tools the user lacks
 access to are filtered out at recipe execution time using
 `$HOME/.similarweb-plugin/capabilities.json`.
 
@@ -90,11 +93,11 @@ access to are filtered out at recipe execution time using
 | Compare N domains' traffic | `get-websites-traffic-and-engagement` (same tool, looped over each domain) | as above; one call per domain | No batched-over-entities variant exists for this tool. Loop the non-agg tool. |
 | Traffic channels (absolute visits) | `get-websites-traffic-channels` | domain, country, window | Returns absolute visits by channel across the live 10-channel taxonomy: Affiliates, Direct, Display Ads, Gen AI, Mail, Organic Search, Organic Social, Paid Search, Paid Social, Referrals. Use `get-traffic-channels-share` for share-percentage view. |
 | Marketing channels by source | `get-traffic-referrals-incoming` | domain | Per-domain inbound referrers (`get-segments-traffic-sources` takes a Segment ID, not a domain). |
-| Similar sites | `get-websites-similar-sites-agg` | domain, country, limit | Default limit 10. |
+| Similar sites | `get-websites-similar-sites-agg` | domain, country, limit | Default limit 10. WINDOW CONSTRAINT: explicit start_date/end_date must span EXACTLY 3 months (use start_date 2_months_ago, end_date latest) or the call 400s with "must span exactly 3 month(s)"; omitting both dates is also safe. Response rows carry `affinity` (0..1 similarity); there is NO `similarity_score` field. Per `similar-sites-window-constraint`. |
 | Audience overlap | `get-websites-audience-overlap-agg` | domain, domains (comma-joined string, 2-5 domains) | Returns 2^N-1 subset rows in a single batched call. |
 | Demographics | `get-websites-demographics-agg` | domain, country | Age + gender breakdown. |
 | Geography | `get-websites-geography-agg` | domain | Country share. |
-| Conversion rates | `get-websites-conversion-rates-agg` | domain, vertical | Vertical-specific. |
+| Conversion rates | `get-websites-conversion-rates-agg` | domain, vertical | Vertical-specific. Module-gated: absent from many plans' tool lists entirely; verify the tool is present in the live tool list before planning it. |
 | PPC spend | `get-websites-ppc-spend` | domain, country, window, currency | Returns estimated monthly PPC spend as a single scalar per month (no by-channel breakdown). |
 | SERP positions | `get-websites-serp-players-agg` | keyword, country | Domain rankings for a keyword. |
 | Landing pages | `get-websites-landing-pages-agg` | domain, source_channel | Top entry points by channel. |
@@ -110,6 +113,8 @@ access to are filtered out at recipe execution time using
 | SEO landscape for a keyword | `get-keywords-seo-overview` | keyword, country |
 
 ### Apps-shaped queries
+
+The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (they are absent from the client's tool list rather than returning 403). Before planning any apps call, verify the tool name appears in the live tool list; if absent, treat the category as module_not_exposed and say so, do not attempt the call.
 
 | Intent | Tool | Key params |
 |--------|------|------------|
@@ -143,9 +148,9 @@ access to are filtered out at recipe execution time using
 
 ## Tool-call economy rules
 
-1. **Prefer `-agg` for time aggregation.** When you need a single aggregated row (e.g. lifetime demographics, all-time conversion) rather than a time series, the `-agg` variant returns one row at substantially lower credit cost (about 37x cheaper for demographics; see `tests/grounded/agg-variant-cost-savings.md`). For comparing N domains, loop the non-agg tool. The documented exception is `get-websites-audience-overlap-agg`, which accepts a comma-joined `domains` parameter (2-5 domains) and returns 2^N-1 subset rows in a single call.
+1. **Prefer `-agg` for time aggregation.** When you need a single aggregated row (e.g. lifetime demographics, all-time conversion) rather than a time series, the `-agg` variant returns one row at substantially lower credit cost (about 37x cheaper for demographics, per `agg-variant-cost-savings`). For comparing N domains, loop the non-agg tool. The documented exception is `get-websites-audience-overlap-agg`, which accepts a comma-joined `domains` parameter (2-5 domains) and returns 2^N-1 subset rows in a single call.
 2. **Smoke test first.** Use `get-websites-website-rank` as a one-call check that the domain has Similarweb coverage before running a full recipe.
-3. **Default windows.** 90 days for traffic, 30 days for SERP, 12 months for sales. Override only when user specifies.
+3. **Default windows.** Defer to sw-foundation-data § window-resolution: rolling 3 months (`start_date = "2_months_ago"`, `end_date = "latest"`) for traffic and SERP surfaces; the Amazon shopper surface defaults server-side to a multi-year aggregate. Override only when the user specifies.
 4. **Skip tools the user lacks.** Read `$HOME/.similarweb-plugin/capabilities.json` first; filter call plan against it.
 5. **Never re-call within a turn.** If you already have the data from a previous call this turn, use it. Don't re-call.
 
@@ -153,8 +158,7 @@ access to are filtered out at recipe execution time using
 
 Each MCP response carries `meta.last_updated` in `YYYY-MM-DD` form. Use it as
 the source of truth for that tool's freshness rather than assuming a cadence.
-Cadences observed in production (subject to drift; re-ground via
-`build.py --ground`):
+Cadences observed in production (subject to drift; re-grounded each release):
 
 | Bucket | Approximate cadence | Example tools |
 |--------|---------------------|---------------|
@@ -174,7 +178,7 @@ The capability map at `~/.similarweb-plugin/capabilities.json` is an OPTIONAL hi
 
 **Pattern (each recipe Step 2):**
 
-1. Try to read `~/.similarweb-plugin/capabilities.json`. If present and not expired, use its `tools_inaccessible` list (and `tools_available` map if also present) to pre-filter the call plan (skip OPTIONAL tools known to be inaccessible; abort if REQUIRED tools are flagged inaccessible).
+1. Try to read `~/.similarweb-plugin/capabilities.json`. If present and not expired, use its `tools_inaccessible` list (and `tools_available` map if also present) to pre-filter the call plan (skip OPTIONAL tools known to be inaccessible; abort if REQUIRED tools are flagged inaccessible). Expiry applies only to full-probe maps via their `refresh_after` field; a lazy append-only map (no `refresh_after`) never expires, it is an advisory set of observed denials.
 2. If missing or expired, proceed with no prior knowledge. Execute the recipe's planned tool calls.
 3. Wrap each tool call in § error-rendering pattern 3 handling. Record a tool as access-denied ONLY on an actual access error: HTTP 403 carrying "missing the required claims" (or an equivalent auth/access-denied message), consistent with the in-run tracking and persistence rules below. Do NOT record other 4xx responses as denials: a validation error (a 400 such as "Dates not in range", "at most 3 months", or a bad metric or param) is a schema or transient problem (handle per § error-rendering Pattern 2), and a country-coverage gap (per § Country-coverage gap detection / § Precedence) is a per-(tool, country) plan limitation, NOT a tool denial. Recording a validation error or a country gap in `tools_inaccessible` would poison the map and wrongly skip a tool the plan actually grants.
 4. At the end of the recipe (whether success, partial, or aborted), if any access-denied was observed, APPEND those tool names to `tools_inaccessible` in `~/.similarweb-plugin/capabilities.json`. Create the file with minimal shape if missing. Never overwrite known-accessible status; only append observed denials.
@@ -286,7 +290,7 @@ It does not call MCP tools, produce visible output, or override sw-config / any 
 
 ## Grounded assertions
 
-This skill's behavior is live-validated against the following assertions in `tests/grounding-ledger.json`. Build-time `--validate` rejects unknown references.
+This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - mcp-tool-catalog-v1
 - agg-variant-cost-savings
@@ -295,3 +299,4 @@ This skill's behavior is live-validated against the following assertions in `tes
 - website-rank-no-global-field
 - resource-reads-unavailable
 - country-coverage-gap-shape
+- similar-sites-window-constraint
