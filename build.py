@@ -36,7 +36,7 @@ CANONICAL_FRONTMATTER_ORDER = [
     "allowed-tools",
 ]
 
-TEXT_EXTENSIONS = {".sh", ".py", ".md", ".json", ".yml", ".yaml", ".txt", ".toml", ".template"}
+TEXT_EXTENSIONS = {".sh", ".py", ".md", ".json", ".yml", ".yaml", ".txt", ".toml", ".template", ".html", ".jsx"}
 TEXT_FILES = {".gitattributes", "LICENSE", "CONNECTORS.md", "README.md"}
 
 GROUNDED_BODY_HEADER = "## Grounded assertions"
@@ -212,11 +212,49 @@ def strip_cowork_sections(text):
     return "\n".join(out)
 
 
-def _copy_skills(skills_target, exclude_cowork_only, strip_cowork, write_openai_yaml=False):
-    """Copy skill SKILL.md files into a bundle's skills dir (already created by the
-    caller). Non-Cowork bundles drop the Cowork-only skill and strip Cowork tier
-    sections from each body. The Cowork bundle copies raw bytes so its skills stay
-    byte-identical to source."""
+CAPMAP_SOURCE_SKILL = "sw-foundation-core"
+CAPMAP_CONSUMER_SKILLS = ("sw-setup", "sw-config")
+
+
+def _skill_shipped_files(name, include_cowork_files):
+    """Map skill-relative posix path to source Path for the companion files a skill
+    ships beside SKILL.md. Shipping convention: references/*.md and scripts/*.py ship
+    to every bundle; references/cowork/* ships only when include_cowork_files is true
+    (the Cowork bundle). sw-setup and sw-config additionally receive a build-time copy
+    of sw-foundation-core's capmap.py (single source of truth) when it exists; its
+    absence is tolerated silently until the script lands."""
+    skill_dir = SKILLS_DIR / name
+    shipped = {}
+    references = skill_dir / "references"
+    if references.is_dir():
+        for p in sorted(references.glob("*.md")):
+            if p.is_file():
+                shipped[f"references/{p.name}"] = p
+        cowork_dir = references / "cowork"
+        if include_cowork_files and cowork_dir.is_dir():
+            for p in sorted(cowork_dir.iterdir()):
+                if p.is_file():
+                    shipped[f"references/cowork/{p.name}"] = p
+    scripts = skill_dir / "scripts"
+    if scripts.is_dir():
+        for p in sorted(scripts.glob("*.py")):
+            if p.is_file():
+                shipped[f"scripts/{p.name}"] = p
+    if name in CAPMAP_CONSUMER_SKILLS:
+        capmap_src = SKILLS_DIR / CAPMAP_SOURCE_SKILL / "scripts" / "capmap.py"
+        if capmap_src.is_file():
+            shipped["scripts/capmap.py"] = capmap_src
+    return shipped
+
+
+def _copy_skills(skills_target, exclude_cowork_only, strip_cowork, include_cowork_files,
+                 write_openai_yaml=False):
+    """Copy each skill's SKILL.md plus its shipped companion files (see
+    _skill_shipped_files) into a bundle's skills dir (already created by the
+    caller). Non-Cowork bundles drop the Cowork-only skill, strip Cowork tier
+    sections from each body, and pass include_cowork_files=False so
+    references/cowork/ stays out. The Cowork bundle copies raw bytes so its
+    skills stay byte-identical to source."""
     for name, path in list_skills(exclude_cowork_only=exclude_cowork_only):
         skill_target = skills_target / name
         skill_target.mkdir()
@@ -228,6 +266,10 @@ def _copy_skills(skills_target, exclude_cowork_only, strip_cowork, write_openai_
                 f.write(strip_cowork_sections(text))
         else:
             shutil.copy(path, dest)
+        for rel, src in _skill_shipped_files(name, include_cowork_files).items():
+            dest_file = skill_target / rel
+            dest_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(src, dest_file)
         if write_openai_yaml:
             _write_codex_skill_openai_yaml(skill_target, name)
 
@@ -373,9 +415,78 @@ def scan_em_dashes():
     return errors
 
 
+SKILL_FILE_POINTER_RX = re.compile(r"`((?:references|scripts)/[^`\n]+)`")
+
+
+def scan_skill_file_pointers():
+    """Pointer-integrity and orphan checks for per-skill shipped files.
+
+    Pointer grammar (pinned): a backtick-quoted path starting with references/ or
+    scripts/, relative to the skill's own directory. Checked per bundle variant:
+    in the raw (Cowork) body every pointer must resolve to a file the Cowork
+    bundle ships; in the stripped body every surviving pointer must resolve to a
+    file non-Cowork bundles ship, so a references/cowork/ pointer may appear only
+    inside sections strip_cowork_sections removes. Inverse check: a file under
+    references/ or scripts/ that no pointer in its skill's SKILL.md references is
+    an orphan. Exact filename capmap.py is exempt from the orphan check (build-time
+    copies; single source in sw-foundation-core)."""
+    errors = []
+    for name, path in list_skills():
+        try:
+            _, body = parse_frontmatter(path)
+        except ValueError:
+            continue  # malformed frontmatter is reported by cmd_validate's main pass
+        skill_dir = path.parent
+        raw_pointers = SKILL_FILE_POINTER_RX.findall(body)
+        shipped_cowork = _skill_shipped_files(name, include_cowork_files=True)
+        shipped_noncowork = _skill_shipped_files(name, include_cowork_files=False)
+        for ptr in raw_pointers:
+            if ptr in shipped_cowork:
+                continue
+            if (skill_dir / ptr).is_file():
+                errors.append(
+                    f"{path}: pointer `{ptr}` resolves to a file outside the shipping "
+                    f"convention (references/*.md, references/cowork/*, scripts/*.py), "
+                    f"so no bundle would carry it. Rename or relocate the file."
+                )
+            else:
+                errors.append(
+                    f"{path}: pointer `{ptr}` does not resolve to a file under "
+                    f"skills/{name}/. A dangling pointer ships a broken instruction; "
+                    f"add the file or fix the path."
+                )
+        if name not in COWORK_ONLY_SKILLS:
+            for ptr in SKILL_FILE_POINTER_RX.findall(strip_cowork_sections(body)):
+                if ptr in shipped_noncowork or ptr not in shipped_cowork:
+                    continue  # fine, or already reported by the raw pass above
+                errors.append(
+                    f"{path}: Cowork-only pointer `{ptr}` survives strip_cowork_sections, "
+                    f"so non-Cowork bundles would carry a pointer to a file they do not "
+                    f"ship. Move it inside a heading starting with '## Cowork' or a line "
+                    f"tagged (Cowork-only)."
+                )
+        pointer_set = set(raw_pointers)
+        for sub in ("references", "scripts"):
+            sub_dir = skill_dir / sub
+            if not sub_dir.is_dir():
+                continue
+            for f in sorted(sub_dir.rglob("*")):
+                if not f.is_file() or f.name == "capmap.py":
+                    continue
+                rel = f.relative_to(skill_dir).as_posix()
+                if rel not in pointer_set:
+                    errors.append(
+                        f"{path}: {rel} has no backticked pointer in SKILL.md; an "
+                        f"orphan file ships dead weight. Reference it as `{rel}` or "
+                        f"delete it."
+                    )
+    return errors
+
+
 def cmd_validate():
     """Frontmatter present, descriptions under Claude.ai cap, file presence per target,
-    grounding citations resolve, fragility-aware dependency check.
+    grounding citations resolve, pointer integrity for per-skill shipped files,
+    fragility-aware dependency check.
 
     Fragility-classifier rules (ledger schema v2):
     - validated:      passes silently.
@@ -564,21 +675,35 @@ def cmd_validate():
                     f"bundle (v0.1.11; it is Cowork-only, filtered by emit_codex). "
                     f"Re-run build.py --build."
                 )
-        for skill_md in sorted(skills_mirror.glob("*/SKILL.md")):
-            try:
-                _, body = parse_frontmatter(skill_md)
-            except ValueError:
-                body = skill_md.read_text(encoding="utf-8")
-            offenders = [
-                ln.strip()[:70] for ln in body.split("\n")
-                if ln.startswith("## Cowork") or "(Cowork-only)" in ln or "mcp__cowork__" in ln
-            ]
-            if offenders:
-                errors.append(
-                    f"{skill_md}: Codex bundle still carries Cowork-tier content (v0.1.11 "
-                    f"strips it from non-Cowork bundles): {offenders[:3]}. strip_cowork_sections "
-                    f"missed it; check the heading convention and re-run build.py --build."
-                )
+        for mirror_tree in (REPO_ROOT / ".agents", REPO_ROOT / "plugins"):
+            if not mirror_tree.is_dir():
+                continue
+            for mf in sorted(mirror_tree.rglob("*")):
+                if not mf.is_file():
+                    continue
+                parts = mf.relative_to(mirror_tree).parts
+                if any(parts[i] == "references" and parts[i + 1] == "cowork"
+                       for i in range(len(parts) - 1)):
+                    errors.append(
+                        f"{mf}: references/cowork/ content must not ship in the Codex "
+                        f"bundle (Cowork-only files; the per-bundle copy filter excludes "
+                        f"them). Re-run build.py --build."
+                    )
+                    continue
+                if mf.suffix.lower() in PII_SKIP_SUFFIXES:
+                    continue
+                offenders = [
+                    ln.strip()[:70]
+                    for ln in mf.read_text(encoding="utf-8", errors="replace").split("\n")
+                    if ln.startswith("## Cowork") or "(Cowork-only)" in ln or "mcp__cowork__" in ln
+                ]
+                if offenders:
+                    errors.append(
+                        f"{mf}: Codex bundle still carries Cowork-tier content (v0.1.11 "
+                        f"strips it from non-Cowork bundles): {offenders[:3]}. "
+                        f"strip_cowork_sections or the copy filter missed it; re-run "
+                        f"build.py --build."
+                    )
 
     cc_marketplace = REPO_ROOT / ".claude-plugin" / "marketplace.json"
     if not cc_marketplace.is_file():
@@ -608,6 +733,7 @@ def cmd_validate():
 
     errors.extend(scan_personal_data())
     errors.extend(scan_em_dashes())
+    errors.extend(scan_skill_file_pointers())
 
     if errors:
         for e in errors:
@@ -682,7 +808,8 @@ def emit_cowork(manifest, version):
         json.dump(manifest, f, indent=2)
     skills_target = target_dir / "skills"
     skills_target.mkdir()
-    _copy_skills(skills_target, exclude_cowork_only=False, strip_cowork=False)
+    _copy_skills(skills_target, exclude_cowork_only=False, strip_cowork=False,
+                 include_cowork_files=True)
     commands_src = REPO_ROOT / "commands"
     if commands_src.is_dir():
         shutil.copytree(commands_src, target_dir / "commands")
@@ -713,7 +840,8 @@ def emit_claude_code(manifest, version):
         json.dump(manifest, f, indent=2)
     skills_target = target_dir / "skills"
     skills_target.mkdir()
-    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True)
+    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True,
+                 include_cowork_files=False)
     commands_src = REPO_ROOT / "commands"
     if commands_src.is_dir():
         shutil.copytree(commands_src, target_dir / "commands")
@@ -811,7 +939,8 @@ def emit_codex(manifest, version):
 
     skills_target = plugin_root / "skills"
     skills_target.mkdir()
-    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True, write_openai_yaml=True)
+    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True,
+                 include_cowork_files=False, write_openai_yaml=True)
 
     mcp_template = {
         "mcpServers": {
@@ -936,7 +1065,8 @@ def emit_cursor(manifest, version):
         json.dump(marketplace, f, indent=2)
     skills_target = cursor_plugin_dir / "skills"
     skills_target.mkdir()
-    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True)
+    _copy_skills(skills_target, exclude_cowork_only=True, strip_cowork=True,
+                 include_cowork_files=False)
     commands_src = REPO_ROOT / "commands"
     if commands_src.is_dir():
         shutil.copytree(commands_src, cursor_plugin_dir / "commands")
@@ -980,7 +1110,10 @@ def _rebuild_frontmatter(fm):
 
 
 def emit_claude_ai(manifest, version):
-    """claude-ai: per-skill zips, strip allowed-tools + argument-hint, enforce 1024-char description cap."""
+    """claude-ai: per-skill zips, strip allowed-tools + argument-hint, enforce 1024-char
+    description cap. Each zip also carries the skill's shipped companion files minus
+    references/cowork/ (and sw-setup/sw-config get their capmap.py copy) so it stays
+    self-contained; text payloads are LF-normalized like _zip_target_dir does."""
     target_dir = DIST_DIR / f"similarweb-claude-ai-{version}"
     _prepare_target_dir(target_dir)
     for name, path in list_skills(exclude_cowork_only=True):
@@ -995,9 +1128,15 @@ def emit_claude_ai(manifest, version):
                 file=sys.stderr,
             )
         rebuilt = _rebuild_frontmatter(cleaned_fm) + "\n" + body
+        shipped = _skill_shipped_files(name, include_cowork_files=False)
         skill_zip = target_dir / f"{name}.zip"
         with zipfile.ZipFile(skill_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr(f"{name}/SKILL.md", rebuilt)
+            for rel in sorted(shipped):
+                data = shipped[rel].read_bytes()
+                if is_text(shipped[rel]):
+                    data = data.replace(b"\r\n", b"\n")
+                zf.writestr(f"{name}/{rel}", data)
         print(f"  claude-ai: {skill_zip}")
 
 
