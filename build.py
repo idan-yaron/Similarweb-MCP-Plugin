@@ -91,7 +91,7 @@ CODEX_LONG_DESCRIPTION = (
     "Expert co-pilot for the Similarweb MCP server. Seven analyst recipes "
     "(competitive teardown, audience overlap, channel mix, market size, AEO audit, "
     "page mix, keyword opportunity), free-form intent routing, lazy capability "
-    "discovery, intent-aware output. Turns the Similarweb MCP from a 90-tool flat "
+    "discovery, intent-aware output. Turns the Similarweb MCP from an 80-tool flat "
     "menu into deterministic multi-tool playbooks."
 )
 CODEX_DEFAULT_PROMPTS = [

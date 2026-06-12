@@ -37,7 +37,7 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 - **Caveats.** One bullet per real caveat (clamped windows, access denials, structural-zero rollups, brand absence, fallback modes). Drop duplicated context (window, country) the header already states. Drop "opt-in flag X not supplied" promotional lines: users see opt-in flags via `argument-hint` completion. Caveats are not for advertising features.
 - **Strategic insights (DEFEND / EXPOSE / PLAY).** 3 bullets, ~25 words each, `(confidence: HIGH | MEDIUM | LOW)` at end.
 - **NEXT MOVES.** 2 backtick-quoted natural-language questions, one-sentence rationale max each. See the conversational-tone rule below in this section. Do NOT emit slash-commands or `--flag` syntax in NEXT MOVES.
-- **Output-render targets (v0.1.14):** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
+- **Output-render targets:** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
 **1. Sources (single line, NOT a table, NOT collapsible).** Format:
 

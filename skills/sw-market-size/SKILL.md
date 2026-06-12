@@ -128,9 +128,8 @@ Recognized brand-families (heuristic):
 | Meta | Facebook, Instagram, WhatsApp, Oculus |
 | Amazon Inc. | Amazon, Ring, Eero, Audible, Kindle, Whole Foods |
 | Microsoft | Microsoft, LinkedIn, GitHub, Activision-Blizzard, Xbox, Surface |
-| Adobe | Adobe, Figma |
 | Samsung | Samsung, Harman Kardon, JBL, AKG |
-| Sony | Sony, Bose-via-Sony (where applicable), PlayStation |
+| Sony | Sony, PlayStation |
 | Procter & Gamble | Gillette, Oral-B, Pampers, Tide |
 | Unilever | Dove, Axe, Ben & Jerry's, Hellmann's |
 | L'Oréal | Maybelline, NYX, La Roche-Posay, CeraVe |
@@ -140,7 +139,7 @@ Recognized brand-families (heuristic):
 
 Matching: case-insensitive substring or exact-brand match; require 2+ matched constituents in the top-N for a parent to count as "consolidated". Computation: `consolidated_revenue_share = sum(revenue_share for matched)`, `consolidated_revenue_usd = sum(revenue_in_usd for matched)`.
 
-The list is intentionally narrow; document its scope in the rendered subsection. If the category has obvious parent-brand structure not covered above, suggest the user inspect the top-brands table manually.
+The list is intentionally narrow; document its scope in the rendered subsection. If the category has obvious parent-brand structure not covered above, suggest the user inspect the top-brands table manually. This is a static editorial table with no data-source backing: review its entries for ownership changes before each release.
 
 ## Step 6: Classify output intent
 
