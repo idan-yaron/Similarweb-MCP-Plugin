@@ -1,6 +1,6 @@
 ---
 name: sw-setup
-description: Manual capability probe for the Similarweb MCP server. Runs only when explicitly invoked via the sw-config refresh path; does NOT auto-trigger. Calls one cheap MCP tool per category (websites, keywords, apps, brands, categories, lead enrichment), records which tools the user has access to, and writes a fresh capabilities.json with a tools available map and a last full probe timestamp at $HOME/.similarweb-plugin/. Recipes do not require this file; the plugin runs lazily and discovers access at runtime via the foundation render error pattern, then appends observed denials to the same file. This skill exists as a manual recovery path for users who want a thorough up front map.
+description: Manual capability probe for the Similarweb MCP server. Runs only when explicitly invoked via the sw-config refresh path and never auto triggers. Calls one cheap tool per category, records access, and writes a fresh capabilities map with a full probe timestamp under the home directory. Recipes never require this file; the plugin discovers access lazily at runtime and appends observed denials to the same map.
 user-invocable: false
 ---
 # sw-setup: manual capability probe

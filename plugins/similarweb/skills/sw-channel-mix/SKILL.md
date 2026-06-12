@@ -1,6 +1,6 @@
 ---
 name: sw-channel-mix
-description: Channel mix breakdown for a target domain with optional period over period deltas, top inbound referrers, PPC investment, and ad network share. Use when the user asks about traffic channels, channel breakdown, paid versus organic split, PPC spend, ad network share, or channel mix shift over time on a single domain. Renders the live ten channel taxonomy from the traffic channels MCP tool. When the user asks for a period over period view the recipe runs two sequential calls because the flat time series cannot separate current from prior. Uses incoming referrals as the referrer source, renders PPC spend as a monthly scalar with no per channel split. Derives end date from a rank smoke. Delegates capability gating, citations, error rendering, and handoff JSON to sw foundation. Never fabricates per channel PPC attribution.
+description: Channel mix breakdown for a single domain with optional period over period deltas, top referrers, PPC spend, and ad network share. Use for traffic channels, channel breakdown, paid versus organic split, where traffic comes from, or whether paid or organic shifted over time. Renders the live ten channel taxonomy with period comparison on request. Do not use for multi domain channel comparisons (use sw-competitive-teardown) or keyword level paid analysis (use sw-keyword-opportunity).
 ---
 # sw-channel-mix
 

@@ -1,6 +1,6 @@
 ---
 name: sw-aeo-audit
-description: Proxy AEO audit for a brand domain. Use when the user asks about Answer Engine Optimization, AEO audit, AEO score, SERP share of voice for AI engines, answer box visibility, or similar Answer Engine readiness questions on a single domain. The dedicated AEO MCP tool needs a customer configured AI Tracker campaign UUID the server cannot discover, so the recipe substitutes SEO plus per keyword SERP share of voice plus answer box adjacent landing pages as a grounded proxy. When the user supplies a campaign UUID the audit promotes from proxy to direct signal. Server enforces a rolling 3 month window. Delegates capability gating, citations, error rendering, and handoff JSON to the sw foundation helpers. Never fabricates AEO data.
+description: AEO and AI search visibility audit for one brand domain. Use for Answer Engine Optimization, an AEO audit or score, an SEO audit of a domain, AI visibility posture, whether LLMs or AI assistants such as ChatGPT cite or recommend a brand, answer box presence, and SERP share of voice for AI engines. Runs a grounded proxy from SEO posture, per keyword SERP share, and answer box adjacent pages; an AI Tracker campaign UUID promotes it to direct measurement. Do not use for keyword gap mining versus a rival (use sw-keyword-opportunity) or for page level content mix (use sw-page-mix). Never fabricates AEO data.
 ---
 # sw-aeo-audit
 

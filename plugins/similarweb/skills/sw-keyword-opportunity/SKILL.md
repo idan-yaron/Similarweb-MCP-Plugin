@@ -1,6 +1,6 @@
 ---
 name: sw-keyword-opportunity
-description: Keyword gap analysis between a target domain and a competitor. Use when the user asks about keyword gaps, keyword opportunities, organic competitor keyword overlap, content gaps versus a rival, or where the target loses or wins on keyword presence. Calls the keywords competitors aggregate tool which requires an exactly three month window, plus keyword analysis per side, plus keywords overview for volume difficulty and CPC. Surfaces target gaps where the competitor wins, shared territory, target wins, and ROI ranked opportunities. Lean recipe delegating to the sw foundation core, data, and render helpers.
+description: Keyword gap analysis for a target domain, against a named competitor or auto discovering the closest organic rival when none is named. Use for keyword gaps, keyword or SEO opportunities for a domain, content gaps versus a rival, terms competitors win that the target loses, or ROI ranked keyword targets. Returns gaps, shared territory, wins, and ranked opportunities with volume, difficulty and CPC. Do not use for a whole domain SEO or AI visibility audit (use sw-aeo-audit), for page and folder mix (use sw-page-mix), or for plain keyword volume (one MCP call suffices).
 ---
 # sw-keyword-opportunity
 

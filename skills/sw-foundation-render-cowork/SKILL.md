@@ -1,6 +1,6 @@
 ---
 name: sw-foundation-render-cowork
-description: Cowork-only rich-rendering tiers for the Similarweb recipes. Loaded ONLY on Cowork AND when the user explicitly asks for a dashboard, persistent view, interactive panel, artifact, or chart, OR when a recipe's high-dimensionality trigger fires (3+ competitors in a teardown, 3+ overlap domains, 10+ market brands, deep folder trees in a page-mix run). Covers Tier 2 chat-side jsx panels emitted via the Write tool and Tier 3 persistent HTML artifacts emitted via mcp__cowork__create_artifact, including the CSP whitelist, the window.cowork JS bridge, the gridjs and chartjs CDN pins, and the slug pattern for artifact reuse. NEVER loads on Codex, Claude Code, Cursor, or Claude.ai (no equivalent surface). Markdown plus Unicode-bar rendering (Tier 1) is the universal baseline carried by sw-foundation-render section visualizations and ships on every platform without this helper.
+description: Cowork only rich rendering tiers for the Similarweb recipes. Loaded ONLY on Cowork and only when the user asks for a dashboard, persistent view, interactive panel, artifact, or chart, or when a recipe high dimensionality trigger fires (wide comp sets, many brands, deep folder trees). Covers Tier 2 chat side jsx panels and Tier 3 persistent HTML artifacts via the Cowork artifact tool. NEVER loads on Codex, Claude Code, Cursor, or Claude.ai; markdown plus Unicode bars from sw-foundation-render is the universal baseline.
 user-invocable: false
 ---
 # sw-foundation-render-cowork: Cowork rich-rendering tiers

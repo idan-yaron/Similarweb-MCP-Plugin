@@ -1,6 +1,6 @@
 ---
 name: sw-config
-description: Inspect, refresh, or reset the Similarweb plugin capability map. Use this when the user asks what Similarweb MCP tools they currently have access to, wants to force a fresh capability probe after a plan change or auth update, or wants to wipe the cached state entirely. Reads the local capabilities cache at ~/.similarweb-plugin/capabilities.json. The capability map is optional and recipes run lazily without it. This command is the explicit power user path. Also hosts an opt in Cowork only scheduled grounding sub mode that re validates fragile MCP shape assertions on a weekly or monthly cadence.
+description: Inspect, refresh, or reset the Similarweb plugin capability map. Use when the user asks which Similarweb MCP tools they can access, wants a fresh capability probe after a plan or auth change, or wants the cached state wiped. Reads the local capabilities cache under the home directory. The map is optional; recipes run lazily without it. Also hosts the opt in Cowork only scheduled grounding sub mode that re validates fragile MCP assertions on a cadence.
 ---
 # sw-config: inspect, refresh, or reset the capability map
 

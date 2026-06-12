@@ -37,8 +37,8 @@ Pick two or three of these for any deep dive. Default is two; add a third only w
 - Competitive question (who is winning, who is gaining, who do we beat): sw-competitive-teardown.
 - Channel question (where does traffic come from, did paid drop, is organic eroding): sw-channel-mix.
 - Audience question (do we share users with X, who is the same pond, how much duplication): sw-audience-overlap.
-- Market question (how big is this category, who concentrates revenue, is the long tail growing): sw-market-size.
-- AEO question (do we show up in AI answers, is our SERP posture strong enough): sw-aeo-audit.
+- Market question (how big is this category, who concentrates revenue, top selling products or best sellers on Amazon, is the long tail growing): sw-market-size.
+- AEO question (do we show up in AI answers, do AI assistants cite or recommend us, plain SEO audit of a domain, is our SERP posture strong enough): sw-aeo-audit.
 - Page-level question (what content do we lead with, where is the folder concentration): sw-page-mix.
 - Keyword question (what terms do competitors win that we lose, where is the gap): sw-keyword-opportunity.
 

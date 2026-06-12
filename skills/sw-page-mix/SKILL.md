@@ -1,6 +1,6 @@
 ---
 name: sw-page-mix
-description: URL and folder level content surface for a single domain. Use when the user asks about which pages drive traffic, top URLs, folder breakdown, content concentration, page traffic share, or which sections of the site own the audience. Calls the popular pages aggregate plus leading folders aggregate, both requiring web source equal to total which the server enforces. Renders top URLs by traffic share, folder hierarchy with HHI concentration verdict, strategic insights on content gaps, and conversational NEXT MOVES. Lean recipe delegating to the sw foundation core, data, and render helpers.
+description: URL and folder level content surface for one domain. Use for which pages drive traffic, top URLs, folder breakdown, content concentration, which site sections own the audience, or what a brand publishes most. Renders top URLs by traffic share and the folder hierarchy with a concentration verdict. Do not use for content or keyword gaps versus a rival (use sw-keyword-opportunity), for AI citation posture (use sw-aeo-audit), or for one URL traffic share (one MCP call suffices).
 ---
 # sw-page-mix
 

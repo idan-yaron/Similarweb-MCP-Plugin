@@ -1,6 +1,6 @@
 ---
 name: sw-foundation-data
-description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries Similarweb MCP data-handling priors such as country normalization, window resolution, and conversation context across recipe runs. Helper sections cited by recipes are section country-normalization, section window-resolution, section conversation-context. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-render.
+description: Background helper for the seven Similarweb recipes, loaded via their Inherits block and on sw-router dispatch, never for trivial single metric lookups (the Step 0 carve-out exits first). Carries country normalization, window resolution, and conversation context across recipe runs. Calls no MCP tools itself; pairs with sw-foundation-core and sw-foundation-render.
 user-invocable: false
 ---
 # sw-foundation-data: country, window, and conversation-context normalization

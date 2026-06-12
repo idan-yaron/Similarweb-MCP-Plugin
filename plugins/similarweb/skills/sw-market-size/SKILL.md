@@ -1,6 +1,6 @@
 ---
 name: sw-market-size
-description: Market size profile for a category or keyword cluster. Use when the user asks about market size, total addressable market, category sizing, top brands in a category, or share of voice within a vertical. The MCP exposes categories as two disjoint flows. The Amazon shopper flow uses a numeric ID plus an Amazon TLD and offers rich analytics. The Web industry flow uses a PascalCase slug plus an ISO country and offers only domain plus rank. They do not translate. Recipe defaults to the Amazon flow for richer sizing, treats Web as an opt in companion, and falls back to Web only with a caveat when no Amazon match exists. Delegates capability gating, citations, error rendering, and handoff JSON to sw foundation. Never fabricates total click math.
+description: Market and category sizing. Use for market size, total addressable demand, category sizing, top brands or top selling products in a category on Amazon, best sellers in a niche, brand concentration, or who leads a vertical by revenue share. Defaults to the rich Amazon shopper flow; the Web industry flow (domain rank only) is an opt in companion and the fallback with a caveat when no Amazon category matches. Do not use for SERP share of voice on keywords (use sw-aeo-audit) or for sizing one domain traffic profile (use sw-competitive-teardown). Never fabricates total click math.
 ---
 # sw-market-size
 

@@ -1,6 +1,6 @@
 ---
 name: sw-audience-overlap
-description: Audience overlap deep dive for a target domain against up to four competitors (max five domains total per the live tool constraint). Use when the user asks about audience overlap, audience duplication, shared visitors, audience similarity, or interest persona overlap across multiple domains. Renders subset overlap with client derived share of union, target demographics as two adjacent tables for age and gender, target geography top ten with rank zero rendered as n/a, and per domain deduplicated reach looped per domain since the live tool takes a single domain. Delegates capability gating, citations, error rendering, and handoff JSON to sw foundation helpers. Never fabricates audience data.
+description: Audience overlap deep dive for a target versus up to four competitors, five domains max per the live tool. Use when the question is about audience overlap, shared visitors, audience duplication, same pond versus different pond, demographics or geography of a shared audience, or deduplicated reach across domains. Renders subset overlap with share of union, demographics, and deduplicated reach. Do not use when overlap is one angle inside a broader competitive read (use sw-competitive-teardown) or for single domain demographics (one MCP call suffices). Never fabricates audience data.
 ---
 # sw-audience-overlap
 
