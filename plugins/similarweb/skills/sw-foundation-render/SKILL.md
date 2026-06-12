@@ -1,6 +1,6 @@
 ---
 name: sw-foundation-render
-description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries Similarweb MCP output rendering priors such as intent-aware modes, citation block, error rendering, handoff JSON, expert heuristics, and Unicode-bar visualizations. Helper sections cited by recipes are section citation block, section error-rendering, section handoff-json-schema, section expert-heuristics, section derived-metric glossing, section visualizations. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Rich rendering beyond markdown is platform-specific and ships in a separate Cowork-only helper skill on platforms that support it. Does not call MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
+description: Background helper for the seven Similarweb recipes, loaded via their Inherits block and on sw-router dispatch, never for trivial single metric lookups (the Step 0 carve-out exits first). Carries intent aware modes, insight first delivery, citations, error rendering, handoff JSON, expert heuristics, metric glossing, and Unicode bar visualizations; richer rendering ships in a separate Cowork only helper. Calls no MCP tools itself; pairs with sw-foundation-core and sw-foundation-data.
 user-invocable: false
 ---
 # sw-foundation-render: Similarweb MCP output rendering priors
@@ -19,9 +19,71 @@ Classify user intent FIRST, then render:
 | CSV in working directory that the recipe could enrich | `handoff` (append machine-readable JSON) |
 | Default | `narrative` |
 
+**Answer-first ordering (every mode).** The verdict or headline leads, supporting evidence (tables, charts, per-section detail) follows, and the compact closing blocks (Strategic insights, Caveats, NEXT MOVES, Sources, glossary footnotes) come last. Never open with method narration; the first content line after the header line is the answer. The early-headline contract and its supersession rule live in § insight-first delivery.
+
+**Short form (narrow questions).** Depth is question-proportional. When the routed question is narrow (one metric, one comparison, a yes/no call), render the verdict plus compact evidence standalone: header line, verdict sentence (with its § expert-heuristics label when one applies), ONE compact table or chart, NEXT MOVES whose FIRST move offers the full report as a natural-language question, Sources line. A short form is roughly 400-800 chars total. Do NOT emit the full report by default.
+
 Every recipe output must include:
 - A single-line **Sources** rollup (per-tool counts + total data credits, status suffix appended ONLY on failure or retry; see § citation block).
 - A `## Caveats` block when any tool returned null, was unavailable, or hit a freshness limit.
+
+## Insight-first delivery
+
+Every recipe surfaces a one-to-two line headline insight immediately after its first successful data-bearing call, BEFORE the remaining call plan executes. The user reads a real finding within one data call; the full analysis follows with no change in rigor. This section is the single owner of the headline contract: recipes cite their row in the class table below and do not restate it.
+
+### Headline timing
+
+- Render the headline as soon as the first successful data-bearing response arrives. Do NOT wait for the parallel batches; the headline precedes every remaining planned call.
+- Format: one to two lines opening with the bold label `**First read:**`, derived ONLY from fields the response in hand actually carries.
+- The headline binds to the first successful data-bearing call WHATEVER that turns out to be. After a smoke retarget (sw-foundation-core § tool-surface presence), a country pivot, or a retry, the first call that succeeds with data is the headline source; speak to what that envelope returned.
+- A metrics-free response is not data-bearing for headline purposes. The disambiguation-smoke class below confirms resolution in one line at the smoke and takes its headline from the first post-smoke data call.
+
+### Headline classes (all 7 recipes)
+
+Two classes:
+
+- **Metric-smoke**: the smoke returns metrics; the headline derives from the smoke response itself.
+- **Disambiguation-smoke**: the smoke is a resolution lookup carrying no metrics; emit a one-line resolution confirmation when it returns, then derive the headline from the first post-smoke data call.
+
+| Recipe | Class | Headline source | Pinned headline format | Grounded in |
+|--------|-------|-----------------|------------------------|-------------|
+| sw-competitive-teardown | metric-smoke | rank smoke (target, country=ww) | `**First read:** {target} ranks #{country_rank} worldwide and #{category_rank} in {category}; head-to-head vs {competitors} follows.` | `website-rank-no-global-field` |
+| sw-audience-overlap | metric-smoke | rank smoke (target, country=ww) | `**First read:** {target} ranks #{country_rank} worldwide and #{category_rank} in {category}; overlap across {N} domains follows.` | `website-rank-no-global-field` |
+| sw-channel-mix | metric-smoke | rank smoke (target, user country, default us) | `**First read:** {target} ranks #{country_rank} in {country} and #{category_rank} in {category}; channel breakdown follows.` | `website-rank-no-global-field` |
+| sw-page-mix | metric-smoke | rank smoke (target, user country, default us) | `**First read:** {target} ranks #{country_rank} in {country} and #{category_rank} in {category}; page-level mix follows.` | `website-rank-no-global-field` |
+| sw-aeo-audit | metric-smoke | seo-overview smoke (seed keyword; search-click metrics) | `**First read:** "{keyword}": {unbranded_share}% of search clicks are unbranded and {informational_share}% informational, the share AI engines preferentially answer; full AEO audit of {target} follows.` | `aeo-seo-overview-shape` |
+| sw-keyword-opportunity | metric-smoke | keywords-overview smoke (seed keyword) when present and accessible; else the first successful data-bearing call | `**First read:** "{keyword}" draws {volume} monthly searches at difficulty {difficulty} and ${cpc} CPC; gap scan vs {competitor} follows.` | `keywords-overview-3-month-max` |
+| sw-market-size | disambiguation-smoke | categories-search smoke returns a category resolution list, no metrics; headline from the first post-smoke data call (canonically the category demand row, `get-categories-performance-agg`) | Resolution line: `Resolved "{input}" to Amazon category {category_path} (id {category_id}) on {tld}.` Headline: `**First read:** {category_name} on {tld}: {search_volume} searches and {total_clicks} category clicks over the cited window; brand concentration follows.` | `categories-search-resolution`, `categories-performance-shape` |
+
+Class-table notes:
+
+- **Rank-class headlines speak to standing, never scale.** The rank envelope carries `country_rank`, `category`, and `category_rank` ONLY; it has NO traffic field (per `website-rank-no-global-field`). Traffic scale enters the narrative only after the first traffic call returns. When the smoke ran at country=ww, the returned `country_rank` IS the global rank.
+- **sw-keyword-opportunity fallback**: its overview smoke is an OPTIONAL tool. When it is absent or denied, the headline derives from whatever first successful data-bearing call the run produces (rank-class wording when that call is the rank tool), stating only that envelope's fields.
+- **sw-market-size**: the post-smoke calls may run as a parallel batch; the headline derives from the first of them to return, with the pinned format above covering the canonical demand row. When a different call returns first, derive from its envelope under the same honesty constraints. The resolution line renders only once resolution is settled (auto-resolved or user-picked); a disambiguation question to the user is not a headline.
+
+### Honesty constraints
+
+The early headline obeys the same contract as the final render:
+
+- NO fabrication: the headline states only fields present in the response it derives from. Null is null; nothing estimated, nothing recalled from training data.
+- Derived metrics in a headline carry their gloss per § derived-metric glossing. Prefer raw envelope fields; a simple share of returned fields (e.g. unbranded share of clicks) carries its inline meaning as in the pinned formats.
+- When the FIRST call fails, the documented error patterns fire INSTEAD of a headline: a country-coverage gap pivots per § error-rendering Pattern 6 and sw-foundation-core § Skip + pivot rule (no headline is invented from the failed call); a claims 403 follows the smoke branch ladder; absence follows Pattern 7. If a pivoted, retargeted, or retried call then succeeds, THAT response is the first successful data-bearing call and the headline derives from it, carrying the pivot context (e.g. worldwide standing instead of the requested country).
+
+### Partial failure after the headline (precedence)
+
+When the headline has rendered and two or more REQUIRED tools subsequently fail (403s, absences, and exhausted retries counted together):
+
+- The final synthesis leads with a partial-data acknowledgment: the verdict opens with "Based on partial data:" followed by what the surviving data supports.
+- NEXT MOVES leads with a re-run suggestion phrased per the conversational-tone rule (e.g. `"Can you re-run this analysis? Two required tools failed this run."`).
+- Precedence: once the headline has rendered, this clause SUPERSEDES the aggregate-insufficiency Pattern 5 escalation (sw-foundation-core § tool-surface presence; § error-rendering Patterns 5 and 7) for that run. Data already shown is never retracted; an INSUFFICIENT SIGNAL verdict that erases an already-rendered headline is worse than an honest partial read. Pre-headline insufficiency is unchanged: when fewer than 2 REQUIRED tools are present and accessible before any headline rendered, escalate per Pattern 5 as documented.
+- Every failure still gets its Caveats entry per § error-rendering, and the Sources line reflects the calls actually issued.
+
+### Supersession
+
+The final answer-first verdict supersedes the early headline:
+
+- When the full data contradicts the headline (e.g. the standing read suggested parity but traffic shows a 3x gap), the synthesis states the corrected verdict; one clause may acknowledge the revision.
+- The prior headline is NOT repeated verbatim in the synthesis, whether confirmed or contradicted; the synthesis re-derives its verdict from the complete picture.
 
 ## Helper sections (recipes reference these by name)
 
@@ -37,7 +99,7 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 - **Caveats.** One bullet per real caveat (clamped windows, access denials, structural-zero rollups, brand absence, fallback modes). Drop duplicated context (window, country) the header already states. Drop "opt-in flag X not supplied" promotional lines: users see opt-in flags via `argument-hint` completion. Caveats are not for advertising features.
 - **Strategic insights (DEFEND / EXPOSE / PLAY).** 3 bullets, ~25 words each, `(confidence: HIGH | MEDIUM | LOW)` at end.
 - **NEXT MOVES.** 2 backtick-quoted natural-language questions, one-sentence rationale max each. See the conversational-tone rule below in this section. Do NOT emit slash-commands or `--flag` syntax in NEXT MOVES.
-- **Output-render targets:** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
+- **Output-render targets:** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000; short form (narrow questions, any recipe) ~400-800, with the full report offered as a NEXT MOVES question instead of emitted. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
 **1. Sources (single line, NOT a table, NOT collapsible).** Format:
 
@@ -355,3 +417,8 @@ This skill's behavior is live-validated against the following grounded assertion
 - country-coverage-gap-shape
 - unknown-tool-error-shape
 - unknown-tool-error-shape-other-platforms
+- website-rank-no-global-field
+- categories-search-resolution
+- categories-performance-shape
+- aeo-seo-overview-shape
+- keywords-overview-3-month-max

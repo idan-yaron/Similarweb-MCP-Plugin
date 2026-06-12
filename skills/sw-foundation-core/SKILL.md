@@ -1,6 +1,6 @@
 ---
 name: sw-foundation-core
-description: Helper utility loaded by the seven user-invocable Similarweb recipes (sw-competitive-teardown, sw-audience-overlap, sw-channel-mix, sw-market-size, sw-aeo-audit, sw-page-mix, sw-keyword-opportunity) and by sw-router when it dispatches to a recipe or plans a direct-MCP fallback. Carries the Similarweb MCP server core priors such as the tool catalog, capability map, tool-call economy, and freshness rules. Helper sections cited by recipes are section capability-gating and section bulk-input-from-context. NOT loaded for trivial single-domain single-metric lookups; the sw-router Step 0 carve-out exits before reaching the foundations. Does not call MCP tools itself; pairs with sw-foundation-data and sw-foundation-render.
+description: Background helper for the seven Similarweb recipes, loaded via their Inherits block and on sw-router dispatch, never for trivial single metric lookups (the Step 0 carve-out exits first). Carries the tool catalog, capability map and gating contract, tool call economy, freshness, and tool surface presence rules. Calls no MCP tools itself; pairs with sw-foundation-data and sw-foundation-render.
 user-invocable: false
 ---
 # sw-foundation-core: Similarweb MCP catalog and tool-call economy
@@ -253,7 +253,7 @@ Presence ("does this tool exist on this connector?") is a gating axis SEPARATE f
 - The advertised-but-not-callable case stays in-run only; never persist it to `tools_absent` (the live list contains the name, so a stamped absence entry would contradict the quarantine reader).
 - On platforms whose error wording is not yet grounded (per `unknown-tool-error-shape-other-platforms`), do NOT claim absence from a failed call; render the hedged wording "could not reach that tool in this session" and handle per § error-rendering Pattern 2.
 
-**Aggregate insufficiency.** When fewer than 2 of the recipe's REQUIRED tools are both present and accessible (absences and 403s counted together), escalate per § error-rendering Pattern 5 semantics with a caveat naming BOTH causes, instead of shipping a multi-section-dropped report that reads like a verdict.
+**Aggregate insufficiency.** When fewer than 2 of the recipe's REQUIRED tools are both present and accessible (absences and 403s counted together), escalate per § error-rendering Pattern 5 semantics with a caveat naming BOTH causes, instead of shipping a multi-section-dropped report that reads like a verdict. Once a headline insight has rendered this run, subsequent REQUIRED-tool failures follow sw-foundation-render § insight-first delivery's partial-failure clause instead of escalating here; pre-headline insufficiency escalates unchanged.
 
 **Per-platform evidence classes** (client-scoped; rows fill in as platforms are observed):
 
