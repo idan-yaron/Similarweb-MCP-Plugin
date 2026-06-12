@@ -7,8 +7,9 @@ description: Competitive teardown of a target domain, with or without named riva
 **Inherits:**
 - sw-foundation-core: § capability-gating, § bulk-input-from-context
 - sw-foundation-data: § country-normalization, § window-resolution
-- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations
-- sw-foundation-render: § handoff-json-schema (when intent=handoff)
+- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations, § handoff-json-schema (when intent=handoff)
+
+Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via your platform's skill mechanism (the Skill tool where available, plugin-qualified names accepted); where no skill mechanism exists, Read the bundled SKILL.md files of those three skills and apply them inline. Never resolve them via cwd-relative paths.
 
 ## Hard rules (NEVER violate)
 
@@ -36,16 +37,10 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-compe
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
-
-1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-websites-website-rank` absent: the smoke retargets to `get-websites-traffic-and-engagement` and rank rendering degrades; `get-websites-traffic-and-engagement` or `get-websites-traffic-channels` absent: drop the dependent sections and continue (the teardown never aborts on a single tool); OPTIONAL tools absent: skip with one consolidated caveat line. When fewer than 2 REQUIRED tools are present AND accessible (absences and 403s counted together), escalate INSUFFICIENT SIGNAL per § error-rendering Pattern 5 semantics instead of shipping a sections-dropped report. If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically.
-2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing (an unbounded call returns the multi-year series at ~10x the credits). Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 item 1; reuse it, never re-issue it.
-3. **Branch**:
-   - 200: cache the rank result; this becomes the "rank smoke" data Step 4 references for end_date derivation. Proceed to Step 2A.
-   - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-traffic-and-engagement` for the target, country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
-   - Client-level unknown-tool error ("No such tool available", or server "Unknown tool"; per `unknown-tool-error-shape`): the tool is not exposed on this connector. Do NOT retry; apply the item-1 outcomes (retarget the smoke, drop the tool) and add the consolidated caveat: "Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact." An "Input validation error" is NOT this case: the tool exists, fix the arguments.
-   - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
-4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
+- **Smoke**: `get-websites-website-rank`, target domain only, country=ww, bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the target's `country="ww"` rank call for Call 1; reuse it, never re-issue it.
+- **Secondary probe**: `get-websites-traffic-and-engagement`, target, country=us.
+- **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-and-engagement` or `get-websites-traffic-channels`: drop the dependent sections and continue (the teardown never aborts on a single tool); OPTIONAL tools: skip with one consolidated caveat line.
+- Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED:
 - get-websites-website-rank
@@ -73,49 +68,49 @@ entirely, or pass EXACTLY a 3-month span (`start_date = "2_months_ago"`,
 `end_date = "latest"`); any other explicit span 400s.
 Surface them in a one-line Caveat: "No competitors supplied; using top 4
 similar sites: X, Y, Z, W. Name a different set if you want me to compare against specific competitors."
-Cost: ~20 data credits at limit 4 (~5 per returned row). Step 4 would have called
-similar-sites-agg anyway, so the marginal cost when this fires before
-Step 4 is zero; the call is reused.
+Cost: ~20 data credits at limit 4 (~5 per returned row). Call 4 would have made
+this similar-sites call anyway, so the marginal cost when discovery fires
+first is zero; the call is reused.
 
 ## Step 4: Plan the call sequence
 
 Always-included (filter against capabilities):
 
-1. `get-websites-website-rank` TWICE per domain: once with `country: "ww"` to populate the Global rank column (no `global_rank` field exists in the response; use `country_rank` from the `ww` call per `website-rank-no-global-field`), and once with `country: "<user-country>"` to populate the Country rank column. For the TARGET, the Step 2 smoke already IS the `ww` call; reuse its cached result and issue only the user-country call. Bound EACH call to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per bounded call (~2 per month of window). Total: ~12 data credits per domain (~6 for the target thanks to smoke reuse). When the user-supplied country IS `ww`, make only ONE call per domain (none for the target) and use that response for both the Global and Country columns (the Country rank column collapses to "n/a" in that case; surface in Caveats).
-2. `get-websites-traffic-and-engagement` per domain.
-3. `get-websites-traffic-channels` per domain (absolute visits per channel). If a share % view is needed for the Channel breakdown table, derive client-side from these visits: `share[ch] = visits[ch] / sum(visits)`. Do NOT call `get-traffic-channels-share` for the rollup; ~200 data credits per call avoided, ~800 data credits for a 4-domain teardown.
-4. `get-websites-similar-sites-agg` for target (omit dates, or pass exactly the 3-month `2_months_ago`/`latest` span per `similar-sites-window-constraint`; reuse the Step 3 result if discovery already ran).
+- **Call 1**: `get-websites-website-rank` TWICE per domain: once with `country: "ww"` to populate the Global rank column (no `global_rank` field exists in the response; use `country_rank` from the `ww` call per `website-rank-no-global-field`), and once with `country: "<user-country>"` to populate the Country rank column. For the TARGET, the Step 2 smoke already IS the `ww` call; reuse its cached result and issue only the user-country call. Bound EACH call to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per bounded call (~2 per month of window). Total: ~12 data credits per domain (~6 for the target thanks to smoke reuse). When the user-supplied country IS `ww`, make only ONE call per domain (none for the target) and use that response for both the Global and Country columns (the Country rank column collapses to "n/a" in that case; surface in Caveats).
+- **Call 2**: `get-websites-traffic-and-engagement` per domain.
+- **Call 3**: `get-websites-traffic-channels` per domain (absolute visits per channel). If a share % view is needed for the Channel breakdown table, derive client-side from these visits: `share[ch] = visits[ch] / sum(visits)`. Do NOT call `get-traffic-channels-share` for the rollup; ~200 data credits per call avoided, ~800 data credits for a 4-domain teardown.
+- **Call 4**: `get-websites-similar-sites-agg` for target, `limit: 4` (the only limit this recipe documents for the call, matching the Step 3 discovery shape; omit dates, or pass exactly the 3-month `2_months_ago`/`latest` span per `similar-sites-window-constraint`; reuse the Step 3 result if discovery already ran).
 
 Opt-in only when `--with-rank-delta` is supplied (default false):
 
-1b. `get-websites-website-rank` for the TARGET ONLY with `country: "ww"` and a 12-month window (`start_date = <12 months before effective end_date>`, `end_date = <effective end_date from Step 1 smoke>`). The `country="ww"` scope locks the YoY comparison to global rank (the only "true" global figure; see `website-rank-no-global-field`). Surfaces a YoY delta in the Rank row of the Rank + reach table. Cost: ~25 data credits for one extra year of data on the target. Competitors stay at the single-month bounded smokes from Step 1; only the target gets the 12-month series. When `--with-rank-delta` is absent, only the latest rank shows and no delta column is rendered.
+- **Call 1b**: `get-websites-website-rank` for the TARGET ONLY with `country: "ww"` and a 12-month window (`start_date = <12 months before effective end_date>`, `end_date = <effective end_date from the Step 2 smoke>`). The `country="ww"` scope locks the YoY comparison to global rank (the only "true" global figure; see `website-rank-no-global-field`). Surfaces a YoY delta in the Rank row of the Rank + reach table. Cost: ~25 data credits for one extra year of data on the target. Competitors stay at the single-month bounded calls from Call 1; only the target gets the 12-month series. When `--with-rank-delta` is absent, only the latest rank shows and no delta column is rendered.
 
 Optional, only if accessible:
 
-5. `get-websites-audience-overlap-agg` for [target, ...competitors] (batched, 2-5 domains max).
-6. `get-websites-ppc-spend` per domain.
+- **Call 5**: `get-websites-audience-overlap-agg` for [target, ...competitors] (batched, 2-5 domains max).
+- **Call 6**: `get-websites-ppc-spend` per domain.
 
 Opt-in only when `--with-amazon-context` was supplied:
 
-7. `get-keywords-top-brands-agg` for target's primary category keyword. Off by default because most DTC comp sets don't sell on Amazon at scale, and the call returns generic mass brands (Amazon Essentials, Hanes, Carhartt) that have nothing to do with the target's competitive set. Cost is ~120 data credits per teardown; supply `--with-amazon-context` only when the target IS a major Amazon seller.
+- **Call 7**: `get-keywords-top-brands-agg` for target's primary category keyword. Off by default because most DTC comp sets don't sell on Amazon at scale, and the call returns generic mass brands (Amazon Essentials, Hanes, Carhartt) that have nothing to do with the target's competitive set. Cost is ~120 data credits per teardown; supply `--with-amazon-context` only when the target IS a major Amazon seller.
 
 ## Step 5: Execute calls
 
 Parallelize independent calls when supported. Per sw-foundation-core tool-call
-economy rule #1, loop the non-agg tools (1, 2, 3, 6) across domains; only
-step 5 batches entities. Step 1 makes two calls per domain (one with
+economy rule #1, loop the non-agg tools (Calls 1, 2, 3, 6) across domains; only
+Call 5 batches entities. Call 1 makes two calls per domain (one with
 `country: "ww"` for global rank, one with the user country for in-country
 rank) per `website-rank-no-global-field`; parallelize both within the
 per-domain loop (the target needs only the user-country call; its ww data
 is the Step 2 smoke). Per sw-foundation-core § Country-coverage gap
 detection, the (tool, $country) batch is skipped if a prior call for any
 tool in this turn detected the country-coverage gap envelope for $country;
-fall back to the ww-only data for those domains. Step 7 (`get-keywords-top-brands-agg`) is the opt-in
+fall back to the ww-only data for those domains. Call 7 (`get-keywords-top-brands-agg`) is the opt-in
 `--with-amazon-context` call and runs once for the target's primary
-category keyword when supplied; otherwise skipped entirely. Step 1b
+category keyword when supplied; otherwise skipped entirely. Call 1b
 (`--with-rank-delta`) runs once for the TARGET ONLY with `country: "ww"`
 and a 12-month window; competitors stay at the single-month bounded
-smokes. Compute `delta_yoy = current_country_rank - country_rank_12_months_ago`
+calls. Compute `delta_yoy = current_country_rank - country_rank_12_months_ago`
 client-side from the two `country="ww"` responses for the target
 (positive = lost ground, negative = gained ground in global rank; the
 field name is `country_rank` since the response has no `global_rank` field,
@@ -130,7 +125,7 @@ Use sw-foundation-render's intent-aware rules table; the result drives whether
 
 ## Step 7: Render
 
-Apply token compression per sw-foundation-render § citation block. Body output target ~2000-3000 chars.
+Apply token compression per sw-foundation-render § citation block. Output length per sw-foundation-render's output-render targets.
 
 **Header (FIRST line of output, ONE italic line):** `*{target} vs {competitors} | {country} | {window} | last_updated {meta.last_updated}*`. Drop duplicated parentheticals like `(US, Feb-Apr 2026)` from every subsequent section header.
 
@@ -155,7 +150,7 @@ LEDE: the BIGGEST DELTA across the comp set when any period-over-period data is 
 Engagement quality score (`(1 - bounce_rate) * pages_per_visit`) renders as a per-domain line BELOW the executive read, not inside it.
 
 For the Rank + reach section: when `--with-rank-delta` was supplied AND
-Step 1b returned a 12-month series for the target, add a `YoY delta`
+Call 1b returned a 12-month series for the target, add a `YoY delta`
 column to the Rank row. The target row carries the computed delta; every
 competitor row renders `n/a` for that column (competitors stayed at the
 single-month smoke). Footnote: "YoY delta is target-only; positive = lost
@@ -169,7 +164,7 @@ classifier-rollup Caveat. Similarweb's classifier often rolls paid social
 into Display Ads, so a literal `0.0%` is structural-zero, not measured-zero.
 
 For the PPC investment section: add a derived `$ / visit` column to the
-PPC table when Step 6 (`get-websites-ppc-spend`) returned data AND Step 2
+PPC table when Call 6 (`get-websites-ppc-spend`) returned data AND Call 2
 (`get-websites-traffic-and-engagement`) returned visits for the same
 period. Compute per domain per period: `cost_per_visit = ppc_spend / visits_in_period`
 (guard division by zero; render `n/a` when visits is zero or null).
@@ -267,7 +262,7 @@ country, or `null` when collapsed).
 
 `rank_table.<domain>.delta_yoy` is optional. It is `null` by default and
 only populated for the TARGET when `--with-rank-delta` was supplied AND
-Step 1b returned a 12-month series. Competitors always have
+Call 1b returned a 12-month series. Competitors always have
 `delta_yoy: null`. Value semantics: positive = lost ground (global rank
 worsened over 12 months), negative = gained ground. Computed as
 `current_country_rank - country_rank_12_months_ago` from the two
@@ -276,7 +271,7 @@ the value is the global rank, because the call passed `country="ww"`).
 
 `ppc_spend.<domain>.monthly[].cost_per_visit` is the CAC-proxy ratio
 derived client-side: `ppc_spend / visits_in_period`. Populated per period
-when both PPC spend (Step 6) and traffic-and-engagement visits (Step 2)
+when both PPC spend (Call 6) and traffic-and-engagement visits (Call 2)
 are available for the same period. `null` when either is missing or
 visits is zero. Lower = more cost-efficient; comparable across domains
 within this teardown, NOT across categories.

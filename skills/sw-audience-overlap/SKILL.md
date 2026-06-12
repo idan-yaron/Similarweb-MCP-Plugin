@@ -7,8 +7,9 @@ description: Audience overlap deep dive for a target versus up to four competito
 **Inherits:**
 - sw-foundation-core: § capability-gating, § bulk-input-from-context
 - sw-foundation-data: § country-normalization, § window-resolution
-- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations
-- sw-foundation-render: § handoff-json-schema (when intent=handoff)
+- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations, § handoff-json-schema (when intent=handoff)
+
+Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via your platform's skill mechanism (the Skill tool where available, plugin-qualified names accepted); where no skill mechanism exists, Read the bundled SKILL.md files of those three skills and apply them inline. Never resolve them via cwd-relative paths.
 
 ## Hard rules (NEVER violate)
 
@@ -36,18 +37,12 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-audie
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
+- **Smoke**: `get-websites-website-rank`, target domain only, country=ww, bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the target's `country="ww"` rank call for Call 1; reuse it, never re-issue it.
+- **Secondary probe**: `get-websites-audience-overlap-agg`, `domains = "<target>,<first --against domain>"` (2-domain batched call), country=us.
+- **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-audience-overlap-agg`: ABORT with the caveat (this recipe IS the overlap analysis); OPTIONAL tools: drop their sections with one consolidated caveat line (similar-sites absent with no supplied competitors keeps its documented ask-once-then-abort semantics).
+- Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
-1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-websites-website-rank` absent: the smoke retargets to `get-websites-audience-overlap-agg` and rank rendering degrades; `get-websites-audience-overlap-agg` absent: ABORT with the caveat (this recipe IS the overlap analysis); OPTIONAL tools absent: drop their sections with one consolidated caveat line (similar-sites absent with no supplied competitors keeps its documented ask-once-then-abort semantics). If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically.
-2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=ww, bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the target's `country="ww"` rank call for Step 4 row 1; reuse it, never re-issue it.
-3. **Branch**:
-   - 200: cache the rank result for reuse in Step 4 row 1; proceed to Step 2A.
-   - 403 with "missing the required claims": issue ONE secondary probe to `get-websites-audience-overlap-agg` for `domains = "<target>,<first --against domain>"` (2-domain batched call), country=us. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
-   - Client-level unknown-tool error ("No such tool available", or server "Unknown tool"; per `unknown-tool-error-shape`): the tool is not exposed on this connector. Do NOT retry; apply the item-1 outcomes and add the consolidated caveat: "Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact." An "Input validation error" is NOT this case: the tool exists, fix the arguments.
-   - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
-4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
-
-REQUIRED: `get-websites-website-rank`, `get-websites-audience-overlap-agg`. OPTIONAL: `get-websites-demographics-agg`, `get-websites-geography-agg`, `get-websites-audience-interests-agg` (Step 5b Persona overlap section; if not accessible, omit the Persona overlap section and note in Caveats), `get-websites-deduplicated-audience`, `get-websites-similar-sites-agg` (used by Step 3 fallback when `--against` was not supplied AND no competitor list was found in context; if not accessible, the recipe asks the user once for competitors and aborts if none provided).
+REQUIRED: `get-websites-website-rank`, `get-websites-audience-overlap-agg`. OPTIONAL: `get-websites-demographics-agg`, `get-websites-geography-agg`, `get-websites-audience-interests-agg` (Call 5b Persona overlap section; if not accessible, omit the Persona overlap section and note in Caveats), `get-websites-deduplicated-audience`, `get-websites-similar-sites-agg` (used by Step 3 fallback when `--against` was not supplied AND no competitor list was found in context; if not accessible, the recipe asks the user once for competitors and aborts if none provided).
 
 ## Step 3: Pick up bulk inputs from context
 
@@ -65,7 +60,7 @@ Cost: ~20 data credits at limit 4 (~5 per returned row).
 
 ## Step 4: Plan the call sequence
 
-| Step | Tool | Per-call scope |
+| Call | Tool | Per-call scope |
 |------|------|----------------|
 | 1 | `get-websites-website-rank` | Looped per domain (target + each --against), TWO calls per domain per `website-rank-no-global-field`: once with `country: "ww"` for global rank and once with `country: "<user-country>"` for country rank. The TARGET's ww call is the Step 2 smoke; reuse it and issue only the user-country call for the target. Bound each call to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-data § window-resolution; ~6 data credits per call (~12 per domain, ~6 for the target). When the user-supplied country is `ww`, make only one call per domain (none for the target) and set the Country rank column to `n/a`. |
 | 2 | `get-websites-audience-overlap-agg` | Single batched call, `domains` comma-joined (2-5 total). Returns 2^N - 1 rows |
@@ -74,15 +69,15 @@ Cost: ~20 data credits at limit 4 (~5 per returned row).
 | 5 | `get-websites-deduplicated-audience` | **Looped per domain** (one call per target + each --against); live tool takes a SINGLE `domain`. BUDGET GATE: ~259 data credits per domain (`deduplicated-audience-shape`), the dominant cost of this recipe. Run by default only when the analysis set is 2 domains; for 3+ domains, skip by default and offer in ONE line ("Deduplicated reach for N domains adds ~259xN data credits; want it?"), running it only on user consent. When skipped, render the section per the budget-skip edge case. |
 | 5b | `get-websites-audience-interests-agg` | **Looped per domain** (one call per target + each --against); `limit: 15`. ~60 data credits per call per `audience-interests-shape`. Feeds the Persona overlap (Jaccard) section. Skipped if not accessible; omit section + note in Caveats. |
 
-Steps 1-4 are independent; parallelize. Step 5 loops; parallelize within the loop. Step 5b also loops; parallelize within the loop and parallel with Step 5.
+Calls 1-4 are independent; parallelize. Call 5 loops; parallelize within the loop. Call 5b also loops; parallelize within the loop and parallel with Call 5.
 
 ## Step 5: Execute
 
 Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. Tolerate unknown meta keys as informational (e.g. `geography-agg` returns an extra `meta.query`).
 
-### Step 5b derivations: Persona overlap (Jaccard) + Incremental reach decay
+### Call 5b derivations: Persona overlap (Jaccard) + Incremental reach decay
 
-**Persona overlap (Jaccard).** After Step 5b returns, for each domain D in the analysis set (target + each --against), build:
+**Persona overlap (Jaccard).** After Call 5b returns, for each domain D in the analysis set (target + each --against), build:
 
 ```
 interests[D] = {row.domain for row in response_for_D.data}   # top-15 by affinity
@@ -102,12 +97,12 @@ Label per pair per `audience-interests-shape`:
 
 Sort pairs by Jaccard descending for the rendered table and bar chart.
 
-**Incremental reach decay.** Pure client-side analysis of the existing Step 5 `get-websites-deduplicated-audience` output + Step 2 `get-websites-audience-overlap-agg` subset rows. No new MCP calls.
+**Incremental reach decay.** Pure client-side analysis of the existing Call 5 `get-websites-deduplicated-audience` output + Call 2 `get-websites-audience-overlap-agg` subset rows. No new MCP calls.
 
 Algorithm (greedy by traffic size):
-1. Sort the N domains by latest `total_deduplicated_audience` (from Step 5) descending. Call them `d_1, d_2, ..., d_N`.
+1. Sort the N domains by latest `total_deduplicated_audience` (from Call 5) descending. Call them `d_1, d_2, ..., d_N`.
 2. `cum_reach[1] = audience[d_1]` (the largest domain's unique users).
-3. For k in 2..N: `cum_reach[k] = union_unique_users` for the subset `{d_1, ..., d_k}` (lookup the matching subset row in Step 2's response after the alphabetical-sort normalization per the existing recipe rules; if the row is missing for any k, mark `cum_reach[k] = null` and render `n/a` for that step).
+3. For k in 2..N: `cum_reach[k] = union_unique_users` for the subset `{d_1, ..., d_k}` (lookup the matching subset row in Call 2's response after the alphabetical-sort normalization per the existing recipe rules; if the row is missing for any k, mark `cum_reach[k] = null` and render `n/a` for that step).
 4. `marginal[k] = cum_reach[k] - cum_reach[k-1]` (the incremental unique users added by domain k).
 5. `marginal_pct[k] = marginal[k] / cum_reach[k]` (the percentage incremental contribution).
 
@@ -119,7 +114,7 @@ Per sw-foundation-render intent-aware output rendering rules. Default: narrative
 
 ## Step 7: Render
 
-Apply token compression per sw-foundation-render § citation block. Body output target ~1500-2500 chars.
+Apply token compression per sw-foundation-render § citation block. Output length per sw-foundation-render's output-render targets.
 
 **Header (FIRST line of output, ONE italic line):** `*{target} vs {against_set} | {country} | last_updated {meta.last_updated}*`. Drop duplicate parentheticals from every subsequent section header.
 
@@ -140,17 +135,17 @@ Sections in order:
 - `## Target audience demographics`. TWO adjacent tables: age (6 buckets) and gender (male + female). NOT a crossed matrix; age and gender are independent dimensions in the server response. Shares as % to 1 decimal.
 - `## Target audience geography`. Top 10 countries by `share` (defensively re-sort descending before slicing). Aggregate the remainder into one "Rest of world" row. Render `country_name` as label. Render `rank: 0` as `n/a` (server sentinel for "not ranked", not a true zero).
 - `## Deduplicated audience`. Per-domain latest-row headline (since looped). For each domain: latest-month `total_deduplicated_audience` and the three device-mix shares (desktop-only, mobile-only, cross-device). If section skipped: "Deduplicated audience not accessible on this plan."
-- `## Persona overlap`. ONLY if Step 5b returned data for at least 2 domains AND N >= 2 input domains. Top-15 audience interests per domain, pairwise Jaccard score per the Step 5b derivation (`J(A, B) = |interests_A ∩ interests_B| / |interests_A ∪ interests_B|`). Render in this order:
+- `## Persona overlap`. ONLY if Call 5b returned data for at least 2 domains AND N >= 2 input domains. Top-15 audience interests per domain, pairwise Jaccard score per the Call 5b derivations (`J(A, B) = |interests_A ∩ interests_B| / |interests_A ∪ interests_B|`). Render in this order:
   - Subtitle: "Top-15 audience interests per domain, pairwise Jaccard score (set membership, no affinity threshold):"
   - Table. Columns: `Pair`, `Jaccard`, `Shared interests (top 5)`, `Label`. Rows are every unordered pair `(i, j)` where `i < j`, sorted by Jaccard descending. `Pair` rendered as `<domain_i> <-> <domain_j>`. `Jaccard` rendered to 2 decimals. `Shared interests` rendered as the first 5 alphabetical from the intersection, comma-separated; suffix `, ...` if more than 5 in the intersection; render `n/a` if the intersection is empty. `Label` from the § expert-heuristics-style enum: INTEREST TWIN (`J >= 0.40`), ADJACENT (`0.15 <= J < 0.40`), DISTINCT (`J < 0.15`).
   - Unicode bar chart (sw-foundation-render § visualizations). One row per pair, sorted by Jaccard desc. Bar width: round(`J * 16`) full blocks (`█`) + partial block from the fractional remainder; max bar width 16. Pad bars with `░` (light shade) to width 16 for column alignment. Format: `{pair_left_padded_to_24}  {jaccard_to_2_dp}  {bar}  {label}`.
   - Footnote: "Jaccard label thresholds: INTEREST TWIN >= 0.40 (heavily duplicative audience interests); ADJACENT 0.15-0.40 (meaningful overlap, distinct edges); DISTINCT < 0.15 (essentially independent interest pools). Top-15 interest set per domain comes from get-websites-audience-interests-agg pre-sorted by affinity desc (affinity scale 0-100); for typical high-traffic domains every top-15 row exceeds affinity 90, so the recipe uses raw set membership (no threshold) for Jaccard. Per audience-interests-shape, ~60 data credits per domain at limit=15."
-  - If Step 5b was skipped entirely (capability denied), render as one line: "Persona overlap skipped: get-websites-audience-interests-agg not accessible on this plan." and surface in Caveats.
-- `## Incremental reach decay`. ONLY if Step 2 returned data AND Step 5 returned data for at least 2 domains. Pure client-side analysis of the existing deduplicated-audience output (Step 5) plus audience-overlap-agg subset rows (Step 2). NO new MCP calls.
+  - If Call 5b was skipped entirely (capability denied), render as one line: "Persona overlap skipped: get-websites-audience-interests-agg not accessible on this plan." and surface in Caveats.
+- `## Incremental reach decay`. ONLY if Call 2 returned data AND Call 5 returned data for at least 2 domains. Pure client-side analysis of the existing deduplicated-audience output (Call 5) plus audience-overlap-agg subset rows (Call 2). NO new MCP calls.
   - Subtitle: "Adding each next-largest domain to the deduplicated audience pool:"
-  - Unicode bar chart (sw-foundation-render § visualizations). One row per domain in greedy traffic order (largest first per Step 5b derivation). First row is the baseline; subsequent rows show marginal addition. Bar width: scale `marginal[k] / cum_reach[k_max]` to 20 blocks max; the first (baseline) row uses width 20 (full); subsequent rows use proportional width. Format: `{domain_label_padded_to_28}  {marginal_or_baseline_M}  {bar}  ({sign}{marginal_pct_to_1_dp}% {qualifier})`. Where `qualifier` is `baseline` for k=1, `incremental` for `marginal_pct >= 0.10`, `saturated` for `0.02 <= marginal_pct < 0.10`, `near zero` for `marginal_pct < 0.02`.
+  - Unicode bar chart (sw-foundation-render § visualizations). One row per domain in greedy traffic order (largest first per the Call 5b derivations). First row is the baseline; subsequent rows show marginal addition. Bar width: scale `marginal[k] / cum_reach[k_max]` to 20 blocks max; the first (baseline) row uses width 20 (full); subsequent rows use proportional width. Format: `{domain_label_padded_to_28}  {marginal_or_baseline_M}  {bar}  ({sign}{marginal_pct_to_1_dp}% {qualifier})`. Where `qualifier` is `baseline` for k=1, `incremental` for `marginal_pct >= 0.10`, `saturated` for `0.02 <= marginal_pct < 0.10`, `near zero` for `marginal_pct < 0.02`.
   - Saturation observation. One sentence inferring whether the set hits diminishing returns. Examples: "Diminishing returns kick in after <domain_k>; <domain_k+1> adds essentially no incremental unique reach." Or: "Every domain in the set contributes meaningful incremental reach (no saturation observed)." Or: "Saturation is severe: the second domain already adds < 10% incremental reach."
-  - If any `cum_reach[k]` is null (subset row missing from Step 2 response after normalization), render the row as `n/a` and append: "Incremental row for {domain} unavailable: subset row missing from audience-overlap-agg response." to Caveats.
+  - If any `cum_reach[k]` is null (subset row missing from Call 2's response after normalization), render the row as `n/a` and append: "Incremental row for {domain} unavailable: subset row missing from audience-overlap-agg response." to Caveats.
 - `## Media-planning verdict`. Three sentences max, derived from the labels in Subset overlap:
   - If the goal is REACH MAXIMIZATION: name the DISJOINT and COMPLEMENTARY pairs (incremental-reach buys).
   - If the goal is FREQUENCY against a defined target: name the SAME POND pairs (hit the same humans repeatedly).
@@ -212,7 +207,7 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
 
 `deduplicated_audience` is keyed by domain (not flat) because the live tool loops per domain.
 
-`persona_overlap` is `null` when Step 5b was skipped (capability denied) or when N < 2 input domains. `interests_by_domain` is keyed by domain; each value is the top-15 interest-domain set from `get-websites-audience-interests-agg`. `pairwise_jaccard` rows are sorted by `jaccard` descending; `shared_interests_top5` is the first 5 alphabetical entries from the pair's interest intersection (full intersection may be longer). `label` from the enum: INTEREST TWIN (>=0.40), ADJACENT (0.15-0.40), DISTINCT (<0.15) per `audience-interests-shape`.
+`persona_overlap` is `null` when Call 5b was skipped (capability denied) or when N < 2 input domains. `interests_by_domain` is keyed by domain; each value is the top-15 interest-domain set from `get-websites-audience-interests-agg`. `pairwise_jaccard` rows are sorted by `jaccard` descending; `shared_interests_top5` is the first 5 alphabetical entries from the pair's interest intersection (full intersection may be longer). `label` from the enum: INTEREST TWIN (>=0.40), ADJACENT (0.15-0.40), DISTINCT (<0.15) per `audience-interests-shape`.
 
 `incremental_reach_decay` is `null` when fewer than 2 deduplicated-audience rows are available. Rows are ordered by greedy traffic size descending (step 1 = largest domain = baseline; subsequent steps are marginal additions). `marginal` and `marginal_pct` are `null` for the baseline row (step 1). `qualifier` enum: `baseline` (step 1), `incremental` (marginal_pct >= 0.10), `saturated` (0.02-0.10), `near zero` (< 0.02).
 
@@ -222,10 +217,10 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
 - **>4 --against supplied**: drop to top 4 by global rank (Step 1); note in Caveats.
 - **Full country name passed**: normalize per sw-foundation-data § country-normalization before any call. If not resolvable, ask one disambiguation question.
 - **`audience-overlap-agg` returns access-denied at runtime**: treat as runtime capability mismatch; suggest refreshing the capability map (a `/sw-config --refresh` run) in Caveats so the next session pre-filters this tool.
-- **`deduplicated-audience` skipped for budget** (default for 3+ domains per the Step 4 budget gate, until the user consents): render section as "Deduplicated audience skipped (~259 data credits per domain x {{N}} domains). Say the word and I'll run it."; note in Caveats.
-- **`audience-interests-agg` access-denied at runtime**: skip Step 5b; OMIT the `## Persona overlap` section; render a single-line note: "Persona overlap skipped: get-websites-audience-interests-agg not accessible on this plan." Add to Caveats. `persona_overlap` is `null` in handoff.
-- **N=1 (target only, no --against supplied AND no auto-discovered set)**: skip Step 5b entirely; omit the `## Persona overlap` and `## Incremental reach decay` sections (pairwise Jaccard and marginal-reach are undefined for a single domain). The recipe still renders the rest.
-- **Step 2 subset row missing for a (d_1, ..., d_k) combination**: render `marginal[k] = n/a` for that row in the Incremental reach decay section; surface in Caveats. Continue rendering subsequent rows (they consume the next subset row).
+- **`deduplicated-audience` skipped for budget** (default for 3+ domains per the Call 5 budget gate, until the user consents): render section as "Deduplicated audience skipped (~259 data credits per domain x {{N}} domains). Say the word and I'll run it."; note in Caveats.
+- **`audience-interests-agg` access-denied at runtime**: skip Call 5b; OMIT the `## Persona overlap` section; render a single-line note: "Persona overlap skipped: get-websites-audience-interests-agg not accessible on this plan." Add to Caveats. `persona_overlap` is `null` in handoff.
+- **N=1 (target only, no --against supplied AND no auto-discovered set)**: skip Call 5b entirely; omit the `## Persona overlap` and `## Incremental reach decay` sections (pairwise Jaccard and marginal-reach are undefined for a single domain). The recipe still renders the rest.
+- **Call 2 subset row missing for a (d_1, ..., d_k) combination**: render `marginal[k] = n/a` for that row in the Incremental reach decay section; surface in Caveats. Continue rendering subsequent rows (they consume the next subset row).
 
 ## Cowork persistent artifact (when 3+ domains)
 

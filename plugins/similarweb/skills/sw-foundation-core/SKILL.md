@@ -38,7 +38,7 @@ Every recipe issues exactly ONE single-call probe before any parallel batching b
 - ONE tool. ONE domain. ONE country. NO parallel siblings.
 - ALWAYS bounded: pass `start_date = "2_months_ago"`, `end_date = "latest"` (the known-safe rolling 3-month window). An unbounded `get-websites-website-rank` smoke returns the multi-year default series at roughly 10x the credits (~74 vs ~6).
 - Dispatch synchronously. Wait for the response before issuing any other call.
-- The recipe documents which tool is its smoke (see the per-recipe Step 2 sections).
+- The recipe documents which tool is its smoke (see the smoke catalog table below; the per-recipe Step 2 parameter forms mirror it).
 - The smoke result IS charged data. Recipes MUST reuse it for any later step that needs the same (tool, domain, country, window) instead of re-calling.
 
 ### Branch logic
@@ -58,17 +58,19 @@ Do NOT batch N tools across M domains in parallel without an upfront smoke probe
 
 One synchronous round-trip (~1 second) on the success path. Negligible compared to the 20+ wasted calls saved on the failure path.
 
-### Smoke tool catalog (which tool each recipe uses as its smoke)
+### Smoke tool catalog (per-recipe smoke, secondary probe, and pinned absence outcomes)
 
-| Recipe | Smoke tool | First-domain default |
-|--------|------------|---------------------|
-| sw-competitive-teardown | get-websites-website-rank | target, country=ww |
-| sw-audience-overlap | get-websites-website-rank | target, country=ww |
-| sw-channel-mix | get-websites-website-rank | target, country=us (or user-supplied) |
-| sw-page-mix | get-websites-website-rank | target, country=us (or user-supplied) |
-| sw-aeo-audit | get-keywords-seo-overview | the first keyword from the recipe args if supplied, else the user's prompt-derived seed term; country=us |
-| sw-keyword-opportunity | get-keywords-overview | the first keyword from the recipe args if supplied, else target's brand term; country=us |
-| sw-market-size | get-categories-search | the category-or-keyword-cluster argument; no country needed |
+This table is the single authoritative home for each recipe's smoke parameters, secondary probe, and pinned absence outcomes; the recipes' Step 2 parameter forms mirror it. An absence outcome inherits the same tool's denial outcome per § tool-surface presence (zero calls, zero retries, "not exposed on this connector" caveat wording).
+
+| Recipe | Smoke tool | First-domain default | Secondary probe (tool + args) | Pinned absence outcomes |
+|--------|------------|---------------------|-------------------------------|-------------------------|
+| sw-competitive-teardown | get-websites-website-rank | target, country=ww | get-websites-traffic-and-engagement (target, country=us) | website-rank: retarget the smoke, degrade rank rendering. traffic-and-engagement or traffic-channels: drop the dependent sections and continue (the teardown never aborts on a single tool). OPTIONAL: skip with one consolidated caveat line. |
+| sw-audience-overlap | get-websites-website-rank | target, country=ww | get-websites-audience-overlap-agg (domains = target plus first competitor, 2-domain batched call, country=us) | website-rank: retarget the smoke, degrade rank rendering. audience-overlap-agg: ABORT (the recipe IS the overlap analysis). OPTIONAL: drop their sections with one consolidated caveat line; similar-sites absent with no supplied competitors keeps its documented ask-once-then-abort semantics. |
+| sw-channel-mix | get-websites-website-rank | target, country=us (or user-supplied) | get-websites-traffic-channels (target, smoke country, single-month window) | website-rank: retarget the smoke, degrade rank rendering. traffic-channels: ABORT with the caveat (there is no channel mix without it). OPTIONAL: skip their steps with one consolidated caveat line. The smoke runs at the user country, so the § Skip + pivot rule can fire on the smoke itself. |
+| sw-page-mix | get-websites-website-rank | target, country=us (or user-supplied) | get-pages-popular-pages-agg (target, smoke country, single-month window, web_source total, limit 5) | website-rank: retarget the smoke, degrade rank rendering. ONE pages tool: drop its section (same as its denial outcome). BOTH pages tools: abort with the caveat (nothing to render). |
+| sw-aeo-audit | get-keywords-seo-overview | the first keyword from the recipe args if supplied, else the user's prompt-derived seed term; country=us | get-websites-website-rank (target, country=us) | seo-overview: ABORT outright, no smoke retarget exists (the audit cannot ship without SEO-overview signal). serp-players-agg or landing-pages-agg: drop their sections and continue. website-rank: degrade the rank context and derive end_date from the smoke's meta.last_updated. |
+| sw-keyword-opportunity | get-keywords-overview | the first keyword from the recipe args if supplied, else target's brand term; country=us | get-website-analysis-keywords-agg (target, country=us, single-month window, limit 5) | keywords-overview (the documented smoke, itself OPTIONAL): retarget the smoke to the gap-table tool and ship the gap table without enrichment. website-analysis-keywords-agg: ABORT with the caveat (it IS the gap table). website-rank: degrade the headline and derive end_date from the smoke's meta.last_updated. keywords-competitors-agg: skip it with its documented denial caveat. |
+| sw-market-size | get-categories-search | the category-or-keyword-cluster argument; no country needed | get-categories-performance-agg (domain = the Amazon TLD, category "1", smallest window) | categories-search: retarget the smoke to the secondary probe, then abort with the pivot offer (pass a numeric category ID, or pivot to `--web-companion`). Any other REQUIRED shopper tool: abort offering `--web-companion` only (a numeric ID cannot replace a missing data tool). OPTIONAL: skip with one consolidated caveat line. |
 
 If a recipe omits an explicit smoke tool, the planning step is malformed and the recipe should abort with a Caveats note pointing to this section. (A documented smoke tool that is ABSENT from the live tool list is not malformation; it retargets per § tool-surface presence.)
 
@@ -143,7 +145,7 @@ access to are filtered out at recipe execution time using
 | Compare N domains' traffic | `get-websites-traffic-and-engagement` (same tool, looped over each domain) | as above; one call per domain | No batched-over-entities variant exists for this tool. Loop the non-agg tool. |
 | Traffic channels (absolute visits) | `get-websites-traffic-channels` | domain, country, window | Returns absolute visits by channel across the live 10-channel taxonomy: Affiliates, Direct, Display Ads, Gen AI, Mail, Organic Search, Organic Social, Paid Search, Paid Social, Referrals. Use `get-traffic-channels-share` for share-percentage view. |
 | Marketing channels by source | `get-traffic-referrals-incoming` | domain | Per-domain inbound referrers (`get-segments-traffic-sources` takes a Segment ID, not a domain). |
-| Similar sites | `get-websites-similar-sites-agg` | domain, country, limit | Default limit 10. WINDOW CONSTRAINT: explicit start_date/end_date must span EXACTLY 3 months (use start_date 2_months_ago, end_date latest) or the call 400s with "must span exactly 3 month(s)"; omitting both dates is also safe. Response rows carry `affinity` (0..1 similarity); there is NO `similarity_score` field. Per `similar-sites-window-constraint`. |
+| Similar sites | `get-websites-similar-sites-agg` | domain, limit (NO country param; the live schema does not accept one and a client-side validation rejects it) | Default limit 10. WINDOW CONSTRAINT: explicit start_date/end_date must span EXACTLY 3 months (use start_date 2_months_ago, end_date latest) or the call 400s with "must span exactly 3 month(s)"; omitting both dates is also safe. Response rows carry `affinity` (0..1 similarity); there is NO `similarity_score` field. Per `similar-sites-window-constraint`. |
 | Audience overlap | `get-websites-audience-overlap-agg` | domain, domains (comma-joined string, 2-5 domains) | Returns 2^N-1 subset rows in a single batched call. |
 | Demographics | `get-websites-demographics-agg` | domain, country | Age + gender breakdown. |
 | Geography | `get-websites-geography-agg` | domain | Country share. |
@@ -238,10 +240,10 @@ Presence ("does this tool exist on this connector?") is a gating axis SEPARATE f
 **Outcomes.**
 
 - **Present**: plan normally.
-- **Absent** (qualifying evidence positively omits the name): the outcome inherits the recipe's documented DENIAL outcome for that same tool (degrade, pivot offer, ask-user, abort; each recipe's Step 2 pins these per REQUIRED tool), differing only in: zero calls, no denial-confirmation probe, no retry, Pattern 7 wording ("not exposed on this connector"), and persistence to `tools_absent` (capability map schema) instead of `tools_inaccessible`. Abort only where denial would abort.
+- **Absent** (qualifying evidence positively omits the name): the outcome inherits the recipe's documented DENIAL outcome for that same tool (degrade, pivot offer, ask-user, abort; pinned per recipe in the smoke catalog table and mirrored in each recipe's Step 2 parameter form), differing only in: zero calls, no denial-confirmation probe, no retry, Pattern 7 wording ("not exposed on this connector"), and persistence to `tools_absent` (capability map schema) instead of `tools_inaccessible`. Abort only where denial would abort.
 - **Unknown** (no qualifying evidence): skip the pre-filter entirely and proceed optimistically; call-time detection below is the only absence detector. Cached `tools_absent` entries may advisorily skip OPTIONAL tools, but NEVER abort or skip a REQUIRED tool from cache.
 
-**Smoke retarget ladder.** When the recipe's documented smoke tool is absent: promote the recipe's documented secondary-probe tool to smoke; if that is also absent, smoke the first PRESENT REQUIRED tool; when no REQUIRED tool is present, abort at planning time with zero calls (aggregate insufficiency below). The retarget preserves the claims-probe purpose of smoke-first; never skip the smoke because the documented tool is absent.
+**Smoke retarget ladder.** When the recipe's documented smoke tool is absent: promote the recipe's documented secondary-probe tool to smoke; if that is also absent, smoke the first PRESENT REQUIRED tool; when no REQUIRED tool is present, abort at planning time with zero calls (aggregate insufficiency below). The retarget preserves the claims-probe purpose of smoke-first; never skip the smoke because the documented tool is absent. A retargeted smoke dispatches with the recipe's planned call params for the tool it retargets to (its call-plan row form), not a minimal probe shape, so a 200 is reusable as that planned call.
 
 **Call-time detection (message-gated per `unknown-tool-error-shape`).** A failed call whose error carries "No such tool available" (client-level) or "Unknown tool" (server-level, the advertised-but-not-callable case) is absence-equivalent for THIS RUN:
 
@@ -271,7 +273,7 @@ The capability map at `~/.similarweb-plugin/capabilities.json` is an OPTIONAL hi
 
 **Pattern (each recipe Step 2):**
 
-1. Try to read `~/.similarweb-plugin/capabilities.json`. If present and not expired, use its `tools_inaccessible` list (and `tools_available` map if also present) to pre-filter the call plan (skip OPTIONAL tools known to be inaccessible; abort if REQUIRED tools are flagged inaccessible). Expiry applies only to full-probe maps via their `refresh_after` field; a lazy append-only map (no `refresh_after`) never expires, it is an advisory set of observed denials.
+1. Try to read `~/.similarweb-plugin/capabilities.json`. If present and not expired, use its `tools_inaccessible` list (and `tools_available` map if also present) to pre-filter the call plan (skip OPTIONAL tools known to be inaccessible; abort if REQUIRED tools are flagged inaccessible). Legacy schema-v1 maps (`schema_version: 1`, the early full-probe shape) carry denials as `tools_available: false` entries: those gate access exactly like v2 denial records (the access-gate reading; presence-wise they remain non-evidence per the read-path precedence). Expiry applies only to full-probe maps via their `refresh_after` field; a lazy append-only map (no `refresh_after`) never expires, it is an advisory set of observed denials.
 2. If missing or expired, proceed with no prior knowledge. Execute the recipe's planned tool calls.
 3. Wrap each tool call in § error-rendering pattern 3 handling. Record a tool as access-denied ONLY on an actual access error: HTTP 403 carrying "missing the required claims" (or an equivalent auth/access-denied message), consistent with the in-run tracking and persistence rules below. Do NOT record other 4xx responses as denials: a validation error (a 400 such as "Dates not in range", "at most 3 months", or a bad metric or param) is a schema or transient problem (handle per § error-rendering Pattern 2), and a country-coverage gap (per § Country-coverage gap detection / § Precedence) is a per-(tool, country) plan limitation, NOT a tool denial. Recording a validation error or a country gap in `tools_inaccessible` would poison the map and wrongly skip a tool the plan actually grants. An ABSENT tool (per § tool-surface presence) is likewise never recorded here; absence persists to `tools_absent` per the capability map schema.
 4. At the end of the recipe (whether success, partial, or aborted), if any access-denied was observed, APPEND those tool names to `tools_inaccessible` in `~/.similarweb-plugin/capabilities.json`. Create the file with minimal shape if missing. Never overwrite known-accessible status; only append observed denials.
@@ -350,10 +352,10 @@ Maintain a parallel in-memory map: `country_unavailable_this_run: dict[(tool, co
 When the FIRST domain attempted with a (tool, country) pair returns the country-coverage-gap envelope (NOT a 403; either Shape A 400-client_error-with-country-message or Shape B 200-empty-data-with-country-message above):
 
 1. Record `country_unavailable_this_run[(tool, country)] = True`.
-2. Skip ALL remaining domains in this turn for this (tool, country) pair. Do not batch the rest.
+2. Skip ALL remaining domains in this turn for this (tool, country) pair. Do not batch the rest. "Remaining" means not-yet-dispatched: sibling calls already in flight in the same parallel batch are not retracted (their gap responses are uncharged and recorded); whether a per-domain batch was dispatched in parallel before the first gap returned is an execution-environment detail, and both shapes comply.
 3. Pivot strategy: substitute `country=ww` for the remaining domains for this tool in this turn. If a ww call has already succeeded for this tool in this turn, the (tool, ww) data is already cached; use it.
 4. CROSS-TOOL PROPAGATION: when 2 or more distinct tools report country-coverage gap for the same country in this turn, set `country_suspicious_this_run[country] = True`. For all SUBSEQUENT tool batches in this recipe, skip the (subsequent_tool, country) batch entirely without a smoke probe. Fall back to country=ww immediately.
-5. Render rule: in the Caveats block, surface one consolidated line: "Country X not on this plan; rendered worldwide. Affected tools: tool-1, tool-2, ..." Do NOT render one line per tool.
+5. Render rule: in the Caveats block, surface one consolidated line: "Country X not on this plan; rendered worldwide. Affected tools: tool-1, tool-2, ..." Do NOT render one line per tool. Once the run has pivoted, the header line renders the pivoted country (`ww`), not the requested one, per sw-foundation-render § error-rendering Pattern 6 main text.
 
 This rule pairs with § smoke-first sequencing. Recipes whose smoke probe runs at `country=ww` (e.g. sw-competitive-teardown) never trigger this path on the smoke itself; recipes whose smoke runs at the user-supplied country (e.g. sw-channel-mix, default `us`) CAN hit the gap on the very first call, in which case the same detect-and-pivot rule applies to the smoke. Either way, detection runs on the first (tool, country) call that carries the country-coverage message, smoke or batched.
 

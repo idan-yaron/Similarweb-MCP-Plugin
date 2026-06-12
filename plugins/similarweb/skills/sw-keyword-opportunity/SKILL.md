@@ -7,8 +7,9 @@ description: Keyword gap analysis for a target domain, against a named competito
 **Inherits:**
 - sw-foundation-core: § capability-gating, § bulk-input-from-context
 - sw-foundation-data: § country-normalization, § window-resolution, § conversation-context
-- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations
-- sw-foundation-render: § handoff-json-schema (when intent=handoff)
+- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations, § handoff-json-schema (when intent=handoff)
+
+Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via your platform's skill mechanism (the Skill tool where available, plugin-qualified names accepted); where no skill mechanism exists, Read the bundled SKILL.md files of those three skills and apply them inline. Never resolve them via cwd-relative paths.
 
 ## Hard rules (NEVER violate)
 
@@ -18,7 +19,7 @@ description: Keyword gap analysis for a target domain, against a named competito
 - NEVER pass a window wider than 3 months to `get-website-analysis-keywords-agg` or `get-keywords-overview`. Both cap at 3 months per `keywords-overview-3-month-max`. The server returns HTTP 400 `VALIDATION_ERROR / Dates not in range` (probe confirmed for 4-month windows on `get-keywords-overview`).
 - NEVER look for `volume` / `difficulty` / `CPC` fields on `get-website-analysis-keywords-agg`. Those fields live on `get-keywords-overview` only. Recipe combines both tools by looping the overview per gap keyword.
 - NEVER pass a full country name (`"United States"`) to any tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize per sw-foundation-data § country-normalization before any call.
-- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` (currently `2026-04-30`) and rejects future dates. Derive effective `end_date` per sw-foundation-data § window-resolution from the Step 0 rank smoke.
+- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` (currently `2026-04-30`) and rejects future dates. Derive effective `end_date` per sw-foundation-data § window-resolution from the Call 0 rank smoke.
 - NEVER treat the `url` field of `get-websites-keywords-competitors-agg` as a URL. Per `keywords-competitors-shape`, it is a DOMAIN despite the misleading name. Recipe renders it as a domain.
 - NEVER treat `shared_keywords` from `get-websites-keywords-competitors-agg` as an integer count. Per `keywords-competitors-shape`, it is a FLOAT 0..1 (Jaccard-like overlap fraction). Recipe renders as percent.
 - NEVER skip the competitor positional/flag input. Both `<domain>` AND `--vs <competitor>` are required; if missing, ask one disambiguation question.
@@ -43,16 +44,10 @@ echo "$COMPETITOR" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Invalid comp
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
-
-1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-keywords-overview` (the documented smoke, itself OPTIONAL) absent: retarget the smoke to `get-website-analysis-keywords-agg` and ship the gap table without enrichment (the claims probe is preserved; never skip the smoke); `get-website-analysis-keywords-agg` absent: ABORT with the caveat (it IS the gap table); `get-websites-website-rank` absent: degrade the headline and derive end_date from the smoke's `meta.last_updated`; `get-websites-keywords-competitors-agg` absent: skip Step 1 with its documented denial caveat. If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically; at call time, an error saying "No such tool available" (or server "Unknown tool"; per `unknown-tool-error-shape`) means not exposed: apply the same outcomes with the consolidated caveat ("Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact."), zero retries; an "Input validation error" means the tool exists, fix the arguments.
-2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain, country=us. Wait synchronously for the response. Do NOT issue any other call yet.
-3. **Branch**:
-   - 200: cache the result; reuse it as the first enrichment row in Step 4 row 4 if the seed term ends up in the gap-keywords list. Proceed to Step 2A.
-   - 403 with "missing the required claims": issue ONE secondary probe to `get-website-analysis-keywords-agg` for the target domain, country=us, single-month window, `limit: 5`. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark `get-keywords-overview` as inaccessible_this_run and ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
-   - Country-coverage gap (a 400 `client_error` or a 200-empty response carrying a country-coverage message, per sw-foundation-core § Country-coverage gap detection): do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat.
-   - Other error: retry once. If still failing, mark `get-keywords-overview` as fragile-this-run and proceed.
-4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
+- **Smoke**: `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain; country=us. Reuse a 200 as the first enrichment row in Call 4 if the seed term ends up in the gap-keywords list.
+- **Secondary probe**: `get-website-analysis-keywords-agg`, target domain, country=us, single-month window, `limit: 5`. If the smoke is denied but the secondary probe returns 200, ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
+- **Pinned absence outcomes**: `get-keywords-overview` (the documented smoke, itself OPTIONAL): retarget the smoke to `get-website-analysis-keywords-agg` and ship the gap table without enrichment (the claims probe is preserved; never skip the smoke); `get-website-analysis-keywords-agg`: ABORT with the caveat (it IS the gap table); `get-websites-website-rank`: degrade the headline and derive end_date from the smoke's `meta.last_updated`; `get-websites-keywords-competitors-agg`: skip Call 1 with its documented denial caveat.
+- Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED: `get-websites-website-rank`, `get-website-analysis-keywords-agg`. OPTIONAL: `get-websites-keywords-competitors-agg` (surfaces alternative competitors; if denied the recipe still computes the gap from the explicit `--vs` competitor), `get-keywords-overview` (enriches the gap keywords with volume / difficulty / CPC; if denied the recipe ships the gap table without enrichment).
 
@@ -62,7 +57,7 @@ Per sw-foundation-core § bulk-input-from-context. If `--vs` was not supplied an
 
 ## Step 4: Plan the call sequence
 
-| Step | Tool | Purpose |
+| Call | Tool | Purpose |
 |------|------|---------|
 | 0 | `get-websites-website-rank` | Headline rank for BOTH target and competitor + derive effective `end_date` from `meta.last_updated` (NOT this recipe's smoke; the Step 2 smoke is `get-keywords-overview`). Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per call (2 calls = ~12 total). |
 | 1 | `get-websites-keywords-competitors-agg` | Top organic competitors of target, sanity-check that `--vs <competitor>` actually shares keywords. EXACT 3-month window required. ~3 sw_coins. |
@@ -74,24 +69,24 @@ Default total cost: ~30-40 data credits per run.
 
 ## Step 5: Execute
 
-Step 0 runs first (2 parallel calls, one per domain). Derive effective `end_date` from the target's `meta.last_updated` per sw-foundation-data § window-resolution; the recipe uses the SAME EXACT 3-month window across all subsequent steps. Concretely: `end_date = 2026-04-30` (or current ceiling), `start_date = 2026-02-01`.
+Call 0 runs first (2 parallel calls, one per domain). Derive effective `end_date` from the target's `meta.last_updated` per sw-foundation-data § window-resolution; the recipe uses the SAME EXACT 3-month window across all subsequent calls. Concretely: `end_date = 2026-04-30` (or current ceiling), `start_date = 2026-02-01`.
 
-Step 1, 2, 3 are independent given the resolved window; parallelize.
+Calls 1, 2, and 3 are independent given the resolved window; parallelize.
 
-Step 4 fans out per gap keyword and is itself independent across keywords; parallelize within the loop.
+Call 4 fans out per gap keyword and is itself independent across keywords; parallelize within the loop.
 
 Client-side derivations after responses arrive:
 
-1. **From Step 1 (competitor sanity check):** scan the response for the user-supplied `--vs` competitor. If present, the competitor is a genuine organic-keyword overlap (surface its `shared_keywords` % and `score` in the rendered output). If absent, surface in Caveats: "`<competitor>` does not appear in target's top-100 keyword competitors; gap analysis still runs but the keyword overlap with `<target>` may be thin."
+1. **From Call 1 (competitor sanity check):** scan the response for the user-supplied `--vs` competitor. If present, the competitor is a genuine organic-keyword overlap (surface its `shared_keywords` % and `score` in the rendered output). If absent, surface in Caveats: "`<competitor>` does not appear in target's top-100 keyword competitors; gap analysis still runs but the keyword overlap with `<target>` may be thin."
 
-2. **From Steps 2 + 3 (target vs competitor keyword sets):** intersect the keyword sets by exact-match on the `keyword` field. Build three buckets:
+2. **From Calls 2 + 3 (target vs competitor keyword sets):** intersect the keyword sets by exact-match on the `keyword` field. Build three buckets:
    - `gap_keywords`: keywords where competitor ranks (position present) but target does NOT (target absent from intersection's competitor side) -- competitor wins
    - `shared_keywords`: keywords where BOTH target and competitor rank (both present in intersection)
    - `target_wins`: keywords where target ranks but competitor does NOT
 
    MANDATORY caveat rendered with the Gap table: "Gap = absent from `<target>`'s top-25 organic keywords (the limit=25 pull); the target may still rank below that cutoff for these terms. Treat gaps as priority candidates, not proof of zero presence."
 
-3. **ROI score per gap keyword** (after Step 4 enriches volume / difficulty / CPC):
+3. **ROI score per gap keyword** (after Call 4 enriches volume / difficulty / CPC):
    ```
    roi_score = volume_competitor_position_factor / max(difficulty, 1)
    ```
@@ -111,7 +106,7 @@ Per sw-foundation-render intent-aware output rendering rules. Default: narrative
 
 ## Step 7: Render
 
-Apply token compression per sw-foundation-render § citation block. Body output target ~2500-3500 chars.
+Apply token compression per sw-foundation-render § citation block. Output length per sw-foundation-render's output-render targets.
 
 **Header (FIRST line of output, ONE italic line):** `*{target} vs {competitor} | {country} | {window} | last_updated {meta.last_updated}*`. Drop duplicate parentheticals from every subsequent section header.
 
@@ -122,8 +117,8 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 Sections in order:
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. Name the SIZE of the gap (count of gap_keywords + their total competitor volume), the BIGGEST gap keyword, and the verdict on opportunity. Use § expert-heuristics calibration: HIGH = clear gap with monetizable volume; MEDIUM = some gap but mixed; LOW = mostly shared territory with thin gaps. When the current recipe builds materially on a prior recipe in this conversation, prepend with the "Connecting back" line per sw-foundation-data § conversation-context.).
-- `## Rank + reach` (table with target and competitor country rank from Step 0; if user country is `ww`, render as one column).
-- `## Keyword gap (competitor wins)` (top 10 by ROI desc, after Step 4 enrichment. Columns: `Rank`, `Keyword`, `Competitor pos`, `Volume`, `Difficulty`, `Intent`, `ROI score`. Sort by ROI descending. Pair with Unicode bar visualization of ROI scores.).
+- `## Rank + reach` (table with target and competitor country rank from Call 0; if user country is `ww`, render as one column).
+- `## Keyword gap (competitor wins)` (top 10 by ROI desc, after Call 4 enrichment. Columns: `Rank`, `Keyword`, `Competitor pos`, `Volume`, `Difficulty`, `Intent`, `ROI score`. Sort by ROI descending. Pair with Unicode bar visualization of ROI scores.).
 - `## Shared territory` (table of keywords both rank for; columns: `Keyword`, `Target pos`, `Competitor pos`, `Position gap`. Highlight position gaps > 5 as defensive priorities. Top 10 by competitor traffic_share. If empty, skip with one-line note.).
 - `## Target wins` (keywords where target ranks but competitor doesn't; columns: `Keyword`, `Target pos`, `Traffic share`. Top 10 by traffic_share. If empty, render a single line "No outright wins detected in top-25; target's strength is in shared territory, not exclusive keywords.").
 - `## Strategic insights` (3 bullets per § expert-heuristics, labeled `DEFEND` / `EXPOSE` / `PLAY`, each ending with `(confidence: HIGH | MEDIUM | LOW)`. DEFEND = shared territory where target leads; EXPOSE = gap keywords with high ROI; PLAY = an intent cluster or content angle the data implies.).
@@ -200,7 +195,7 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
 Field semantics:
 - `competitor_relationship.shared_keywords_fraction` is the float 0..1 from `get-websites-keywords-competitors-agg` (Jaccard-like overlap coefficient; per `keywords-competitors-shape`, this is NOT an integer count).
 - `competitor_relationship.competitiveness_score` is the `score` field from `get-websites-keywords-competitors-agg` (unbounded float).
-- `competitor_relationship.competitor_in_target_top100` is `false` when the user-supplied `--vs` competitor does NOT appear in the top-100 returned by Step 1; signals a thin overlap.
+- `competitor_relationship.competitor_in_target_top100` is `false` when the user-supplied `--vs` competitor does NOT appear in the top-100 returned by Call 1; signals a thin overlap.
 - `gaps` rows are sorted by `roi_score` descending. `roi_score` = `volume * (1 - (competitor_position - 1) / 10) / max(difficulty, 1)`. Higher = more attractive.
 - `gaps[].volume`, `difficulty`, `cpc_low_bid`, `cpc_high_bid` come from `get-keywords-overview` (looped per top-10 gap keyword). If the overview tool was unavailable, these fields are null.
 - `shared` rows are sorted by competitor `traffic_share` descending. `position_gap` = `competitor_position - target_position` (positive = competitor outranks).
@@ -209,12 +204,12 @@ Field semantics:
 
 ## Edge cases
 
-- **Target has no Similarweb coverage** (Step 0 rank returns null): print "Similarweb has no coverage for `<target>`. Aborting." Exit.
+- **Target has no Similarweb coverage** (Call 0 rank returns null): print "Similarweb has no coverage for `<target>`. Aborting." Exit.
 - **Competitor has no Similarweb coverage**: print "Similarweb has no coverage for `<competitor>`. Aborting." Exit.
-- **`get-websites-keywords-competitors-agg` access-denied at runtime**: skip Step 1; `competitor_in_target_top100` is null in handoff; note in Caveats: "Competitor-relationship sanity check skipped (tool unavailable); gap analysis runs but overlap context is missing."
-- **`get-keywords-overview` access-denied at runtime**: skip Step 4; `gaps[].volume`, `difficulty`, `cpc_*` are null in handoff; render the gap table without enrichment; sort by competitor traffic_share instead of ROI; note in Caveats.
+- **`get-websites-keywords-competitors-agg` access-denied at runtime**: skip Call 1; `competitor_in_target_top100` is null in handoff; note in Caveats: "Competitor-relationship sanity check skipped (tool unavailable); gap analysis runs but overlap context is missing."
+- **`get-keywords-overview` access-denied at runtime**: skip Call 4; `gaps[].volume`, `difficulty`, `cpc_*` are null in handoff; render the gap table without enrichment; sort by competitor traffic_share instead of ROI; note in Caveats.
 - **No gap keywords detected** (target and competitor have identical top-25 keyword sets, rare but possible for very tight competitors): render "No keyword gaps detected in top-25; both domains rank for the same head terms. Consider expanding the limit or comparing on a different country." Skip the gap table; render shared + wins only.
-- **`--vs` competitor doesn't appear in target's top-100 keyword competitors** (Step 1 result): surface in Caveats: "`<competitor>` does not appear in `<target>`'s top-100 organic keyword competitors; gap analysis still runs but the overlap may be thin." Continue with the gap analysis.
+- **`--vs` competitor doesn't appear in target's top-100 keyword competitors** (Call 1 result): surface in Caveats: "`<competitor>` does not appear in `<target>`'s top-100 organic keyword competitors; gap analysis still runs but the overlap may be thin." Continue with the gap analysis.
 - **User-supplied `end_date` is beyond `meta.last_updated`**: clamp per sw-foundation-data § window-resolution and note in Caveats with the canonical "end_date clamped from <requested> to <meta.last_updated>" wording.
 - **Full country name passed**: normalize per sw-foundation-data § country-normalization before any call.
 - **User supplies 2-month window via --window**: ignore the override and use exactly 3 months (the keywords-competitors-agg constraint forces it); note in Caveats: "Window forced to exactly 3 months because keywords-competitors-agg requires it."

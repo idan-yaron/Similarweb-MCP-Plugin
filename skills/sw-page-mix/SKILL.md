@@ -7,14 +7,15 @@ description: URL and folder level content surface for one domain. Use for which 
 **Inherits:**
 - sw-foundation-core: § capability-gating, § bulk-input-from-context
 - sw-foundation-data: § country-normalization, § window-resolution, § conversation-context
-- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations
-- sw-foundation-render: § handoff-json-schema (when intent=handoff)
+- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations, § handoff-json-schema (when intent=handoff)
+
+Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via your platform's skill mechanism (the Skill tool where available, plugin-qualified names accepted); where no skill mechanism exists, Read the bundled SKILL.md files of those three skills and apply them inline. Never resolve them via cwd-relative paths.
 
 ## Hard rules (NEVER violate)
 
 - NEVER pass `web_source: "desktop"` or `web_source: "mobile_web"` to either pages tool. Per `pages-tools-web-source-total` and the live tool schemas (`const: total`), only `total` is supported. Server returns HTTP 400 VALIDATION_ERROR on any other value.
 - NEVER pass a full country name (`"United States"`) to either tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize per sw-foundation-data § country-normalization before any call.
-- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` (e.g. `2026-04-30` at grounding time) and rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution from the Step 0 rank smoke's `meta.last_updated`.
+- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` (e.g. `2026-04-30` at grounding time) and rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution from the Call 0 rank smoke's `meta.last_updated`.
 - NEVER fabricate a traffic_share for a folder or page when the response row's `share` is null or absent. Render `n/a` per sw-foundation-render § error-rendering pattern 1 (null payload; pattern 4 is reserved for structural-zero `0.0` values).
 - NEVER sum top-N folder shares as if they were disjoint when parent/child folders both appear in the response. Per `pages-leading-folders-shape`, the server does NOT dedupe (`nike.com/launch` and `nike.com/launch/t` coexist). The recipe computes HHI on the returned rows AS-IS for the concentration verdict but documents the nesting in the strategic insights, not by quietly collapsing rows.
 - NEVER call `get-pages-popular-pages-agg` with the `page` parameter set when summarizing the surface; that filters the response to a single page only, which is a per-page drill-in, not a top-page survey.
@@ -35,16 +36,10 @@ echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-page-
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Apply sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating in this exact order:
-
-1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-websites-website-rank` absent: the smoke retargets to `get-pages-popular-pages-agg` and rank rendering degrades; ONE pages tool absent: drop its section (the DEGRADABLE semantics below, same as denial); BOTH pages tools absent: abort with the caveat (nothing to render). If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically; at call time, an error saying "No such tool available" (or server "Unknown tool"; per `unknown-tool-error-shape`) means not exposed: apply the same outcomes with the consolidated caveat ("Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact."), zero retries; an "Input validation error" means the tool exists, fix the arguments.
-2. **Smoke probe (single call, sequential)**: Issue exactly ONE call to `get-websites-website-rank` for the target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded to `start_date = "2_months_ago"`, `end_date = "latest"` per sw-foundation-core § smoke-first sequencing. Wait synchronously for the response. Do NOT issue any other call yet. This smoke IS the Step 4 row 0 rank call; reuse it, never re-issue it.
-3. **Branch**:
-   - 200: cache the rank result; this becomes the Step 0 "rank smoke" data Step 4 references for end_date derivation. Proceed to Step 2A.
-   - 403 with "missing the required claims": issue ONE secondary probe to `get-pages-popular-pages-agg` for the target, country=`$COUNTRY`, single-month window, `web_source: total`, `limit: 5`. If that is also 403, render § error-rendering Pattern 5 (systemic auth failure) and STOP. If 200, mark website-rank as inaccessible_this_run, proceed to Step 2A with degraded rank rendering.
-   - Country-coverage gap (a 400 `client_error` or a 200-empty response carrying a country-coverage message, per sw-foundation-core § Country-coverage gap detection): do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat.
-   - Other error: retry once. If still failing, mark website-rank as fragile-this-run and proceed.
-4. **Step 2A**: apply lazy capability gating per sw-foundation-core § capability-gating using the smoke probe result plus any previously persisted ~/.similarweb-plugin/capabilities.json entries. Per-call access denial is handled inline via § error-rendering pattern 3 and appended to `tools_inaccessible` at the end of the run; per-call absence is handled via § error-rendering Pattern 7 and is NEVER appended to `tools_inaccessible`.
+- **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
+- **Secondary probe**: `get-pages-popular-pages-agg`, target, country=`$COUNTRY`, single-month window, `web_source: total`, `limit: 5`.
+- **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; ONE pages tool: drop its section (the DEGRADABLE semantics below, same as denial); BOTH pages tools: abort with the caveat (nothing to render).
+- Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED: `get-websites-website-rank`. DEGRADABLE: `get-pages-popular-pages-agg`, `get-pages-leading-folders-agg` (if ONE pages tool returns access-denied at runtime, the recipe drops that section and notes the skip in Caveats rather than aborting; if BOTH pages tools are denied there is nothing to render, so abort per sw-foundation-render § error-rendering Pattern 5 semantics with a clear Caveat).
 
@@ -54,27 +49,27 @@ Per sw-foundation-core § bulk-input-from-context. sw-page-mix is single-domain.
 
 ## Step 4: Plan the call sequence
 
-| Step | Tool | Purpose |
+| Call | Tool | Purpose |
 |------|------|---------|
 | 0 | `get-websites-website-rank` | The Step 2 smoke (reused, not re-called) + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. |
-| 1 | `get-pages-popular-pages-agg` | Top URLs by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 25`. 3-month window. ~75 sw_coins. |
-| 2 | `get-pages-leading-folders-agg` | Top folders by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 15`. 3-month window. ~45 sw_coins. |
+| 1 | `get-pages-popular-pages-agg` | Top URLs by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 25`. 3-month window with `granularity: monthly` (omitting granularity defaults the endpoint to daily, which rejects any window past 28 days). ~75 sw_coins. |
+| 2 | `get-pages-leading-folders-agg` | Top folders by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 15`. 3-month window with `granularity: monthly` (same daily-default rejection). ~45 sw_coins. |
 
 Default total cost: ~125 sw_coins (rank smoke + 25 pages + 15 folders).
 
 ## Step 5: Execute
 
-Step 0 runs first; derive the effective window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`, so 3 calendar months) and read `meta.last_updated` from its response. Steps 1 and 2 are independent given the resolved window; parallelize.
+Call 0 runs first; derive the effective window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`, so 3 calendar months) and read `meta.last_updated` from its response. Calls 1 and 2 are independent given the resolved window; parallelize.
 
 Client-side derivations after responses arrive:
 
-1. **From Step 1 (top URLs):**
+1. **From Call 1 (top URLs):**
    - Recipe surfaces top 10 in the rendered table (server returned 25; bottom 15 are kept in handoff JSON).
    - Sum top-10 shares to compute "top-10 page concentration" (the head's share of all traffic).
    - Identify the top-3 "anchor pages" (highest `share` rows) for the strategic-insights commentary.
    - For each URL row, retain `change` for the period-over-period column.
 
-2. **From Step 2 (top folders):**
+2. **From Call 2 (top folders):**
    - Compute folder HHI: `hhi = sum((share_i * 100) ** 2 for i in returned_rows)`. Note this uses the partial-tail subset, NOT the full domain; per § expert-heuristics it's an underestimate of true folder HHI.
    - Apply the § expert-heuristics threshold verdict: `hhi < 1500` -> `FRAGMENTED`; `1500 <= hhi < 2500` -> `MODERATE`; `hhi >= 2500` -> `CONCENTRATED`.
    - Compute "concentration in top-5 folders" = sum of first 5 folder shares.
@@ -93,7 +88,7 @@ Per sw-foundation-render intent-aware output rendering rules. Default: narrative
 
 ## Step 7: Render
 
-Apply token compression per sw-foundation-render § citation block. Body output target ~2000-3000 chars.
+Apply token compression per sw-foundation-render § citation block. Output length per sw-foundation-render's output-render targets.
 
 **Header (FIRST line of output, ONE italic line):** `*{target} | {country} | {window} | last_updated {meta.last_updated}*`. Drop duplicate parentheticals from every subsequent section header.
 
@@ -105,9 +100,9 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 Sections in order:
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. FIRST WORD is the folder-concentration verdict (`FRAGMENTED`, `MODERATE`, `CONCENTRATED`) per § expert-heuristics. Name the top-1 anchor page (URL + share) and the dominant folder (folder + share) in the same paragraph. If concentration is `CONCENTRATED`, note the risk of overdependence; if `FRAGMENTED`, note the spread. When the current recipe builds materially on a prior recipe in this conversation, prepend with the "Connecting back" line per sw-foundation-data § conversation-context.).
-- `## Rank + reach` (table: country rank, from Step 0; if the user country IS `ww`, the table collapses to one row).
-- `## Top URLs` (table from Step 1, top 10 rows sorted by `share` descending. Columns: `Rank`, `URL`, `Traffic share`, `Change vs prior`. `share` rendered as percent to 2 decimals; `change` rendered as `+X%` / `-X%`, `n/a` when null. Pair with Unicode bar visualization.).
-- `## Folder hierarchy` (table from Step 2, all returned rows sorted server-side by `share` descending. Columns: `Rank`, `Folder`, `Traffic share`, `Change vs prior`. Pair with Unicode bar visualization. Sub-line below the table: "Folders nest; parent and child paths both appear when the server returns them. The top-5 folder concentration is X%.").
+- `## Rank + reach` (table: country rank, from Call 0; if the user country IS `ww`, the table collapses to one row).
+- `## Top URLs` (table from Call 1, top 10 rows sorted by `share` descending. Columns: `Rank`, `URL`, `Traffic share`, `Change vs prior`. `share` rendered as percent to 2 decimals; `change` rendered as `+X%` / `-X%`, `n/a` when null. Pair with Unicode bar visualization.).
+- `## Folder hierarchy` (table from Call 2, all returned rows sorted server-side by `share` descending. Columns: `Rank`, `Folder`, `Traffic share`, `Change vs prior`. Pair with Unicode bar visualization. Sub-line below the table: "Folders nest; parent and child paths both appear when the server returns them. The top-5 folder concentration is X%.").
 - `## Concentration` (Unicode HHI threshold bar per § visualizations. Headline: `HHI: <value>  <bar>  <VERDICT>`. Sub-line citing the 1500 / 2500 thresholds. Sub-line: "HHI computed on the top-N folder subset; absolute HHI rises when the long tail is added.").
 - `## Strategic insights` (3 bullets per § expert-heuristics, each labeled `DEFEND` / `EXPOSE` / `PLAY` and ending with `(confidence: HIGH | MEDIUM | LOW)`. Reference the SPECIFIC numbers and URLs surfaced in this run.).
 - `## NEXT MOVES` (EXACTLY 2 backtick-quoted natural-language questions, each
@@ -165,9 +160,9 @@ Field semantics:
 
 ## Edge cases
 
-- **Target has no Similarweb coverage** (Step 0 rank returns null): print "Similarweb has no coverage for `<target>`. Aborting." Exit.
-- **`get-pages-popular-pages-agg` access-denied at runtime**: skip Step 1; skip the `## Top URLs` section; note in Caveats. `top_urls` and `anchor_pages` are empty in handoff. Folder section still ships.
-- **`get-pages-leading-folders-agg` access-denied at runtime**: skip Step 2; skip the `## Folder hierarchy` and `## Concentration` sections; note in Caveats. `folders`, `hhi`, `hhi_verdict`, `concentration_top5` are null in handoff. Top URLs section still ships.
+- **Target has no Similarweb coverage** (Call 0 rank returns null): print "Similarweb has no coverage for `<target>`. Aborting." Exit.
+- **`get-pages-popular-pages-agg` access-denied at runtime**: skip Call 1; skip the `## Top URLs` section; note in Caveats. `top_urls` and `anchor_pages` are empty in handoff. Folder section still ships.
+- **`get-pages-leading-folders-agg` access-denied at runtime**: skip Call 2; skip the `## Folder hierarchy` and `## Concentration` sections; note in Caveats. `folders`, `hhi`, `hhi_verdict`, `concentration_top5` are null in handoff. Top URLs section still ships.
 - **Both pages tools access-denied at runtime**: print "Neither pages tool is accessible on this plan; the page-mix recipe needs at least one. Aborting." Exit.
 - **Server returns fewer rows than requested limit** (thin coverage): surface in Caveats ("server returned N rows for limit=M; domain has thin coverage on country=X"); render what was returned.
 - **All returned page rows have `share = 0.0`** (silent zero-fill artifact): treat as missing data; surface in Caveats and skip the URL bars but render the table.

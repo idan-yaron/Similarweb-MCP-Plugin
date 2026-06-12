@@ -7,8 +7,9 @@ description: Market and category sizing. Use for market size, total addressable 
 **Inherits:**
 - sw-foundation-core: § capability-gating, § bulk-input-from-context
 - sw-foundation-data: § country-normalization
-- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations
-- sw-foundation-render: § handoff-json-schema (when intent=handoff)
+- sw-foundation-render: § citation block, § error-rendering, § expert-heuristics, § visualizations, § handoff-json-schema (when intent=handoff)
+
+Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via your platform's skill mechanism (the Skill tool where available, plugin-qualified names accepted); where no skill mechanism exists, Read the bundled SKILL.md files of those three skills and apply them inline. Never resolve them via cwd-relative paths.
 
 ## Hard rules (NEVER violate)
 
@@ -53,13 +54,12 @@ case "$AMAZON_TLD" in
 esac
 ```
 
-## Step 2: smoke-first probe + lazy capability gating (MANDATORY)
+## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-Per sw-foundation-core § tool-surface presence, § smoke-first sequencing, AND § capability-gating:
-
-1. **Presence pre-filter (zero calls)**: resolve presence per sw-foundation-core § tool-surface presence against the session's live tool list for the Similarweb server. Pinned absence outcomes (zero calls, zero retries, "not exposed on this connector" caveat wording): `get-categories-search` absent: the smoke retargets to `get-categories-performance-agg` and the recipe aborts with the existing pivot offer ("pass a numeric category ID, or pivot to `--web-companion`"); any other REQUIRED shopper tool absent: abort offering `--web-companion` only (a numeric ID cannot replace a missing data tool); OPTIONAL tools absent: skip with one consolidated caveat line. If the live list cannot be positively enumerated, skip this pre-filter and proceed optimistically; at call time, an error saying "No such tool available" (or server "Unknown tool"; per `unknown-tool-error-shape`) means not exposed: apply the same outcomes with the consolidated caveat ("Not exposed on this connector: <tools>. Check the connector's tool settings in your AI client first; if enabled there and still absent, ask your Similarweb account contact."), zero retries; an "Input validation error" means the tool exists, fix the arguments.
-2. **Smoke (one call, sequential)**: `get-categories-search`, `domain=$AMAZON_TLD`, `search_term=$INPUT`. Wait. No other call yet. On 200, cache and go to 2A. On 403, secondary probe `get-categories-performance-agg` (`domain=$AMAZON_TLD`, `category="1"`, smallest window); if also 403, render § error-rendering Pattern 5 and STOP; if 200, abort with Caveat "Cannot resolve category without `get-categories-search`; pass a numeric category ID, or pivot to `--web-companion`." Other error: retry once; if still failing, mark fragile-this-run and proceed.
-3. **2A**: apply § capability-gating using the smoke result plus any persisted entries. Per-call denial via § error-rendering pattern 3, appended to `tools_inaccessible` at end of run; per-call absence via § error-rendering Pattern 7, NEVER appended to `tools_inaccessible`.
+- **Smoke**: `get-categories-search`, `domain=$AMAZON_TLD`, `search_term=$INPUT` (no country, no window). On 200, cache the result; it IS Call 1, never re-issue it.
+- **Secondary probe**: `get-categories-performance-agg`, `domain=$AMAZON_TLD`, `category="1"`, smallest window. If the smoke is denied but the secondary probe returns 200, abort with Caveat "Cannot resolve category without `get-categories-search`; pass a numeric category ID, or pivot to `--web-companion`."
+- **Pinned absence outcomes**: `get-categories-search`: retarget the smoke to the secondary probe, then abort with the same pivot offer (pass a numeric category ID, or pivot to `--web-companion`); any other REQUIRED shopper tool: abort offering `--web-companion` only (a numeric ID cannot replace a missing data tool); OPTIONAL tools: skip with one consolidated caveat line.
+- Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED (Amazon flow):
 - `get-categories-search`
@@ -84,26 +84,26 @@ Per sw-foundation-core § bulk-input-from-context. sw-market-size is single-cate
 
 ## Step 4: Plan the call sequence
 
-| Step | Tool | Purpose |
+| Call | Tool | Purpose |
 |------|------|---------|
 | 1 | `get-categories-search` | Resolve user input to an Amazon `category_id`. Params: `domain` = `$AMAZON_TLD`, `search_term` = `$INPUT`. NO `country`, NO `query`. Returns up to ~100 ambiguous matches. Recipe MUST disambiguate. |
-| 2 | `get-categories-performance-agg` | Total Amazon demand for the resolved category. Single row, 6 metrics, 3-year default window. Params: `domain`, `category` (numeric ID from Step 1). |
+| 2 | `get-categories-performance-agg` | Total Amazon demand for the resolved category. Single row, 6 metrics, 3-year default window. Params: `domain`, `category` (numeric ID from Call 1). |
 | 3 | `get-categories-top-brands-agg` | Top 10 brands pre-sorted by revenue desc. Params: `domain`, `category`, `limit: 10`. Optionally pass `metrics: ["revenue_in_usd","revenue_share","total_views_share","units_sold_share","conversion"]` to cut cost. |
 | 4 | `get-categories-top-keywords-agg` | Top 10 keywords pre-sorted by `keyword_total_clicks` desc. Params: `domain`, `category`, `limit: 10`. |
 | 5 (if accessible) | `get-categories-sales-performance-agg` | Optional sales-perf cut. Params: `domain`, `category`. |
 | 6 (if `--web-companion`) | `get-websites-top-sites-by-category-agg` | Web industry leaderboard. Params: `category` (PascalCase slug matched from user input against hardcoded list), `country` (ISO-2), `limit: 10`. Returns ONLY `{domain, rank}` per row. |
-| 7 (if `--web-companion --enrich-traffic`) | `get-websites-traffic-and-engagement` | Looped per ranked domain from Step 6 (up to 10 calls). Returns visits + engagement metrics. Expensive: ~10-20 data credits per domain. |
+| 7 (if `--web-companion --enrich-traffic`) | `get-websites-traffic-and-engagement` | Looped per ranked domain from Call 6 (up to 10 calls). Returns visits + engagement metrics. Expensive: ~10-20 data credits per domain. |
 
 Hardcoded Web slug list (top-level only, case-sensitive, confirmed working in the live grounding probe):
 `Computers_Electronics_and_Technology`, `Health`, `Finance`, `Sports`, `News_and_Media`, `E-Commerce_and_Shopping`. If user input does not match exactly, the recipe asks one disambiguation question with the closest 3-5 slugs from the list.
 
 ## Step 5: Execute
 
-Step 1 runs first. From its response:
-- If 0 nodes returned: Amazon flow fails. If `--web-companion` was supplied, run only Steps 6 (and optionally 7); render with Caveat "Amazon shopper data not available for this category; running Web-industry leaderboard only." If `--web-companion` was NOT supplied, ask the user once: "No Amazon match for `<input>`. Want to try a different search term, or run this as a Web-industry leaderboard instead?".
+Call 1 runs first. From its response:
+- If 0 nodes returned: Amazon flow fails. If `--web-companion` was supplied, run only Call 6 (and optionally Call 7); render with Caveat "Amazon shopper data not available for this category; running Web-industry leaderboard only." If `--web-companion` was NOT supplied, ask the user once: "No Amazon match for `<input>`. Want to try a different search term, or run this as a Web-industry leaderboard instead?".
 - If 1+ nodes returned: disambiguate. Sort by `category_depth` ascending; prefer retail-relevant root trees in this order: `Electronics`, `Toys & Games`, `Sports & Outdoors`, `Home & Kitchen`, `Health & Household`, `Beauty & Personal Care`. Skip `Books > Children's Books > ...` and other educational/book subtrees unless the user explicitly typed `"books"` or a book-related term. If the top match by these heuristics is unambiguous AND its `category_path` reasonably matches the user input, proceed. Otherwise, present the top 5 matches to the user with their `category_path` + `category_depth` and ask them to pick.
 
-Steps 2, 3, 4 are independent given the resolved `category_id`; parallelize. Step 5 is independent and can join the parallel batch. Step 6 (if `--web-companion`) is independent of Steps 2-5 and can run in parallel. Step 7 (if `--enrich-traffic`) loops per domain after Step 6 completes; parallelize within the loop.
+Calls 2, 3, and 4 are independent given the resolved `category_id`; parallelize. Call 5 is independent and can join the parallel batch. Call 6 (if `--web-companion`) is independent of Calls 2-5 and can run in parallel. Call 7 (if `--enrich-traffic`) loops per domain after Call 6 completes; parallelize within the loop.
 
 Client-side derivations after responses arrive:
 1. Add `rank = i+1` to each top-brands row.
@@ -111,13 +111,13 @@ Client-side derivations after responses arrive:
 3. Compute `top_5_revenue_share = sum(revenue_share for first 5 brands)`.
 4. Compute `top_10_revenue_share = sum(revenue_share for first 10 brands)`.
 5. Compute HHI from top-10 `revenue_share` values: `hhi = sum(s * s for s in revenue_shares) * 10000`. Note: top-10 covers only ~80% of revenue, so HHI is an underestimate (call this out in the rendered section).
-6. Verify the click identity from Step 2: `total_clicks == category_paid_clicks + category_organic_clicks`. If the identity fails by more than 1 unit (rounding), flag with `[!gap]` in the rendered output (the grounded assumption has shifted).
+6. Verify the click identity from Call 2: `total_clicks == category_paid_clicks + category_organic_clicks`. If the identity fails by more than 1 unit (rounding), flag with `[!gap]` in the rendered output (the grounded assumption has shifted).
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. For Step 6, distinguish `400 VALIDATION_ERROR` (unrecognized slug; ask the user to re-pick from the hardcoded list) from `404 NOT_FOUND` (recognized slug but no data for the country+window; report empty Web companion section with Caveat).
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. For Call 6, distinguish `400 VALIDATION_ERROR` (unrecognized slug; ask the user to re-pick from the hardcoded list) from `404 NOT_FOUND` (recognized slug but no data for the country+window; report empty Web companion section with Caveat).
 
 ## Step 5.5: Brand-family consolidation check
 
-Run AFTER Step 3 resolves top-brands but BEFORE rendering. Scan for parent-brand family memberships from the list below. If 2+ brands in top-N belong to the same parent, surface a `## Brand-family consolidation` subsection AFTER the top-brands table (parent / constituents / consolidated `revenue_share` + `revenue_in_usd`). If no matches, omit.
+Run AFTER Call 3 resolves top-brands but BEFORE rendering. Scan for parent-brand family memberships from the list below. If 2+ brands in top-N belong to the same parent, surface a `## Brand-family consolidation` subsection AFTER the top-brands table (parent / constituents / consolidated `revenue_share` + `revenue_in_usd`). If no matches, omit.
 
 Recognized brand-families (heuristic):
 
@@ -147,7 +147,7 @@ Per sw-foundation-render intent-aware output rendering rules. Default: narrative
 
 ## Step 7: Render
 
-Apply token compression per sw-foundation-render § citation block. Body output target ~3000-4000 chars (dual-surface justifies size).
+Apply token compression per sw-foundation-render § citation block. Output length per sw-foundation-render's output-render targets.
 
 **Header (FIRST line of output, ONE italic line):** `*{category_path} | {AMAZON_TLD} | {window} | last_updated {meta.last_updated}*`. Drop duplicate parentheticals from every subsequent section header.
 
@@ -159,13 +159,13 @@ Sections in order:
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. Lead with HHI verdict label from sw-foundation-render § expert-heuristics (`FRAGMENTED` / `MODERATE` / `CONCENTRATED`); name ONE most-important finding (consolidated-leader revenue_share when Step 5.5 fired, else raw top brand). If --web-companion succeeded, name the #1 Web domain in the same paragraph. When the current recipe builds materially on a prior recipe in this conversation, prepend the Executive read with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## Category metadata` (table: `Field` / `Value`. Rows: `Resolved category`, `Amazon category_id`, `category_path`, `category_depth`, `parent_category_name`, `Amazon TLD`, `Search term`. If --web-companion succeeded: also `Web slug` and `Web country`.).
-- `## Total demand` (table from Step 2 response. Rows: `search_volume`, `total_clicks`, `category_paid_clicks`, `category_organic_clicks`, `brand_paid_clicks`, `brand_organic_clicks`. Window cited above the table from `meta.request.start_date` and `meta.request.end_date`. Footnote: "`total_clicks = category_paid_clicks + category_organic_clicks`. Brand-attribution clicks (`brand_paid_clicks` + `brand_organic_clicks`) are a parallel rollup of who won the click; NOT additive to total_clicks.").
-- `## Top brands` (table from Step 3 response. Columns: `Rank`, `Brand`, `Revenue share`, `Total views share`, `Units sold share`, `Revenue (USD)`, `Conversion`. Use `revenue_in_usd` for the revenue column. Shares rendered as percent to 2 decimal places. Footnote: "Top 10 covers ~80% of category revenue; long tail not surfaced. `revenue_share` is the canonical market-share metric used for concentration math; `total_views_share` and `units_sold_share` shown as orthogonal alternatives.").
+- `## Total demand` (table from Call 2 response. Rows: `search_volume`, `total_clicks`, `category_paid_clicks`, `category_organic_clicks`, `brand_paid_clicks`, `brand_organic_clicks`. Window cited above the table from `meta.request.start_date` and `meta.request.end_date`. Footnote: "`total_clicks = category_paid_clicks + category_organic_clicks`. Brand-attribution clicks (`brand_paid_clicks` + `brand_organic_clicks`) are a parallel rollup of who won the click; NOT additive to total_clicks.").
+- `## Top brands` (table from Call 3 response. Columns: `Rank`, `Brand`, `Revenue share`, `Total views share`, `Units sold share`, `Revenue (USD)`, `Conversion`. Use `revenue_in_usd` for the revenue column. Shares rendered as percent to 2 decimal places. Footnote: "Top 10 covers ~80% of category revenue; long tail not surfaced. `revenue_share` is the canonical market-share metric used for concentration math; `total_views_share` and `units_sold_share` shown as orthogonal alternatives.").
 - `## Brand-family consolidation` (ONLY if Step 5.5 found at least one parent with 2+ matched constituents in the top-N. Columns: `Parent`, `Constituents`, `Consolidated revenue share`, `Consolidated revenue (USD)`. Sort rows by `Consolidated revenue share` descending. Footnote: "Heuristic match against a curated list of well-known consumer-tech and CPG parent-brand families. Not exhaustive; analysts should inspect the top-brands table manually for category-specific groupings (private label, regional holding companies, recent acquisitions).").
-- `## Top keywords` (table from Step 4 response. Columns: `Rank`, `Keyword`, `Total clicks`, `Avg price (USD)`, `Branded type`, `Associated brand`, `Top brand (winner)`, `Top brand share`. Render `associated_brand = null` as `n/a`. Footnote: "`top_brand` is the brand winning the most clicks for the keyword, NOT the brand owning the keyword. For non-branded queries, top_brand may differ from any associated brand. `top_brand_share` is fraction of clicks on this keyword won by the top brand.").
+- `## Top keywords` (table from Call 4 response. Columns: `Rank`, `Keyword`, `Total clicks`, `Avg price (USD)`, `Branded type`, `Associated brand`, `Top brand (winner)`, `Top brand share`. Render `associated_brand = null` as `n/a`. Footnote: "`top_brand` is the brand winning the most clicks for the keyword, NOT the brand owning the keyword. For non-branded queries, top_brand may differ from any associated brand. `top_brand_share` is fraction of clicks on this keyword won by the top brand.").
 - `## Concentration` (HHI from top-10 `revenue_share`, top-5 cumulative `revenue_share`, top-10 cumulative `revenue_share`. **Apply the market concentration label per sw-foundation-render § expert-heuristics**: `HHI < 1500` -> `FRAGMENTED` (room to enter); `1500 <= HHI < 2500` -> `MODERATE`; `HHI >= 2500` -> `CONCENTRATED` (entrenched incumbents). The label becomes the first word of the verdict line. Footnote: "HHI computed from top-10 only; absolute HHI is higher when the long tail is included. Threshold labels per sw-foundation-render § expert-heuristics.").
-- `## Sales performance` (only if Step 5 returned data; render the response as-returned).
-- `## Web companion` (only if `--web-companion` AND Step 6 returned data. Subsections: `Matched slug` (line: "Slug: `<slug>`, country: `<country>`"), then top-sites table from Step 6 with columns `Rank`, `Domain`. If `--enrich-traffic` AND Step 7 returned data, additional `## Traffic enrichment` subsection: one row per top domain with `Visits`, `Pages per visit`, `Avg visit duration`, `Bounce rate` columns from `get-websites-traffic-and-engagement`. Note total looped cost.).
+- `## Sales performance` (only if Call 5 returned data; render the response as-returned).
+- `## Web companion` (only if `--web-companion` AND Call 6 returned data. Subsections: `Matched slug` (line: "Slug: `<slug>`, country: `<country>`"), then top-sites table from Call 6 with columns `Rank`, `Domain`. If `--enrich-traffic` AND Call 7 returned data, additional `## Traffic enrichment` subsection: one row per top domain with `Visits`, `Pages per visit`, `Avg visit duration`, `Bounce rate` columns from `get-websites-traffic-and-engagement`. Note total looped cost.).
 - `## NEXT MOVES` (EXACTLY 2 backtick-quoted natural-language questions, each
   with a one-sentence rationale max. Per sw-foundation-render § citation block
   conversational-tone rule, NEVER emit `/sw-X` slash-commands or `--flag` syntax
@@ -259,8 +259,8 @@ Field semantics:
 - `top_brands` rows pre-sorted by revenue desc as returned; `rank` is the client-side `i+1`.
 - `top_keywords` rows pre-sorted by `keyword_total_clicks` desc; `associated_brand` may be `null`.
 - `concentration.hhi_from_top_10` computed as `sum(revenue_share ** 2) * 10000` over the top-10 rows.
-- `sales_performance` is `null` unless Step 5 was accessible AND returned data.
-- `web_companion` is `null` unless `--web-companion` was supplied AND Step 6 returned data. Shape when populated:
+- `sales_performance` is `null` unless Call 5 was accessible AND returned data.
+- `web_companion` is `null` unless `--web-companion` was supplied AND Call 6 returned data. Shape when populated:
 
 ```json
 {
@@ -271,12 +271,12 @@ Field semantics:
 }
 ```
 
-`traffic_enrichment` is `null` unless `--enrich-traffic` was supplied AND Step 7 returned data. Shape when populated: a list keyed by domain with `visits`, `pages_per_visit`, `avg_visit_duration`, `bounce_rate` from `get-websites-traffic-and-engagement`.
+`traffic_enrichment` is `null` unless `--enrich-traffic` was supplied AND Call 7 returned data. Shape when populated: a list keyed by domain with `visits`, `pages_per_visit`, `avg_visit_duration`, `bounce_rate` from `get-websites-traffic-and-engagement`.
 
 ## Edge cases
 
-- **Input does not resolve to an Amazon category** (Step 1 returns 0 nodes): if `--web-companion` was supplied, fall back to Web-only mode and note in Caveats. If not supplied, ask once: "No Amazon match for `<input>`. Want to try a different search term, or run this as a Web-industry leaderboard instead?" with explicit options.
-- **Step 1 returns many ambiguous matches** (e.g. 99 hits for "technology"): present top 5 by shallowest depth in retail-relevant root trees, ask the user to pick. Do NOT auto-pick `data[0]`.
+- **Input does not resolve to an Amazon category** (Call 1 returns 0 nodes): if `--web-companion` was supplied, fall back to Web-only mode and note in Caveats. If not supplied, ask once: "No Amazon match for `<input>`. Want to try a different search term, or run this as a Web-industry leaderboard instead?" with explicit options.
+- **Call 1 returns many ambiguous matches** (e.g. 99 hits for "technology"): present top 5 by shallowest depth in retail-relevant root trees, ask the user to pick. Do NOT auto-pick `data[0]`.
 - **User passes a full Web-category name instead of a slug** (e.g. "Computers Electronics and Technology"): convert to PascalCase_With_Underscores form and try; if that fails with 400, ask one disambiguation question with closest matches from the hardcoded slug list.
 - **Web slug not in hardcoded list**: ask "Which closest matches: [present 3-5 closest from the list]?". Hardcoded list: `Computers_Electronics_and_Technology`, `Health`, `Finance`, `Sports`, `News_and_Media`, `E-Commerce_and_Shopping`.
 - **Web tool returns `400 VALIDATION_ERROR`**: unrecognized slug; ask user to re-pick from the hardcoded list. Distinct from 404 (recognized but no data).
@@ -284,9 +284,9 @@ Field semantics:
 - **`--enrich-traffic` passed without `--web-companion`**: exit with usage hint at Step 1.
 - **User passes a non-default Amazon TLD** (e.g. `--amazon-tld amazon.de`): accept any of the 6 enum values. `revenue` will be in native currency (EUR); `revenue_in_usd` is the USD-normalized field per `categories-top-brands-shape`. Recipe always uses `revenue_in_usd` for the rendered revenue column to keep cross-domain sums consistent.
 - **`total_clicks != category_paid_clicks + category_organic_clicks`** (identity drift from the grounding): flag with `[!gap]` in the Total demand section: "Click identity from grounding does not hold; the click breakdown semantics may have shifted server-side."
-- **`get-categories-sales-performance-agg` access-denied at runtime**: skip Step 5; skip the Sales performance section; note in Caveats: "Sales performance not accessible on this plan."
-- **`get-websites-top-sites-by-category-agg` access-denied at runtime** (and `--web-companion` supplied): skip Step 6; skip the Web companion section; note in Caveats: "Web companion not accessible on this plan; Amazon shopper sizing only." If the entire user request was Web-only (no Amazon match), exit with "Neither Amazon shopper nor Web industry data is accessible for `<input>` on this plan."
-- **`get-websites-traffic-and-engagement` access-denied at runtime** (and `--enrich-traffic` supplied): skip Step 7; render the Web companion top-sites table without the Traffic enrichment subsection; note in Caveats: "Traffic enrichment not accessible on this plan; Web companion rendered as domain leaderboard only."
+- **`get-categories-sales-performance-agg` access-denied at runtime**: skip Call 5; skip the Sales performance section; note in Caveats: "Sales performance not accessible on this plan."
+- **`get-websites-top-sites-by-category-agg` access-denied at runtime** (and `--web-companion` supplied): skip Call 6; skip the Web companion section; note in Caveats: "Web companion not accessible on this plan; Amazon shopper sizing only." If the entire user request was Web-only (no Amazon match), exit with "Neither Amazon shopper nor Web industry data is accessible for `<input>` on this plan."
+- **`get-websites-traffic-and-engagement` access-denied at runtime** (and `--enrich-traffic` supplied): skip Call 7; render the Web companion top-sites table without the Traffic enrichment subsection; note in Caveats: "Traffic enrichment not accessible on this plan; Web companion rendered as domain leaderboard only."
 
 ## Grounded assertions
 
