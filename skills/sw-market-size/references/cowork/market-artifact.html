@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>sw-market</title>
+<style>
+:root{color-scheme:light}
+body{font:14px/1.4 system-ui;margin:0;padding:16px;background:#fff;color:#111}
+.b{display:inline-block;padding:6px 14px;border-radius:6px;font-weight:600}
+.b.fragmented{background:#d1fae5;color:#065f46}
+.b.moderate{background:#fef3c7;color:#92400e}
+.b.concentrated{background:#fee2e2;color:#991b1b}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css" integrity="sha384-..." crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
+</head><body>
+<header><h1>Market: Electronics</h1><span class="meta">amazon.com | last_updated 2026-04-30</span></header>
+<div id="badge" class="b"></div>
+<canvas id="bar" height="320"></canvas><div id="grid"></div><canvas id="pie" height="280"></canvas>
+<script>
+const SW='mcp__similarweb__',CATEGORY_ID='10048700011',TLD='amazon.com';
+const topN=parseInt(localStorage.getItem('sw-market-top-n')||'25',10);
+const tier=h=>h<1500?'fragmented':h<2500?'moderate':'concentrated';
+async function load(){
+  const [brands]=await Promise.all([
+    window.cowork.callMcpTool(SW+'get-categories-top-brands-agg',{domain:TLD,category:CATEGORY_ID,limit:topN}),
+    window.cowork.callMcpTool(SW+'get-categories-performance-agg',{domain:TLD,category:CATEGORY_ID})
+  ]);
+  const rows=(brands?.data||[]).map((b,i)=>({rank:i+1,...b}));
+  const hhi=rows.slice(0,10).reduce((s,b)=>s+b.revenue_share**2,0)*10000;
+  const t=tier(hhi);
+  const el=document.getElementById('badge'); el.className=`b ${t}`; el.textContent=`${t.toUpperCase()} (HHI ${hhi.toFixed(0)})`;
+  renderBarChart(rows); renderGrid(rows);
+  if(rows.length>25) renderPie(rows);
+}
+load().catch(e=>document.body.insertAdjacentHTML('beforeend',`<pre>${e.message}</pre>`));
+</script></body></html>

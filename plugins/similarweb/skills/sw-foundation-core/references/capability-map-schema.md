@@ -1,0 +1,17 @@
+# Capability map schema, full field and precedence rules (sw-foundation-core reference)
+
+`$HOME/.similarweb-plugin/capabilities.json` is an OPTIONAL on-disk hint. Recipes proceed without it; the map is an APPEND-ONLY CACHE of observed access denials, built up lazily as recipes execute.
+
+**Presence fields (additive, schema_version stays 2; a missing field reads as empty):**
+
+- `tools_absent`: list of `{name, observed_under, observed_at}` entries: tools a recipe PLANNED and found absent from a qualifying live tool list (per § tool-surface presence). Planned-and-absent only, never the full catalog complement. One entry per unqualified name, upserted on re-observation (`observed_under` and `observed_at` refresh; no duplicate names). Absence is NEVER written to `tools_inaccessible` (that list is 403-claims only, per the v0.1.13 rule) and a claims denial is never written here.
+- `tool_surface`: `{hash, count, observed_at, prefix}`: a fingerprint of the observed surface. `hash` is sha256 over the newline-joined ASCII-ascending-sorted unique unqualified names (UTF-8); `count` is the unique-name count; `prefix` is informational only (never used for matching).
+
+**Read-path precedence (one contract; recipes, sw-setup, and sw-config all follow it):**
+
+1. Live list enumerable (qualifying evidence per § tool-surface presence): the live list is the SOLE presence authority; cached presence is ignored for gating and rewritten from observation.
+2. Not enumerable: presence is unknown. `tools_absent` entries whose `observed_under` matches the stored `tool_surface.hash` may advisorily skip OPTIONAL tools; they NEVER abort or skip a REQUIRED tool. Stamp-mismatched entries are quarantined by the mismatch itself (ignored; no separate quarantine pass, no deletion).
+3. A call-time unknown-tool error (per § tool-surface presence) overrides both for the current run.
+4. Legacy discriminator: a `tools_available` entry of `false` with no `tools_inaccessible` sibling, in a map that LACKS `tool_surface`, is a legacy absence record (the pre-presence sw-setup encoding): advisory-only, ignored when the live list is enumerable and contains the tool. In a map that carries `tool_surface`, false-without-sibling means a called probe failed for a non-denial reason (e.g. a validation 400) and is never read as absence.
+
+**Fingerprint maintenance (event-driven, never per-turn).** Compute the hash ONLY when: (a) the live unqualified-name count differs from the stored `tool_surface.count` (the count comparison is free in-context; the map is already read in Step 2), (b) a `tools_absent` write is about to happen, or (c) `/sw-config --show` or `--refresh` runs. An ordinary recipe turn on a stable surface computes nothing and writes nothing. The refresh suggestion ("The connector's tool surface changed since the last observation; claims denials may also be stale. Run /sw-config --refresh to re-probe.") renders ONCE per surface change: only when a prior non-empty hash exists and differs. A first write is silent. NEVER auto-probe; drift response stays user-consented. The map is account-agnostic: two different-plan connectors sharing one `$HOME` degrade the once-per-change suggestion to per-session; `/sw-config --refresh` is the recovery.

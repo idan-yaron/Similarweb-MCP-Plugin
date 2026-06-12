@@ -25,68 +25,13 @@ Inspect `$ARGUMENTS` (or whatever the AI client passes after `/sw-config`):
 
 ## Step A: --show (default)
 
+Render the capability summary via the bundled renderer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source), subcommand show, no stdin:
+
 ```bash
-CAPS_PATH="$HOME/.similarweb-plugin/capabilities.json"
-if [ ! -f "$CAPS_PATH" ]; then
-  echo "No capability map yet. The plugin runs lazily and will discover access as recipes execute."
-  echo "Run /sw-config --refresh to force a thorough probe."
-  exit 0
-fi
-python3 - <<'PYEOF'
-import json, os, collections
-caps = json.load(open(os.path.expanduser("~/.similarweb-plugin/capabilities.json")))
-last_updated = caps.get("last_updated") or caps.get("last_full_probe") or caps.get("probed_at", "unknown")
-expires = caps.get("refresh_after", "n/a")
-version = caps.get("mcp_server_version", "unknown")
-state = caps.get("state", "lazy")
-tools = caps.get("tools_available", {})
-inaccessible = caps.get("tools_inaccessible", [])
-surface = caps.get("tool_surface", {})
-absent = caps.get("tools_absent", [])
-legacy = not surface
-legacy_absent = sorted(t for t, s in tools.items() if s is False and t not in inaccessible) if legacy else []
-print(f"Similarweb MCP capabilities (last updated {last_updated}, refresh_after {expires})")
-print(f"State: {state}")
-if surface:
-    print(f"Tool surface: {surface.get('count', '?')} tools observed {surface.get('observed_at', 'unknown')}")
-if tools:
-    by_cat = collections.defaultdict(lambda: [0, 0])
-    for tool, status in tools.items():
-        if tool in legacy_absent:
-            continue
-        parts = tool.split("-")
-        cat = parts[1] if len(parts) > 1 and parts[0] == "get" else "other"
-        by_cat[cat][1] += 1
-        if status is True:
-            by_cat[cat][0] += 1
-    for cat in sorted(by_cat):
-        accessible, total = by_cat[cat]
-        suffix = ""
-        if accessible == 0:
-            suffix = " (denied on this plan)"
-        elif accessible < total:
-            suffix = " (limited plan)"
-        print(f"  {cat:16s} {accessible}/{total} probed tools accessible{suffix}")
-else:
-    print("  (no full-probe data; lazy mode)")
-if inaccessible:
-    print("")
-    print("Denied during recipe runs or probes (403 claims; the tool exists on the connector):")
-    for t in sorted(inaccessible):
-        print(f"  - {t}")
-if absent or legacy_absent:
-    print("")
-    print("Not exposed on this connector (absent from the tool list; NOT a claims denial):")
-    cur = surface.get("hash", "")
-    for e in sorted(absent, key=lambda x: x.get("name", "")):
-        stale = " [stale: tool surface changed; run /sw-config --refresh to re-check]" if e.get("observed_under") != cur else ""
-        print(f"  - {e.get('name', '?')}{stale}")
-    for t in legacy_absent:
-        print(f"  - {t} [legacy record; re-checked on the next enumerating run]")
-print("")
-print(f"MCP server version: {version}")
-PYEOF
+python3 scripts/capmap.py show
 ```
+
+It prints the human summary, never the raw JSON: the last-updated and refresh_after header, state, tool-surface line, per-category probed-tool counts with denied-on-this-plan and limited-plan suffixes, the 403-denied list, the not-exposed list with stale-stamp and legacy markers, and the MCP server version. A missing map prints the lazy-mode hint; a corrupted map prints the reset hint. If the script file itself is missing, read the JSON directly and render the same summary shape by hand (summary only, never a raw dump), and surface one line that the plugin bundle is incomplete (reinstall to restore it).
 
 After printing the capability summary, also render the grounding-schedule state:
 

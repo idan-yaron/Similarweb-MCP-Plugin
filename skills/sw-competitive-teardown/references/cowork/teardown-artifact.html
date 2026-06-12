@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>sw-teardown-target-202605</title>
+  <style>
+    :root { color-scheme: light; }
+    body { font: 14px/1.4 system-ui; margin: 0; padding: 16px; background: #fff; color: #111; }
+    header { display: flex; gap: 12px; align-items: baseline; margin-bottom: 12px; }
+    h1 { font-size: 16px; margin: 0; }
+    .meta { color: #6b7280; }
+    .toolbar { margin: 12px 0; }
+    .toolbar button { padding: 4px 10px; margin-right: 6px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; }
+    .toolbar button[aria-pressed="true"] { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .grid-wrap { margin-top: 16px; }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css" integrity="sha384-..." crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.10.0/dist/mermaid.min.js" integrity="sha384-..." crossorigin="anonymous"></script>
+</head>
+<body>
+  <header><h1>Competitive teardown: target.com</h1><span class="meta">US | last 90 days | last_updated 2026-04-30</span></header>
+  <div class="toolbar" id="toolbar"></div>
+  <canvas id="channel-mix" height="220"></canvas>
+  <div class="grid-wrap" id="comp-grid"></div>
+  <canvas id="overlap-bars" height="180"></canvas>
+  <div id="sankey-wrap"></div>
+  <script>
+    const SW = 'mcp__similarweb__';
+    const COMP_SET = ['target.com', 'rival-a.com', 'rival-b.com', 'rival-c.com'];
+    const COUNTRY = 'us', START = '2026-02-01', END = 'latest';
+    const sortBy = localStorage.getItem('sw-teardown-sort-by-column') || 'visits';
+    async function load() {
+      const [ranks, traffic, channels, overlap] = await Promise.all([
+        Promise.all(COMP_SET.map(d => window.cowork.callMcpTool(SW + 'get-websites-website-rank', { domain: d, country: 'ww', start_date: START, end_date: END }))),
+        Promise.all(COMP_SET.map(d => window.cowork.callMcpTool(SW + 'get-websites-traffic-and-engagement', { domain: d, country: COUNTRY, start_date: START, end_date: END }))),
+        Promise.all(COMP_SET.map(d => window.cowork.callMcpTool(SW + 'get-websites-traffic-channels', { domain: d, country: COUNTRY, start_date: START, end_date: END }))),
+        window.cowork.callMcpTool(SW + 'get-websites-audience-overlap-agg', { domains: COMP_SET.join(','), country: COUNTRY, start_date: START, end_date: END })
+      ]);
+      renderChannelChart(channels);
+      renderGrid(ranks, traffic, channels, overlap);
+      renderOverlapBars(overlap);
+      renderSankey(overlap);
+    }
+    function renderChannelChart(channels) { new Chart(document.getElementById('channel-mix'), { type: 'bar', data: { /* stacked dataset per channel */ } }); }
+    function renderGrid(ranks, traffic, channels, overlap) {
+      const rows = COMP_SET.map((d, i) => [d, ranks[i]?.data?.[0]?.country_rank ?? 'n/a', traffic[i]?.data?.[0]?.visits ?? 'n/a']);
+      new gridjs.Grid({ columns: ['Domain', 'Global rank', 'Monthly visits'], data: rows, sort: true }).render(document.getElementById('comp-grid'));
+    }
+    function renderOverlapBars(overlap) { /* horizontal bars per competitor vs target */ }
+    function renderSankey(overlap) { /* mermaid sankey-beta when subset rows exist */ }
+    load().catch(e => document.body.insertAdjacentHTML('beforeend', `<pre>${e.message}</pre>`));
+  </script>
+</body>
+</html>

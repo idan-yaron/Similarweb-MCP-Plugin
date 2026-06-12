@@ -313,45 +313,7 @@ Persistent artifact per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL; mar
 
 **Rules:** `revenue_share` percent to 2 decimals; `revenue_in_usd` as `$N.NB` / `$N.NM` / `$N,NNN`; `conversion_rate` percent to 2 decimals, `n/a` when null; `total_clicks` is click-attribution (per categories-top-brands-shape), NOT additive to category clicks; top-10 covers ~80% of revenue.
 
-**Skeleton (runtime LLM fills in SRI hashes + actual data):**
-
-```html
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>sw-market</title>
-<style>
-:root{color-scheme:light}
-body{font:14px/1.4 system-ui;margin:0;padding:16px;background:#fff;color:#111}
-.b{display:inline-block;padding:6px 14px;border-radius:6px;font-weight:600}
-.b.fragmented{background:#d1fae5;color:#065f46}
-.b.moderate{background:#fef3c7;color:#92400e}
-.b.concentrated{background:#fee2e2;color:#991b1b}
-</style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css" integrity="sha384-..." crossorigin="anonymous">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
-</head><body>
-<header><h1>Market: Electronics</h1><span class="meta">amazon.com | last_updated 2026-04-30</span></header>
-<div id="badge" class="b"></div>
-<canvas id="bar" height="320"></canvas><div id="grid"></div><canvas id="pie" height="280"></canvas>
-<script>
-const SW='mcp__similarweb__',CATEGORY_ID='10048700011',TLD='amazon.com';
-const topN=parseInt(localStorage.getItem('sw-market-top-n')||'25',10);
-const tier=h=>h<1500?'fragmented':h<2500?'moderate':'concentrated';
-async function load(){
-  const [brands]=await Promise.all([
-    window.cowork.callMcpTool(SW+'get-categories-top-brands-agg',{domain:TLD,category:CATEGORY_ID,limit:topN}),
-    window.cowork.callMcpTool(SW+'get-categories-performance-agg',{domain:TLD,category:CATEGORY_ID})
-  ]);
-  const rows=(brands?.data||[]).map((b,i)=>({rank:i+1,...b}));
-  const hhi=rows.slice(0,10).reduce((s,b)=>s+b.revenue_share**2,0)*10000;
-  const t=tier(hhi);
-  const el=document.getElementById('badge'); el.className=`b ${t}`; el.textContent=`${t.toUpperCase()} (HHI ${hhi.toFixed(0)})`;
-  renderBarChart(rows); renderGrid(rows);
-  if(rows.length>25) renderPie(rows);
-}
-load().catch(e=>document.body.insertAdjacentHTML('beforeend',`<pre>${e.message}</pre>`));
-</script></body></html>
-```
+**Skeleton.** The artifact skeleton lives at `references/cowork/market-artifact.html`; Read it and substitute the data slots (the SRI hashes from Cowork's CSP, the resolved category id and TLD, and the actual data values).
 
 Runtime LLM fills in SRI hashes (from Cowork's CSP `integrity` directives), resolved `CATEGORY_ID`, and the three render functions. Skeleton fixes the contract: two SRI-pinned CDN scripts, async `load()` calling two MCP tools, client-side HHI per Step 5 derivation #5.
 

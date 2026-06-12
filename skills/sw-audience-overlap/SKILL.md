@@ -249,49 +249,7 @@ Page derives `share_of_union = overlap_unique_visitors / union_unique_users` cli
 
 **Rules.** Diagonal renders `--`, never `100%`. `n/a` cells render `n/a` (not `0`, not blank). Sankey skipped when agg returned < 3 subset rows.
 
-**Skeleton (runtime LLM fills in SRI hashes + actual data):**
-
-```html
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>sw-overlap</title>
-<style>
-:root{color-scheme:light}
-body{font:14px/1.4 system-ui;margin:0;padding:16px;background:#fff;color:#111}
-.b{display:inline-block;padding:6px 14px;border-radius:6px;font-weight:600;margin-bottom:12px}
-.t-same-pond{background:#fee2e2;color:#991b1b}
-.t-adjacent{background:#fef3c7;color:#92400e}
-.t-complementary{background:#d1fae5;color:#065f46}
-.t-disjoint{background:#e5e7eb;color:#374151}
-.matrix td.t-same-pond{background:#fee2e2}
-.matrix td.t-adjacent{background:#fef3c7}
-.matrix td.t-complementary{background:#d1fae5}
-.matrix td.t-disjoint{background:#e5e7eb}
-</style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css" integrity="sha384-..." crossorigin="anonymous">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js" integrity="sha384-..." crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11.10.0/dist/mermaid.min.js" integrity="sha384-..." crossorigin="anonymous"></script>
-</head><body>
-<header><h1>Audience overlap: target.com + against-set</h1><span class="meta">US | last_updated 2026-04-30</span></header>
-<div id="badge" class="b"></div><div id="sankey"></div><div id="matrix" class="matrix"></div><canvas id="dedup" height="180"></canvas>
-<script>
-const SW='mcp__similarweb__';
-const DOMAINS=['target.com','rival-a.com','rival-b.com'],COUNTRY='us',START='2026-02-01',END='latest';
-const tier=s=>s>=0.40?'same-pond':s>=0.15?'adjacent':s>=0.05?'complementary':'disjoint';
-async function load(){
-  const [resp,dedup]=await Promise.all([
-    window.cowork.callMcpTool(SW+'get-websites-audience-overlap-agg',{domains:DOMAINS.join(','),country:COUNTRY,start_date:START,end_date:END}),
-    Promise.all(DOMAINS.map(d=>window.cowork.callMcpTool(SW+'get-websites-deduplicated-audience',{domain:d,country:COUNTRY,start_date:START,end_date:END})))
-  ]);
-  const pairs=(resp?.data||[]).filter(r=>r.domains.split(',').length===2);
-  const maxShare=Math.max(...pairs.map(p=>p.overlap_unique_visitors/p.union_unique_users));
-  const t=tier(maxShare);
-  const el=document.getElementById('badge'); el.className=`b t-${t}`; el.textContent=t.replace('-',' ').toUpperCase();
-  renderMatrix(pairs); renderSankey(pairs); renderDedupBars(dedup);
-}
-load().catch(e=>document.body.insertAdjacentHTML('beforeend',`<pre>${e.message}</pre>`));
-</script></body></html>
-```
+**Skeleton.** The artifact skeleton lives at `references/cowork/overlap-artifact.html`; Read it and substitute the data slots (the SRI hashes from Cowork's CSP, the domain set, country, window, and the actual data values).
 
 Runtime LLM fills in SRI hashes (from Cowork's CSP `integrity` directives) and the three render functions. Skeleton fixes the contract: three SRI-pinned CDN scripts, async `load()` calling the two MCP tools, client-side `share_of_union` derivation, tier-class assignment via `tier()` per sw-foundation-render § expert-heuristics.
 

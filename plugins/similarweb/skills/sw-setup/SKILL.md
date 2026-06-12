@@ -44,45 +44,31 @@ The rank probe uses `end_date="latest"` (the server resolves to actual `meta.las
 
 ## Step 2: Write capabilities.json
 
-Use Python via Bash to avoid BOM issues on Windows (per project rule):
+Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source; Python 3 via Bash, atomic write, no BOM, never improvised inline code). Pipe ONE JSON document on stdin to the script's init subcommand, e.g. `python3 scripts/capmap.py init <<'JSONEOF' ... JSONEOF`. Document shape (the AI client substitutes the actual probe outcomes; example values shown, apps probed via the sibling get-apps-details):
 
-```bash
-python3 - <<'PYEOF'
-import json, os, datetime
-caps = {
-  "schema_version": 2,
-  "mcp_server_version": "<populated-from-probe>",  # the AI client substitutes the actual probed server version here at runtime
-  "last_full_probe": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-  "last_updated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-  "refresh_after": (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-  "state": "ready",  # one of: ready | auth_invalid | mcp_not_configured | probe_partial
+```json
+{
+  "mcp_server_version": "<populated-from-probe>",
+  "state": "ready",
+  "tools": ["<every unqualified name from the live enumeration; omit or leave empty when no qualifying evidence exists>"],
+  "prefix": "<observed-prefix>",
   "tools_available": {
-    # populated from CALLED probe outcomes only; example (apps probed via the sibling get-apps-details):
-    "get-websites-website-rank": True,
-    "get-keywords-overview": True,
-    "get-apps-details": True,
-    "get-brands-search": False,
-    "get-categories-search": True,
-    "get-lead-enrichment-website": False,
+    "get-websites-website-rank": true,
+    "get-keywords-overview": true,
+    "get-apps-details": true,
+    "get-brands-search": false,
+    "get-categories-search": true,
+    "get-lead-enrichment-website": false
   },
   "tools_inaccessible": ["get-brands-search", "get-lead-enrichment-website"],
-  "tools_absent": [
-    # absent-from-list tools observed this probe, stamped with the surface hash; example:
-    {"name": "get-apps-search", "observed_under": "<surface-hash>", "observed_at": "<now>"},
-  ],
-  "tool_surface": {"hash": "<surface-hash>", "count": 80, "observed_at": "<now>", "prefix": "<observed-prefix>"},
-  "categories_available": ["websites", "keywords", "apps", "categories"],
+  "tools_absent": ["get-apps-search"],
+  "categories_available": ["websites", "keywords", "apps", "categories"]
 }
-path = os.path.expanduser("~/.similarweb-plugin/capabilities.json")
-os.makedirs(os.path.dirname(path), exist_ok=True)
-with open(path, "w", encoding="utf-8") as f:
-  json.dump(caps, f, indent=2)
-PYEOF
 ```
 
-The values above are placeholders; the AI client substitutes the actual probe outcomes before running the heredoc.
+`state` is one of ready | auth_invalid | mcp_not_configured | probe_partial. `tools_available` carries CALLED probe outcomes only (true | false | "pending"). The script computes the timestamps (`last_full_probe`, `last_updated`, `refresh_after` 30 days out), fingerprints `tools` into `tool_surface` (omitted when `tools` is empty: no qualifying enumeration, no fingerprint), and stamps each `tools_absent` name with that surface hash.
 
-This write OVERWRITES any existing `capabilities.json` (including lazy-built append-only state). That is the point of `/sw-config --refresh`: a clean, full known-state map.
+This write OVERWRITES any existing `capabilities.json` (including lazy-built append-only state). That is the point of `/sw-config --refresh`: a clean, full known-state map. If the script file is missing, skip the write, keep the probe results in conversation context, and surface one line that the plugin bundle is incomplete (reinstall to restore it); NEVER improvise replacement code.
 
 ## Step 3: Done
 
