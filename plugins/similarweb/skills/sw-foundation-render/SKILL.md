@@ -107,7 +107,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -127,7 +127,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.15` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
+The `version` literal `0.1.16` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 
