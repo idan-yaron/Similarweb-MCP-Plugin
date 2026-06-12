@@ -40,6 +40,7 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-compe
 - **Smoke**: `get-websites-website-rank`, target domain only, country=ww, bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the target's `country="ww"` rank call for Call 1; reuse it, never re-issue it.
 - **Secondary probe**: `get-websites-traffic-and-engagement`, target, country=us.
 - **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-and-engagement` or `get-websites-traffic-channels`: drop the dependent sections and continue (the teardown never aborts on a single tool); OPTIONAL tools: skip with one consolidated caveat line.
+- Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED:
@@ -121,7 +122,7 @@ does not abort on a single tool's failure.
 ## Step 6: Classify output intent
 
 Use sw-foundation-render's intent-aware rules table; the result drives whether
-§ citation block emits the handoff JSON appendix.
+§ citation block emits the handoff JSON appendix. Narrow questions render the short form.
 
 ## Step 7: Render
 
@@ -129,7 +130,7 @@ Apply token compression per sw-foundation-render § citation block. Output lengt
 
 **Header (FIRST line of output, ONE italic line):** `*{target} vs {competitors} | {country} | {window} | last_updated {meta.last_updated}*`. Drop duplicated parentheticals like `(US, Feb-Apr 2026)` from every subsequent section header.
 
-Sections in order: Executive read, Rank + reach, Traffic + engagement, Channel breakdown (table + Unicode horizontal bars per domain), Audience overlap (table + Unicode asymmetry bars), PPC investment (table only by default), Similar sites discovered, Strategic insights (DEFEND / EXPOSE / PLAY), NEXT MOVES.
+Sections, answer-first per sw-foundation-render: Executive read, Rank + reach, Traffic + engagement, Channel breakdown (table + Unicode horizontal bars per domain), Audience overlap (table + Unicode asymmetry bars), PPC investment (table only by default), Similar sites discovered, Strategic insights (DEFEND / EXPOSE / PLAY), NEXT MOVES.
 
 Visualizations per sw-foundation-render § visualizations (Unicode-first):
 - **Channel breakdown:** Unicode horizontal bars per domain (group cumulative <15% slices as `(N more)`); render side-by-side. Replaces Mermaid pie.
@@ -183,7 +184,7 @@ EXACTLY 3 bullets. Each bullet maxes at ~25 words, references a SPECIFIC NUMBER,
 - **THE PLAY** (most copyable competitor move; rec verb: steal / invest).
 
 If the data is too thin for any of the 3 buckets (target has < 30 days of
-coverage, fewer than 2 competitors returned data, or every channel mix
+coverage, fewer than 2 requested competitors returned data (a deliberate 1v1 with data does not trigger), or every channel mix
 returned `n/a`), trigger sw-foundation-render § expert-heuristics refusal-as-feature:
 render `INSUFFICIENT SIGNAL` with the specific reason instead of the 3
 bullets. NEVER ship a generic recommendation.

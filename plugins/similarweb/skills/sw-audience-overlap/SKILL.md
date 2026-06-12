@@ -40,6 +40,7 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-audie
 - **Smoke**: `get-websites-website-rank`, target domain only, country=ww, bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the target's `country="ww"` rank call for Call 1; reuse it, never re-issue it.
 - **Secondary probe**: `get-websites-audience-overlap-agg`, `domains = "<target>,<first --against domain>"` (2-domain batched call), country=us.
 - **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-audience-overlap-agg`: ABORT with the caveat (this recipe IS the overlap analysis); OPTIONAL tools: drop their sections with one consolidated caveat line (similar-sites absent with no supplied competitors keeps its documented ask-once-then-abort semantics).
+- Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED: `get-websites-website-rank`, `get-websites-audience-overlap-agg`. OPTIONAL: `get-websites-demographics-agg`, `get-websites-geography-agg`, `get-websites-audience-interests-agg` (Call 5b Persona overlap section; if not accessible, omit the Persona overlap section and note in Caveats), `get-websites-deduplicated-audience`, `get-websites-similar-sites-agg` (used by Step 3 fallback when `--against` was not supplied AND no competitor list was found in context; if not accessible, the recipe asks the user once for competitors and aborts if none provided).
@@ -110,7 +111,7 @@ Render rows for each k in order. If `marginal_pct[k] < 0.02`, append a "near zer
 
 ## Step 6: Classify output intent
 
-Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative. Narrow questions render the short form per sw-foundation-render's short-form rule.
 
 ## Step 7: Render
 
@@ -122,7 +123,7 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 - **Audience overlap, N=2 (the common case):** Unicode asymmetry bars (e.g., "27.7% of adidas visits nike; 13.6% of nike visits adidas") PLUS a Unicode absolute-breakdown bar (A-only / B-only / shared, with the shared slice labeled per § expert-heuristics: SAME POND / ADJACENT / COMPLEMENTARY / DISJOINT).
 - **Audience overlap, N>=3:** Unicode horizontal bars over the pairwise overlaps (top 6 by share_of_union). Mermaid sankey-beta is renderer-aware appendix per § visualizations for callers whose renderer supports it.
 
-Sections in order:
+Sections in order (answer-first per sw-foundation-render):
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. LEDE on the MOST DISTINCT pair AND the MOST SIMILAR pair in one sentence with the audience-overlap label for each pair per sw-foundation-render § expert-heuristics (e.g., "Nike <-> Adidas = 10.9% COMPLEMENTARY tier; Nike <-> ASICS = 2.9% DISJOINT"). Demographic asymmetry, geographic concentration, and deduplicated reach delta land in subsequent sentences only if material. When the current recipe builds materially on a prior recipe in this conversation, prepend the Executive read with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## Rank + reach` (table: domain, global rank, country rank).
@@ -131,7 +132,7 @@ Sections in order:
   - `### N-1 way subsets` (rows that drop exactly one domain; for N=4, that is 4 rows)
   - `### Pairwise subsets` (rows of exactly 2 domains; for N=4, that is 6 rows). Columns: `Domains in subset`, `Overlap unique visitors`, `Union unique users`, `Share of union`, `Label`. Label values are from the § expert-heuristics enum.
   - `### Singletons (for reference)` (1-element subsets, one per input domain)
-  Within each subsection, sort rows alphabetically by the canonical subset key. The All-N, N-1 way, and Singletons subsections render their tables WITHOUT the `Label` column (the audience-overlap label is defined for pairwise overlaps only). For N=2 or N=3 input domains, some subsection groups will be empty; omit those subsections entirely. For singletons, append the `[*]` footnote to the `Share of union` cell; the value will always be `100%` by definition. After the last subsection, render the footnote: "[*] Singleton subset rows render `share_of_union = 100%` by definition (overlap of a 1-element set is the set itself). This is correct math; the meaningful comparison is across 2+ element subsets." Plus a second footnote: "Label thresholds come from sw-foundation-render § expert-heuristics. SAME POND = duplicative audiences (>=40%); ADJACENT = meaningful overlap with distinct audiences (15-39%); COMPLEMENTARY = efficient incremental reach (5-14%); DISJOINT = essentially independent (<5%)."
+  Within each subsection, sort rows alphabetically by the canonical subset key. The All-N, N-1 way, and Singletons subsections render their tables WITHOUT the `Label` column (the audience-overlap label is defined for pairwise overlaps only). For N=2 or N=3 input domains, some subsection groups will be empty; omit those subsections entirely. At N=2 the all-N row IS the pairwise row: render it ONCE under Pairwise with its Label column, omitting the All-N and N-1 way subsections as empty. For singletons, append the `[*]` footnote to the `Share of union` cell; the value will always be `100%` by definition. After the last subsection, render the footnote: "[*] Singleton subset rows render `share_of_union = 100%` by definition (overlap of a 1-element set is the set itself). This is correct math; the meaningful comparison is across 2+ element subsets." Plus a second footnote: "Label thresholds come from sw-foundation-render § expert-heuristics. SAME POND = duplicative audiences (>=40%); ADJACENT = meaningful overlap with distinct audiences (15-39%); COMPLEMENTARY = efficient incremental reach (5-14%); DISJOINT = essentially independent (<5%)."
 - `## Target audience demographics`. TWO adjacent tables: age (6 buckets) and gender (male + female). NOT a crossed matrix; age and gender are independent dimensions in the server response. Shares as % to 1 decimal.
 - `## Target audience geography`. Top 10 countries by `share` (defensively re-sort descending before slicing). Aggregate the remainder into one "Rest of world" row. Render `country_name` as label. Render `rank: 0` as `n/a` (server sentinel for "not ranked", not a true zero).
 - `## Deduplicated audience`. Per-domain latest-row headline (since looped). For each domain: latest-month `total_deduplicated_audience` and the three device-mix shares (desktop-only, mobile-only, cross-device). If section skipped: "Deduplicated audience not accessible on this plan."

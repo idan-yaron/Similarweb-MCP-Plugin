@@ -39,6 +39,7 @@ echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-page-
 - **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
 - **Secondary probe**: `get-pages-popular-pages-agg`, target, country=`$COUNTRY`, single-month window, `web_source: total`, `limit: 5`.
 - **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; ONE pages tool: drop its section (the DEGRADABLE semantics below, same as denial); BOTH pages tools: abort with the caveat (nothing to render).
+- Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED: `get-websites-website-rank`. DEGRADABLE: `get-pages-popular-pages-agg`, `get-pages-leading-folders-agg` (if ONE pages tool returns access-denied at runtime, the recipe drops that section and notes the skip in Caveats rather than aborting; if BOTH pages tools are denied there is nothing to render, so abort per sw-foundation-render § error-rendering Pattern 5 semantics with a clear Caveat).
@@ -84,7 +85,7 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative. Narrow questions render the short form per sw-foundation-render's short-form rule.
 
 ## Step 7: Render
 
@@ -97,7 +98,7 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 - **Folder hierarchy:** Unicode horizontal bars over the returned folder shares (cap width 16). Pair with the table.
 - **HHI threshold position:** Unicode threshold bar showing where the folder HHI lands relative to the 1500 / 2500 thresholds.
 
-Sections in order:
+Sections in order (answer-first per sw-foundation-render):
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. FIRST WORD is the folder-concentration verdict (`FRAGMENTED`, `MODERATE`, `CONCENTRATED`) per § expert-heuristics. Name the top-1 anchor page (URL + share) and the dominant folder (folder + share) in the same paragraph. If concentration is `CONCENTRATED`, note the risk of overdependence; if `FRAGMENTED`, note the spread. When the current recipe builds materially on a prior recipe in this conversation, prepend with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## Rank + reach` (table: country rank, from Call 0; if the user country IS `ww`, the table collapses to one row).

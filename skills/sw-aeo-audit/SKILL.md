@@ -50,6 +50,7 @@ fi
 - If NO keywords were supplied AND the prompt carries no clear seed term, run Step 3 (keyword acquisition) BEFORE this smoke so the smoke spends on a keyword the audit will actually use; fall back to the target's brand term only when the prompt implies a brand-level audit.
 - **Secondary probe**: `get-websites-website-rank`, target domain, country=us. If the smoke is denied but the secondary probe returns 200, ABORT (the recipe cannot ship an AEO audit without SEO-overview signal); render Caveat "AEO audit requires `get-keywords-seo-overview`; tool not accessible on this plan."
 - **Pinned absence outcomes**: `get-keywords-seo-overview`: ABORT outright (no smoke retarget exists here; absence supersedes retargeting); `get-websites-serp-players-agg` or `get-websites-landing-pages-agg`: drop their sections and continue; `get-websites-website-rank`: degrade the rank context and derive end_date from the smoke's `meta.last_updated` (the seo-overview response carries it).
+- Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED (proxy audit):
@@ -124,7 +125,7 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative. Narrow questions render the short form per sw-foundation-render's short-form rule.
 
 ## Step 7: Render
 
@@ -136,7 +137,7 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 - **Per-keyword brand traffic_share:** Unicode horizontal bars, one per keyword, sorted descending by `brand_traffic_share`. Pair with the table.
 - **SEO context intent_mix:** Unicode horizontal bars over the 5 intent categories (`informational / navigational / transactional / local / job_search` per Step 5 derivation 1). Replaces Mermaid pie. Pair with the SEO context table.
 
-Sections in order:
+Sections in order (answer-first per sw-foundation-render):
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences; always frames the audit as PROXY. Name the STRONGEST AEO surface (top brand-traffic-share keyword) AND the WEAKEST (lowest brand-traffic-share OR brand absent) in the same paragraph. If `--campaign-id` AND Call 5 returned 200, name ONE direct-signal headline finding separated from proxy framing. When the current recipe builds materially on a prior recipe in this conversation, prepend the Executive read with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## SEO context` (table from Call 2 aggregates. Rows: `Branded clicks share`, `Unbranded clicks share`, `Informational intent share`, `Navigational intent share`, `Transactional intent share`, `Local intent share`, `Job-search intent share`. Values rendered as percent to 2 decimal places. Subtitle: "Addressable AEO market = unbranded clicks; AI engines disproportionately answer informational queries." Window cited above the table.).

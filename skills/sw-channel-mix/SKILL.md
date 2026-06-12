@@ -15,7 +15,7 @@ Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via yo
 
 - NEVER call `get-segments-traffic-sources` for the "top referral sources" section. That tool requires a `segment` ID (a user-defined audience segment), NOT a `domain`, and returns per-segment marketing-channel mix, NOT a referrer list. The right tool is `get-traffic-referrals-incoming`. Per `traffic-sources-shape`.
 - NEVER pass a full country name (`"United States"`) to any tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize before any call.
-- NEVER pass `end_date: <today>`. The server rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution (the Call 0 rank smoke's `meta.last_updated`; currently `2026-04-30`).
+- NEVER pass `end_date: <today>`. The server rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution (the Call 0 rank smoke's `meta.last_updated`).
 - NEVER fabricate a per-channel breakdown of PPC spend from `get-websites-ppc-spend` output alone. The tool returns ONE `ppc_spend` scalar per month with NO Paid Search vs Paid Social vs Display split. If per-channel paid attribution is required, compose with `get-websites-traffic-channels` Paid Search + Paid Social + Display Ads visits and qualify the result as "estimated allocation by paid-channel visit share."
 - NEVER label the referrals `share` column as "share of all traffic". `share` is fraction-of-inbound-referrals only; label the column "Share of referrals".
 - NEVER assume `get-traffic-referrals-incoming` rows are pre-sorted by `share`. Sort client-side (or pass `sort=share&asc=false`).
@@ -46,6 +46,7 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-chann
 - **Secondary probe**: `get-websites-traffic-channels`, target, country=`$COUNTRY`, single-month window.
 - **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-channels`: ABORT with the caveat (there is no channel mix without it); OPTIONAL tools: skip their steps with one consolidated caveat line.
 - The smoke runs at the user country, so a country-coverage gap can hit the smoke itself: do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat, per sw-foundation-core § Skip + pivot rule.
+- Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED: `get-websites-website-rank`, `get-websites-traffic-channels`. OPTIONAL: `get-traffic-referrals-incoming`, `get-websites-ppc-spend`, `get-website-analysis-ad-networks-agg`. OPT-IN ONLY (when `--with-share-tool` supplied): `get-traffic-channels-share`.
@@ -89,7 +90,7 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative. Narrow questions render the short form per sw-foundation-render's short-form rule.
 
 ## Step 7: Render
 
@@ -102,7 +103,7 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 - **Period-over-period deltas (when `--vs-period`):** Unicode delta bars per channel with `▶`/`◀` direction caps + verdict label (MAJOR / MATERIAL / NOISE).
 - **PPC monthly trend:** table only by default (Mermaid xychart-beta is renderer-aware appendix per § visualizations).
 
-Sections in order:
+Sections in order (answer-first per sw-foundation-render):
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. When `--vs-period`: FIRST WORD is the overall verdict label per sw-foundation-render § expert-heuristics (`WITHIN NOISE`, `MATERIAL CHANGE`, `MAJOR CHANGE`); name the biggest mover (channel + delta + %) in one sentence. When no `--vs-period`: lede on the dominant channel AND a § expert-heuristics red flag if applicable (e.g., "Paid Search 38% = margin-sensitive"; "Direct 67% = strong brand OR bot noise"; "Organic Search 11% on a content-heavy site = SEO underinvestment"). If engagement metrics are present, cite the matching § expert-heuristics engagement profile in the second sentence. When the current recipe builds materially on a prior recipe in this conversation, prepend the Executive read with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## Rank + reach` (table: global rank, country rank, from Call 0). The Global rank column maps to the `country_rank` value from a `country="ww"` call (no `global_rank` field exists per `website-rank-no-global-field`). The Country rank column maps to the `country_rank` value from the `country="<user-country>"` call. When the user country IS `ww`, the Country rank column collapses to `n/a` and only one call is made.

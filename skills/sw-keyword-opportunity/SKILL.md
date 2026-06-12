@@ -19,7 +19,7 @@ Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via yo
 - NEVER pass a window wider than 3 months to `get-website-analysis-keywords-agg` or `get-keywords-overview`. Both cap at 3 months per `keywords-overview-3-month-max`. The server returns HTTP 400 `VALIDATION_ERROR / Dates not in range` (probe confirmed for 4-month windows on `get-keywords-overview`).
 - NEVER look for `volume` / `difficulty` / `CPC` fields on `get-website-analysis-keywords-agg`. Those fields live on `get-keywords-overview` only. Recipe combines both tools by looping the overview per gap keyword.
 - NEVER pass a full country name (`"United States"`) to any tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize per sw-foundation-data § country-normalization before any call.
-- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` (currently `2026-04-30`) and rejects future dates. Derive effective `end_date` per sw-foundation-data § window-resolution from the Call 0 rank smoke.
+- NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` and rejects future dates. Derive effective `end_date` per sw-foundation-data § window-resolution from the Call 0 rank smoke.
 - NEVER treat the `url` field of `get-websites-keywords-competitors-agg` as a URL. Per `keywords-competitors-shape`, it is a DOMAIN despite the misleading name. Recipe renders it as a domain.
 - NEVER treat `shared_keywords` from `get-websites-keywords-competitors-agg` as an integer count. Per `keywords-competitors-shape`, it is a FLOAT 0..1 (Jaccard-like overlap fraction). Recipe renders as percent.
 - NEVER skip the competitor positional/flag input. Both `<domain>` AND `--vs <competitor>` are required; if missing, ask one disambiguation question.
@@ -47,6 +47,7 @@ echo "$COMPETITOR" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Invalid comp
 - **Smoke**: `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain; country=us. Reuse a 200 as the first enrichment row in Call 4 if the seed term ends up in the gap-keywords list.
 - **Secondary probe**: `get-website-analysis-keywords-agg`, target domain, country=us, single-month window, `limit: 5`. If the smoke is denied but the secondary probe returns 200, ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
 - **Pinned absence outcomes**: `get-keywords-overview` (the documented smoke, itself OPTIONAL): retarget the smoke to `get-website-analysis-keywords-agg` and ship the gap table without enrichment (the claims probe is preserved; never skip the smoke); `get-website-analysis-keywords-agg`: ABORT with the caveat (it IS the gap table); `get-websites-website-rank`: degrade the headline and derive end_date from the smoke's `meta.last_updated`; `get-websites-keywords-competitors-agg`: skip Call 1 with its documented denial caveat.
+- Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED: `get-websites-website-rank`, `get-website-analysis-keywords-agg`. OPTIONAL: `get-websites-keywords-competitors-agg` (surfaces alternative competitors; if denied the recipe still computes the gap from the explicit `--vs` competitor), `get-keywords-overview` (enriches the gap keywords with volume / difficulty / CPC; if denied the recipe ships the gap table without enrichment).
@@ -102,7 +103,7 @@ Execute via the AI client's MCP surface. Accumulate source records `{tool, param
 
 ## Step 6: Classify output intent
 
-Per sw-foundation-render intent-aware output rendering rules. Default: narrative.
+Per sw-foundation-render intent-aware output rendering rules. Default: narrative. Narrow questions render the short form per sw-foundation-render's short-form rule.
 
 ## Step 7: Render
 
@@ -114,7 +115,7 @@ Visualizations per sw-foundation-render § visualizations (Unicode-first):
 - **Gap keyword ROI bars:** Unicode horizontal bars over top-10 gap keywords sorted by ROI desc (cap width 16). Pair with the table.
 - **Target vs competitor traffic-share split:** Unicode bar pair showing target's vs competitor's total share of clicks in this country.
 
-Sections in order:
+Sections in order (answer-first per sw-foundation-render):
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. Name the SIZE of the gap (count of gap_keywords + their total competitor volume), the BIGGEST gap keyword, and the verdict on opportunity. Use § expert-heuristics calibration: HIGH = clear gap with monetizable volume; MEDIUM = some gap but mixed; LOW = mostly shared territory with thin gaps. When the current recipe builds materially on a prior recipe in this conversation, prepend with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## Rank + reach` (table with target and competitor country rank from Call 0; if user country is `ww`, render as one column).
