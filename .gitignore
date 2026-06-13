@@ -5,6 +5,9 @@ tests/
 # Build artifacts
 dist/
 
+# Autoresearch loop artifacts (probe reports + findings, local-only)
+autoresearch/
+
 # Local-only authoring + planning artifacts (never push to public repo)
 CLAUDE.md
 docs/superpowers/
