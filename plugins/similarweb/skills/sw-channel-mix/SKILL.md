@@ -42,7 +42,7 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-chann
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-- **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
+- **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (resolved per sw-foundation-core § default-country resolution: user-supplied wins, else the account-coverage default, else `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
 - **Secondary probe**: `get-websites-traffic-channels`, target, country=`$COUNTRY`, single-month window.
 - **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-channels`: ABORT with the caveat (there is no channel mix without it); OPTIONAL tools: skip their steps with one consolidated caveat line.
 - The smoke runs at the user country, so a country-coverage gap can hit the smoke itself: do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat, per sw-foundation-core § Skip + pivot rule.
@@ -86,7 +86,7 @@ Compute channel share % client-side from Call 1 visits (no separate tool call ne
 
 Sort `get-traffic-referrals-incoming` rows client-side by `share` descending before rendering.
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
 ## Step 6: Classify output intent
 
@@ -110,7 +110,7 @@ Sections in order (answer-first per sw-foundation-render):
 - `## Channel breakdown`. 10-channel taxonomy table from Call 1, columns: `Channel`, `Visits (window)`. Values are ABSOLUTE visits aggregated across the window's months. Rows sorted descending by visits. The 10 channels (alphabetical for reference): Affiliates, Direct, Display Ads, Gen AI, Mail, Organic Search, Organic Social, Paid Search, Paid Social, Referrals. Apply sw-foundation-render § error-rendering pattern 4 (structural-zero) specifically when Paid Social returns exactly `0.0`: render `n/a [1]` and surface the classifier-rollup Caveat. Similarweb's classifier often rolls paid social into Display Ads, so a literal `0.0%` is structural-zero, not measured-zero.
 - `## Period-over-period deltas` (only if `--vs-period`). Columns: `Channel`, `Current visits`, `Prior visits`, `Delta visits`, `% change`. Sorted by `abs(delta_visits)` descending.
 - `## Channel share %`. Same 10-channel taxonomy, columns: `Channel`, `Share %`. By default, derived client-side from Call 1 visits per the Step 5 derivation (`share[ch] = visits[ch] / sum(visits)`) so no separate tool call is needed; saves ~200 data credits per run. If `--with-share-tool` was supplied AND Call 3 returned data, use Call 3 server-side values instead (only worth it for the long-tail-referrer rows the share tool surfaces). Apply sw-foundation-render § error-rendering pattern 4 (structural-zero) specifically when Paid Social returns exactly `0.0`: render `n/a [1]` and surface the classifier-rollup Caveat. Similarweb's classifier often rolls paid social into Display Ads, so a literal `0.0%` is structural-zero, not measured-zero.
-- `## Top referral sources` (only if Call 4 accessible). Top 20 rows sorted client-side by `share` descending. Columns: `Referring domain`, `Share of referrals`, `Change vs prior period`. Context line: "Out of {{meta.total_count}} total referrers." `change` field rendered as % when present, `n/a` when null.
+- `## Top referral sources` (only if Call 4 accessible). Top 20 rows sorted client-side by `share` descending. Columns: `Referring domain`, `Share of referrals`, `Change vs prior period`. Context line: "{{meta.visits}} referral visits across {{meta.total_count}} referring domains." (both come free from the `get-traffic-referrals-incoming` meta). `change` field rendered as % when present, `n/a` when null.
 - `## PPC investment` (only if Call 5 accessible). Monthly time series table from Call 5. Columns: `Month`, `PPC spend`, `Currency`. Headline value above the table: "Total over window: {{sum(ppc_spend)}} {{currency}}." If `--vs-period`, render an adjacent "Prior window total: {{sum(prior)}} {{currency}}, delta = {{current - prior}}." (NO per-channel breakdown is rendered; the tool does not supply one.)
 - `## Ad networks` (only if Call 6 accessible). Top 10 rows from Call 6, pre-sorted server-side. Columns: `Ad network`, `Share`, `Change`. Render `share` as % (0..1 -> %.1f). Render `change` as `n/a` when null.
 - `## Root-cause hypotheses` (only if `--vs-period` AND the overall verdict was MATERIAL or MAJOR; SKIPPED entirely under WITHIN NOISE per Step 5 derivation #4). 2-3 ranked hypotheses for the biggest channel mover, each labeled `HIGH | MEDIUM | LOW` confidence per sw-foundation-render § expert-heuristics hypothesis calibration. Each hypothesis cites the SPECIFIC NUMBER from the data and a natural-language confirmation question the user might ask in chat (per sw-foundation-render § citation block conversational-tone rule, NEVER emit `/sw-X` slash-commands or `--flag` syntax). For example: "Organic Search dropped 18%; HIGH confidence; could be algorithm update, ranking loss, or seasonality; confirm by asking 'Is `<target>` showing up in AI answers for its top keywords?'". NEVER ship without confidence labels. NEVER introduce external-world speculation (algorithm-update dates, news events) the user did not supply; if you must, label it `UNCONFIRMED EXTERNAL HYPOTHESIS` and put it LAST.
@@ -186,6 +186,7 @@ This skill's behavior is live-validated against the following grounded assertion
 - traffic-channels-tool-shape
 - channel-mix-period-comparison
 - traffic-sources-shape
+- referral-pipelines-divergence
 - ppc-spend-shape
 - ad-networks-shape
 - website-rank-no-global-field

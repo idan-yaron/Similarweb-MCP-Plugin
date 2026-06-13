@@ -107,7 +107,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -127,7 +127,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.16` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is filled from MCP `meta.data_credits_charged` (the live field), falling back to the legacy `meta.sw_coins`; a call missing both is recorded with `data_credits: null` (unknown, never 0). See § citation block.
+The `version` literal `0.1.17` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is filled from MCP `meta.data_credits_charged` (the live field), falling back to the legacy `meta.sw_coins`; a call missing both is recorded with `data_credits: null` (unknown, never 0). See § citation block.
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 

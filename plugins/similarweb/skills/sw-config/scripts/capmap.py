@@ -12,6 +12,10 @@ atomically (mkstemp + os.replace, UTF-8, no BOM). Python 3 stdlib only.
                idempotent sorted append to tools_inaccessible
   absent       stdin {"tools": [names], "observed_under": surface-hash}
                upserts tools_absent entries stamped with the hash
+  coverage     stdin {"countries": [codes], "observed_under": surface-hash,
+               optional "data_window": {start,end}, "fresh_data": date, "segments": []}
+               upserts the coverage block from get-user-segments-describe;
+               touches NO state/tools lists; prints ww-only | multi
   init         stdin the full probe-outcome document (see sw-setup Step 2)
                overwrites the map with the v2 full-probe schema
   show         no stdin; renders the human capability summary
@@ -121,6 +125,34 @@ def cmd_absent(doc):
     return 0
 
 
+def cmd_coverage(doc):
+    countries = doc.get("countries")
+    if not isinstance(countries, list) or not all(isinstance(c, str) for c in countries):
+        return _fail('coverage needs {"countries": [codes], "observed_under": hash}')
+    os.makedirs(os.path.dirname(CAPS_PATH), exist_ok=True)
+    caps = _read_caps()
+    now = _stamp(_now_utc())
+    cov = {
+        "countries": sorted({c.strip().lower() for c in countries if c.strip()}),
+        # default to the map's current surface hash so the caller need not thread it
+        "observed_under": doc.get("observed_under") or caps.get("tool_surface", {}).get("hash", ""),
+        "observed_at": now,
+    }
+    if isinstance(doc.get("data_window"), dict):
+        cov["data_window"] = doc["data_window"]
+    if isinstance(doc.get("fresh_data"), str):
+        cov["fresh_data"] = doc["fresh_data"]
+    if isinstance(doc.get("segments"), list):
+        cov["segments"] = doc["segments"]
+    caps["coverage"] = cov
+    caps["last_updated"] = now
+    _write_caps(caps)
+    # "world" is the describe's alias for "ww"; ww-only = no specific countries.
+    effective = set(cov["countries"]) - {"world", "ww"}
+    print("multi" if effective else "ww-only")
+    return 0
+
+
 def cmd_init(doc):
     if not isinstance(doc, dict):
         return _fail("init needs the probe-outcome JSON document on stdin")
@@ -177,6 +209,18 @@ def cmd_show():
     print(f"State: {state}")
     if surface:
         print(f"Tool surface: {surface.get('count', '?')} tools observed {surface.get('observed_at', 'unknown')}")
+    coverage = caps.get("coverage", {})
+    if coverage:
+        cur = surface.get("hash", "")
+        stale = " [stale: tool surface changed; run /sw-config --refresh]" if coverage.get("observed_under") != cur else ""
+        countries = coverage.get("countries", [])
+        effective = [c for c in countries if c not in ("world", "ww")]
+        cov_desc = "worldwide only" if not effective else ", ".join(countries)
+        print(f"Country coverage: {cov_desc}{stale}")
+        dw = coverage.get("data_window")
+        if isinstance(dw, dict):
+            print(f"  data window: {dw.get('start', '?')} to {dw.get('end', '?')}; fresh_data {coverage.get('fresh_data', 'unknown')}")
+        print(f"  segments defined: {len(coverage.get('segments', []))}")
     if tools:
         by_cat = collections.defaultdict(lambda: [0, 0])
         for tool, status in tools.items():
@@ -217,8 +261,8 @@ def cmd_show():
 
 
 def main(argv):
-    if len(argv) != 2 or argv[1] not in ("fingerprint", "deny", "absent", "init", "show"):
-        return _fail("usage: capmap.py fingerprint|deny|absent|init|show (JSON on stdin except show)")
+    if len(argv) != 2 or argv[1] not in ("fingerprint", "deny", "absent", "coverage", "init", "show"):
+        return _fail("usage: capmap.py fingerprint|deny|absent|coverage|init|show (JSON on stdin except show)")
     sub = argv[1]
     if sub == "show":
         return cmd_show()
@@ -232,6 +276,8 @@ def main(argv):
         return cmd_deny(doc)
     if sub == "absent":
         return cmd_absent(doc)
+    if sub == "coverage":
+        return cmd_coverage(doc)
     return cmd_init(doc)
 
 

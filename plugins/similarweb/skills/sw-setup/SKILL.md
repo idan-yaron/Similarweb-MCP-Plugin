@@ -42,6 +42,8 @@ Recommended approach: invoke each MCP tool via the AI client's native MCP surfac
 
 The rank probe uses `end_date="latest"` (the server resolves to actual `meta.last_updated`) per sw-foundation-data § window-resolution. Passing `end_date = today` or `end_date = first day of current month` 4xxs because `meta.last_updated` lags by days.
 
+**Coverage seed (free, uncharged).** Also call `get-user-segments-describe` (no params; it returns the `{response}` envelope, not the `{meta, data}` shape). From `response.traffic_and_engagement.countries` capture the covered country codes (the object keys; `world` is the alias for `ww`); from any one country entry capture its `start_date`/`end_date` (the account's `data_window`) and `fresh_data`; from `response.segments` capture the segment list. This is the seeding input for Step 2.5. A failed or absent describe simply skips the coverage write; the rest of setup is unaffected. Grounded in `describe-envelope-and-coverage-probe`.
+
 ## Step 2: Write capabilities.json
 
 Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source; Python 3 via Bash, atomic write, no BOM, never improvised inline code). Pipe ONE JSON document on stdin to the script's init subcommand, e.g. `python3 scripts/capmap.py init <<'JSONEOF' ... JSONEOF`. Document shape (the AI client substitutes the actual probe outcomes; example values shown, apps probed via the sibling get-apps-details):
@@ -70,6 +72,21 @@ Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-ti
 
 This write OVERWRITES any existing `capabilities.json` (including lazy-built append-only state). That is the point of `/sw-config --refresh`: a clean, full known-state map. If the script file is missing, skip the write, keep the probe results in conversation context, and surface one line that the plugin bundle is incomplete (reinstall to restore it); NEVER improvise replacement code.
 
+## Step 2.5: Seed coverage (after the init write)
+
+After the init write succeeds, record the account's data coverage so recipes resolve their default country without burning a sacrificial country 400 (per sw-foundation-core § default-country resolution). Pipe ONE JSON document to the writer's `coverage` subcommand, e.g. `python3 scripts/capmap.py coverage <<'JSONEOF' ... JSONEOF`. Document shape (substitute the values captured by the Step 1 coverage seed):
+
+```json
+{
+  "countries": ["world", "ww"],
+  "data_window": {"start": "2023-05", "end": "2026-05"},
+  "fresh_data": "2026-06-09",
+  "segments": []
+}
+```
+
+`observed_under` is omitted on purpose: the writer stamps the coverage block with the map's current `tool_surface.hash` (just written by init) so a later surface change quarantines it automatically. The coverage write touches ONLY the coverage block, never `state` or the tool lists. If the Step 1 describe failed or returned no countries, SKIP this step entirely; recipes then fall back to their documented defaults plus the country-coverage pivot.
+
 ## Step 3: Done
 
 Exit silently. Return control to sw-config with no user-visible output; sw-config renders the summary.
@@ -90,3 +107,4 @@ This skill's behavior is live-validated against the following grounded assertion
 - cheap-probe-tool-per-category
 - mcp-tool-catalog-v1
 - unknown-tool-error-shape
+- describe-envelope-and-coverage-probe

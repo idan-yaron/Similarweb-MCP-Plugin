@@ -186,3 +186,9 @@ This skill's behavior is live-validated against the following grounded assertion
 - unknown-tool-error-shape
 - unknown-tool-error-shape-other-platforms
 - plan-gating-vs-server-drift
+- describe-envelope-and-coverage-probe
+- audience-geography-shape
+- keywords-latest-agg-shape
+- referral-pipelines-divergence
+- technologies-agg-shape
+- traffic-by-demographics-semantics

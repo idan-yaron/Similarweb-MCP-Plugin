@@ -106,13 +106,13 @@ Exactly one recipe clearly fits. Infer parameters from the prompt:
 
 - **Target domain**: the domain mentioned in the prompt (lowercase, strip protocol / trailing slash). If no domain is given but a brand is (e.g. "apple"), pick the canonical apex (`apple.com`).
 - **Competitors**: any other domains mentioned. If the prompt uses "and its competitors" or similar, pass through without explicit `--vs`; the recipe will infer.
-- **Country**: explicit country mention normalized to ISO-3166-1 alpha-2 (`"United States"` → `us`). Default `us` when not stated.
+- **Country**: explicit country mention normalized to ISO-3166-1 alpha-2 (`"United States"` → `us`). Default `us` when not stated, resolved against the account's coverage at recipe time per sw-foundation-core § default-country resolution (a worldwide-only plan resolves to `ww`).
 - **Window**: explicit time mention (e.g. "this quarter" → `--window quarter`, "last year" → `--window 12m`). Otherwise let the recipe use its default.
 - **Recipe-specific flags**: e.g. `--vs-period previous-quarter` if the prompt says "compared to last quarter", `--web-companion` if the market-size prompt mentions web traffic, `--keywords ...` if the AEO prompt lists keywords.
 
 Cite the decision in ONE line, then dispatch per § Dispatch mechanics. When ANY parameter was inferred (not stated by the user), the routing-decision line MUST surface the inference in natural language so the user can correct it before the recipe runs. Per sw-foundation-render § citation block conversational-tone rule, the inferred-default citation is phrased as a plain sentence, NOT as a `--flag` hint. Country and window are the two inferences most likely to silently mislead non-US or non-default-window users.
 
-- **Country inferred (not stated)**: append the default in a plain sentence, e.g. "Defaulting to country=us. Ask if you want a global view or a different market."
+- **Country inferred (not stated)**: the recipe resolves the actual country against the account's coverage per sw-foundation-core § default-country resolution, so phrase the printed line as the intent, e.g. "Defaulting to country=us (your plan's primary market; a worldwide-only plan renders ww). Ask if you want a different market."
 - **Window defaulted to non-obvious value**: cite the default in a plain sentence, e.g. "Defaulting to the last 90 days."
 - Both inferences fire when both apply; cite each on its own line under the routing decision.
 
@@ -171,6 +171,7 @@ Then execute. If a planned tool turns out inaccessible (403) at runtime, drop it
 **Lead/contact enrichment cost discipline.** When a Branch C plan is a person or company lookup (any of `post-contact-enrichment-contacts`, `post-contact-search-contacts`, `get-lead-enrichment-company`, `get-lead-enrichment-website`):
 - The contact tools (`post-contact-*`) are the free, primary path; the company and website lead-enrichment tools are the metered, expensive calls. This is the one Branch C case where more than 3 calls is acceptable, BECAUSE the extra calls are free contact lookups, NOT because broadening is encouraged: use the free contact tools to settle found-or-not-found, then stop.
 - Issue AT MOST ONE paid enrichment call total (`get-lead-enrichment-company` OR `get-lead-enrichment-website`, never both). NEVER re-enrich the same entity through a sibling domain: a subdomain or country domain (e.g. `at.nestle.com`, `nestle.at`) usually resolves to the same parent-company record as the apex (`nestle.com`), so a second enrichment just re-buys the same data, often with less of it. Once you have a company row, stop.
+- TRIM the metrics on the paid enrichment call to the 4-6 fields the answer actually renders (e.g. `industry`, `employee_count`, `annual_revenue`, `business_model`): 5 data credits vs 27 for the full default set (metric-priced per sw-foundation-data § cost-models). Request the full set ONLY when the user asked for the complete firmographic profile.
 - On a PERSON lookup that returns no contact row, the honest answer is "no contact profile found." NEVER silently spend the paid enrichment on unrequested company context as a consolation. Report the empty contact result, then OFFER company context as a follow-up the user can ask for ("Want me to pull Similarweb's company profile for nestle.com?"). Spend the paid call only if the user actually asked for company data.
 
 ### Branch D: chained 2-recipe plan

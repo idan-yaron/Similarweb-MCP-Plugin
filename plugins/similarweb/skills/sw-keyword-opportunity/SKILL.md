@@ -17,7 +17,8 @@ Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via yo
 - NEVER pass `traffic_source: "all"` to `get-websites-keywords-competitors-agg`. Per `keywords-competitors-shape`, only `organic` or `paid` is accepted; `all` is rejected.
 - NEVER pass `web_source: "total"` to `get-websites-keywords-competitors-agg`. Only `desktop` or `mobile_web` is accepted. The recipe defaults to `desktop`.
 - NEVER pass a window wider than 3 months to `get-website-analysis-keywords-agg` or `get-keywords-overview`. Both cap at 3 months per `keywords-overview-3-month-max`. The server returns HTTP 400 `VALIDATION_ERROR / Dates not in range` (probe confirmed for 4-month windows on `get-keywords-overview`).
-- NEVER look for `volume` / `difficulty` / `CPC` fields on `get-website-analysis-keywords-agg`. Those fields live on `get-keywords-overview` only. Recipe combines both tools by looping the overview per gap keyword.
+- The PRIMARY enrichment path uses `get-keywords-latest-agg`, which carries `volume` / `difficulty` / `cpc` / `cpc_low_bid` / `cpc_high_bid` / `zero_clicks` INLINE on every keyword row (per `keywords-latest-agg-shape`), so the gap list is enriched WITHOUT a per-keyword loop. `get-website-analysis-keywords-agg` does NOT carry those fields; it is used only on the FALLBACK path, where `get-keywords-overview` is looped per gap keyword to supply them.
+- `get-keywords-latest-agg` is LATEST-PERIOD-ONLY (last month, or last 28 days daily); NEVER pass it a multi-month window. `position` comes back null from it, so NEVER promise a keyword position on the primary path. `difficulty` is occasionally null per row (render n/a, never 0). `branded_type: non_branded` is a LOOSE filter: it strips the domain's own brand but KEEPS athlete / event / sponsorship proper nouns (a competitor's gap list can include terms like `alcaraz` or `uefa champions league`), so treat the gap list as candidate terms to scan, not a clean product-only set.
 - NEVER pass a full country name (`"United States"`) to any tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize per sw-foundation-data § country-normalization before any call.
 - NEVER pass `end_date: <today>`. The server clamps to `meta.last_updated` and rejects future dates. Derive effective `end_date` per sw-foundation-data § window-resolution from the Call 0 rank smoke.
 - NEVER treat the `url` field of `get-websites-keywords-competitors-agg` as a URL. Per `keywords-competitors-shape`, it is a DOMAIN despite the misleading name. Recipe renders it as a domain.
@@ -44,13 +45,13 @@ echo "$COMPETITOR" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Invalid comp
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-- **Smoke**: `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain; country=us. Reuse a 200 as the first enrichment row in Call 4 if the seed term ends up in the gap-keywords list.
-- **Secondary probe**: `get-website-analysis-keywords-agg`, target domain, country=us, single-month window, `limit: 5`. If the smoke is denied but the secondary probe returns 200, ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
-- **Pinned absence outcomes**: `get-keywords-overview` (the documented smoke, itself OPTIONAL): retarget the smoke to `get-website-analysis-keywords-agg` and ship the gap table without enrichment (the claims probe is preserved; never skip the smoke); `get-website-analysis-keywords-agg`: ABORT with the caveat (it IS the gap table); `get-websites-website-rank`: degrade the headline and derive end_date from the smoke's `meta.last_updated`; `get-websites-keywords-competitors-agg`: skip Call 1 with its documented denial caveat.
+- **Smoke**: `get-keywords-latest-agg` for the target domain, country=`$COUNTRY` (resolved per sw-foundation-core § default-country resolution; documented default `us`), `branded_type: non_branded`, `limit: 5`. This IS the primary keyword+enrichment tool (Call 2); a 200 confirms the fast path and is reused, never re-called.
+- **Secondary probe**: `get-website-analysis-keywords-agg`, target domain, country=`$COUNTRY`, single-month window, `limit: 5` (the FALLBACK path's gap-discovery tool). If the smoke is denied or absent but the secondary probe returns 200, run the fallback path (website-analysis-keywords-agg for the keyword sets, `get-keywords-overview` looped for enrichment).
+- **Pinned absence outcomes**: `get-keywords-latest-agg` absent or denied: fall back to `get-website-analysis-keywords-agg` (gap sets) + `get-keywords-overview` (looped enrichment); record `enrichment_source: keywords_overview_loop`. BOTH `get-keywords-latest-agg` AND `get-website-analysis-keywords-agg` absent: ABORT with the caveat (no gap table possible). `get-websites-website-rank`: degrade the headline and derive end_date from the smoke's `meta.last_updated`. `get-websites-keywords-competitors-agg`: skip Call 1 with its documented denial caveat.
 - Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
-REQUIRED: `get-websites-website-rank`, `get-website-analysis-keywords-agg`. OPTIONAL: `get-websites-keywords-competitors-agg` (surfaces alternative competitors; if denied the recipe still computes the gap from the explicit `--vs` competitor), `get-keywords-overview` (enriches the gap keywords with volume / difficulty / CPC; if denied the recipe ships the gap table without enrichment).
+REQUIRED: `get-websites-website-rank`, and EITHER `get-keywords-latest-agg` (primary) OR `get-website-analysis-keywords-agg` (fallback gap source). OPTIONAL: `get-websites-keywords-competitors-agg` (surfaces alternative competitors; if denied the recipe still computes the gap from the explicit `--vs` competitor), `get-keywords-overview` (fallback-only enrichment, looped per gap keyword when the primary tool is unavailable).
 
 ## Step 3: Pick up bulk inputs from context
 
@@ -58,48 +59,46 @@ Per sw-foundation-core § bulk-input-from-context. If `--vs` was not supplied an
 
 ## Step 4: Plan the call sequence
 
+PRIMARY path (`get-keywords-latest-agg` present):
+
 | Call | Tool | Purpose |
 |------|------|---------|
-| 0 | `get-websites-website-rank` | Headline rank for BOTH target and competitor + derive effective `end_date` from `meta.last_updated` (NOT this recipe's smoke; the Step 2 smoke is `get-keywords-overview`). Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per call (2 calls = ~12 total). |
-| 1 | `get-websites-keywords-competitors-agg` | Top organic competitors of target, sanity-check that `--vs <competitor>` actually shares keywords. EXACT 3-month window required. ~3 sw_coins. |
-| 2 | `get-website-analysis-keywords-agg` | Target's top organic keywords (limit=25). 3-month window. ~2 sw_coins. |
-| 3 | `get-website-analysis-keywords-agg` | Competitor's top organic keywords (limit=25). 3-month window. ~2 sw_coins. |
-| 4 | `get-keywords-overview` | LOOPED per top-10 gap keyword (where competitor wins but target doesn't), enriches with volume + difficulty + CPC + intent volumes. ~1 sw_coin per keyword (10 calls = ~10 sw_coins). |
+| 0 | `get-websites-website-rank` | Headline rank for BOTH target and competitor + derive effective `end_date` from `meta.last_updated`. Bound per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per call (2 calls = ~12 total). |
+| 1 | `get-websites-keywords-competitors-agg` | Confirm `--vs <competitor>` actually shares organic keywords with the target. EXACT 3-month window. ~3 data credits. |
+| 2 | `get-keywords-latest-agg` | Target's top non-branded keywords WITH inline volume / difficulty / cpc / intent. `branded_type: non_branded`, `limit: 50`, latest month. ~5 data credits. |
+| 3 | `get-keywords-latest-agg` | Competitor's top non-branded keywords WITH the same inline enrichment. `branded_type: non_branded`, `limit: 50`, latest month. ~5 data credits. |
 
-Default total cost: ~30-40 data credits per run.
+Default total cost: ~15-25 data credits per run, ~5-6 MCP calls. No per-keyword enrichment loop: each gap keyword already carries its enrichment from Call 3.
+
+FALLBACK path (`get-keywords-latest-agg` absent or denied): Calls 2 and 3 become `get-website-analysis-keywords-agg` (target, competitor; keywords + clicks + position, NO volume/difficulty/cpc), and a Call 4 loops `get-keywords-overview` per top-10 gap keyword for volume / difficulty / cpc (~1 data credit each). Record `enrichment_source: keywords_overview_loop`. Total ~30-40 data credits, as the pre-rework recipe.
 
 ## Step 5: Execute
 
-Call 0 runs first (2 parallel calls, one per domain). Derive effective `end_date` from the target's `meta.last_updated` per sw-foundation-data § window-resolution; the recipe uses the SAME EXACT 3-month window across all subsequent calls. Concretely: `end_date = 2026-04-30` (or current ceiling), `start_date = 2026-02-01`.
-
-Calls 1, 2, and 3 are independent given the resolved window; parallelize.
-
-Call 4 fans out per gap keyword and is itself independent across keywords; parallelize within the loop.
+Call 0 runs first (2 parallel calls, one per domain). Derive effective `end_date` from the target's `meta.last_updated` per sw-foundation-data § window-resolution. The keywords-competitors-agg call (Call 1) uses the EXACT 3-month window it requires; the primary keyword calls (Calls 2, 3) are latest-month-only (`get-keywords-latest-agg` ignores a multi-month window). Calls 1, 2, and 3 are independent; parallelize. On the fallback path, Call 4 fans out per gap keyword; parallelize within the loop.
 
 Client-side derivations after responses arrive:
 
-1. **From Call 1 (competitor sanity check):** scan the response for the user-supplied `--vs` competitor. If present, the competitor is a genuine organic-keyword overlap (surface its `shared_keywords` % and `score` in the rendered output). If absent, surface in Caveats: "`<competitor>` does not appear in target's top-100 keyword competitors; gap analysis still runs but the keyword overlap with `<target>` may be thin."
+1. **From Call 1 (competitor sanity check):** scan the response for the user-supplied `--vs` competitor. If present, surface its `shared_keywords` % and `score`. If absent, surface in Caveats: "`<competitor>` does not appear in target's top-100 keyword competitors; gap analysis still runs but the keyword overlap with `<target>` may be thin."
 
-2. **From Calls 2 + 3 (target vs competitor keyword sets):** intersect the keyword sets by exact-match on the `keyword` field. Build three buckets:
-   - `gap_keywords`: keywords where competitor ranks (position present) but target does NOT (target absent from intersection's competitor side) -- competitor wins
-   - `shared_keywords`: keywords where BOTH target and competitor rank (both present in intersection)
-   - `target_wins`: keywords where target ranks but competitor does NOT
+2. **Gap, shared, and wins from Calls 2 + 3.** Match the two keyword lists by exact `keyword` string:
+   - `gap_keywords`: keywords in the COMPETITOR's list (Call 3) absent from the TARGET's list (Call 2) -- competitor wins. On the PRIMARY path each gap row already carries `volume`, `difficulty`, `cpc`, `primary_intent`, and the competitor's `clicks` inline (no enrichment loop).
+   - `shared_keywords`: keywords present in BOTH lists.
+   - `target_wins`: keywords in the target's list absent from the competitor's.
 
-   MANDATORY caveat rendered with the Gap table: "Gap = absent from `<target>`'s top-25 organic keywords (the limit=25 pull); the target may still rank below that cutoff for these terms. Treat gaps as priority candidates, not proof of zero presence."
+   MANDATORY caveat with the Gap table: "Gap = absent from `<target>`'s top-50 non-branded keywords (the limit=50 pull) for the latest month; the target may rank below that cutoff or in another period. Treat gaps as priority candidates, not proof of zero presence." On the primary path, ALSO state the latest-month basis next to the recipe header window, and never render a keyword `position` (the primary tool returns it null).
 
-3. **ROI score per gap keyword** (after Call 4 enriches volume / difficulty / CPC):
-   ```
-   roi_score = volume_competitor_position_factor / max(difficulty, 1)
-   ```
-   where `volume_competitor_position_factor = volume * (1 - (competitor_position - 1) / 10)` clamped to [0, volume]. Higher = more attractive (high volume + competitor in lower position = easier to take). Sort gap keywords by ROI descending.
+3. **ROI score per gap keyword.**
+   - PRIMARY path (clicks-based, position unavailable): `roi_score = competitor_clicks / max(difficulty, 1)`, where `competitor_clicks` is the gap keyword's `clicks` from Call 3 and `difficulty` its inline value; rows with null difficulty use `difficulty = 1` and render `n/a` in the Difficulty column. This uses the competitor's OBSERVED traffic for the term as the prize, a stronger signal than a position heuristic.
+   - FALLBACK path (position-based, after the Call 4 overview loop): `roi_score = volume * (1 - (competitor_position - 1) / 10) / max(difficulty, 1)`, clamped to `[0, volume]`, using the competitor `position` from `get-website-analysis-keywords-agg` and `volume`/`difficulty` from the looped `get-keywords-overview`.
+   Sort gap keywords by `roi_score` descending on both paths.
 
-4. **For shared keywords (both rank):** compute `position_gap = competitor_position - target_position`. Positive = competitor outranks target on this keyword; defend by improving the target's position.
+4. **For shared keywords:** PRIMARY path compares the competitor's vs the target's `clicks` for the term (leader = higher clicks; flag terms where the competitor leads by more than 2x as defensive priorities). FALLBACK path computes `position_gap = competitor_position - target_position` (positive = competitor outranks).
 
-5. **For target wins:** keep these for the "DEFEND" recommendation; competitor doesn't rank.
+5. **For target wins:** keep these for the DEFEND recommendation; the competitor doesn't rank for them.
 
-6. **Intent clustering (optional):** group gap keywords by their `primary_intent` (Navigational / Informational / Transactional / Local / Job_Search). The Transactional cluster typically has the highest commercial value.
+6. **Intent clustering (optional):** group gap keywords by `primary_intent` (Transactional usually carries the highest commercial value). Because `non_branded` is a loose filter, drop or label obvious athlete / event / sponsorship proper nouns rather than presenting them as product-category opportunities.
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
 ## Step 6: Classify output intent
 
@@ -119,7 +118,7 @@ Sections in order (answer-first per sw-foundation-render):
 
 - `## Executive read` (numbers-LIGHT, max 3 sentences. Name the SIZE of the gap (count of gap_keywords + their total competitor volume), the BIGGEST gap keyword, and the verdict on opportunity. Use § expert-heuristics calibration: HIGH = clear gap with monetizable volume; MEDIUM = some gap but mixed; LOW = mostly shared territory with thin gaps. When the current recipe builds materially on a prior recipe in this conversation, prepend with the "Connecting back" line per sw-foundation-data § conversation-context.).
 - `## Rank + reach` (table with target and competitor country rank from Call 0; if user country is `ww`, render as one column).
-- `## Keyword gap (competitor wins)` (top 10 by ROI desc, after Call 4 enrichment. Columns: `Rank`, `Keyword`, `Competitor pos`, `Volume`, `Difficulty`, `Intent`, `ROI score`. Sort by ROI descending. Pair with Unicode bar visualization of ROI scores.).
+- `## Keyword gap (competitor wins)` (top 10 by ROI desc. Columns: `Rank`, `Keyword`, `Competitor clicks`, `Volume`, `Difficulty`, `Intent`, `ROI score`. On the PRIMARY path `Competitor clicks` is the gap keyword's observed clicks from the competitor's keywords-latest-agg row, ROI is clicks/difficulty, and no keyword position is rendered (the tool returns it null). On the FALLBACK path the column shows the competitor's clicks from website-analysis-keywords-agg and ROI is the position-based formula. Render `Difficulty` as n/a where null. Sort by ROI descending. Pair with the Unicode bar visualization of ROI scores.).
 - `## Shared territory` (table of keywords both rank for; columns: `Keyword`, `Target pos`, `Competitor pos`, `Position gap`. Highlight position gaps > 5 as defensive priorities. Top 10 by competitor traffic_share. If empty, skip with one-line note.).
 - `## Target wins` (keywords where target ranks but competitor doesn't; columns: `Keyword`, `Target pos`, `Traffic share`. Top 10 by traffic_share. If empty, render a single line "No outright wins detected in top-25; target's strength is in shared territory, not exclusive keywords.").
 - `## Strategic insights` (3 bullets per § expert-heuristics, labeled `DEFEND` / `EXPOSE` / `PLAY`, each ending with `(confidence: HIGH | MEDIUM | LOW)`. DEFEND = shared territory where target leads; EXPOSE = gap keywords with high ROI; PLAY = an intent cluster or content angle the data implies.).
@@ -162,10 +161,12 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
     "competitiveness_score": 0.0,
     "competitor_in_target_top100": true
   },
+  "enrichment_source": "keywords_latest_agg | keywords_overview_loop",
   "gaps": [
     {
       "keyword": "<text>",
-      "competitor_position": 0,
+      "competitor_clicks": 0,
+      "competitor_position": null,
       "volume": 0,
       "difficulty": 0,
       "cpc_low_bid": 0,
@@ -197,8 +198,9 @@ Field semantics:
 - `competitor_relationship.shared_keywords_fraction` is the float 0..1 from `get-websites-keywords-competitors-agg` (Jaccard-like overlap coefficient; per `keywords-competitors-shape`, this is NOT an integer count).
 - `competitor_relationship.competitiveness_score` is the `score` field from `get-websites-keywords-competitors-agg` (unbounded float).
 - `competitor_relationship.competitor_in_target_top100` is `false` when the user-supplied `--vs` competitor does NOT appear in the top-100 returned by Call 1; signals a thin overlap.
-- `gaps` rows are sorted by `roi_score` descending. `roi_score` = `volume * (1 - (competitor_position - 1) / 10) / max(difficulty, 1)`. Higher = more attractive.
-- `gaps[].volume`, `difficulty`, `cpc_low_bid`, `cpc_high_bid` come from `get-keywords-overview` (looped per top-10 gap keyword). If the overview tool was unavailable, these fields are null.
+- `enrichment_source` is `keywords_latest_agg` (PRIMARY path: enrichment inline, `competitor_clicks` populated, `competitor_position` null) or `keywords_overview_loop` (FALLBACK: `competitor_position` populated, enrichment from the looped overview).
+- `gaps` rows are sorted by `roi_score` descending. PRIMARY: `roi_score = competitor_clicks / max(difficulty, 1)`. FALLBACK: `roi_score = volume * (1 - (competitor_position - 1) / 10) / max(difficulty, 1)`. Higher = more attractive.
+- `gaps[].volume`, `difficulty`, `cpc_low_bid`, `cpc_high_bid` come INLINE from `get-keywords-latest-agg` on the primary path, or from the looped `get-keywords-overview` on the fallback. `difficulty` may be null per keyword (render n/a). `competitor_position` is null on the primary path.
 - `shared` rows are sorted by competitor `traffic_share` descending. `position_gap` = `competitor_position - target_position` (positive = competitor outranks).
 - `wins` rows are sorted by target `traffic_share` descending; up to 10 rows.
 - `roi_score_top10` is a compact projection of the top 10 gaps, useful for downstream consumers that only need the ranking.
@@ -220,6 +222,7 @@ Field semantics:
 This skill's behavior is live-validated against the following grounded assertions (recorded in the project's developer-side grounding ledger, which does not ship with the plugin). Build-time validation rejects unknown references.
 
 - unknown-tool-error-shape
+- keywords-latest-agg-shape
 - keywords-competitors-shape
 - keywords-analysis-shape
 - keywords-competitors-exact-3-months
