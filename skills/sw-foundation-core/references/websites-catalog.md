@@ -13,6 +13,7 @@
 | Geography | `get-websites-geography-agg` | domain | Country share. |
 | Conversion rates | `get-websites-conversion-rates-agg` | domain, vertical | Vertical-specific. Presence varies by account (both variants absent from the grounded connector 2026-06-11, present 2026-05-16); resolve per sw-foundation-core § tool-surface presence. |
 | PPC spend | `get-websites-ppc-spend` | domain, country, window, currency | Returns estimated monthly PPC spend as a single scalar per month (no by-channel breakdown). |
+| Domain keywords with enrichment (latest period) | `get-keywords-latest-agg` | domain, country, branded_type, limit | LATEST-PERIOD-ONLY (last month, or last 28 days daily). Returns the domain's top keywords WITH inline `volume` / `difficulty` / `cpc` / `cpc_low_bid` / `cpc_high_bid` / `zero_clicks` per row, plus requested `clicks` / `traffic_share` / `primary_intent` / `serp_features`. `position` returns null; `difficulty` is occasionally null; `branded_type: non_branded` is a LOOSE filter (keeps athlete/event/sponsorship proper nouns). Row-priced (~1 credit per 5-10 rows). Primary keyword+enrichment source for sw-keyword-opportunity (no per-keyword overview loop needed). Per `keywords-latest-agg-shape`. |
 | SERP positions | `get-websites-serp-players-agg` | keyword, country | Domain rankings for a keyword. |
 | Landing pages | `get-websites-landing-pages-agg` | domain, source_channel | Top entry points by channel. |
 | Popular pages on a domain | `get-pages-popular-pages-agg` | domain | URL-level traffic. |
