@@ -89,7 +89,7 @@ The final answer-first verdict supersedes the early headline:
 
 ### § citation block
 
-Every recipe ends its output with a single-line Sources rollup; when intent classifies as `handoff`, the § handoff-json-schema appendix follows it, otherwise Sources is the LAST element. Sources format: `**Sources:** <total> data credits across <N> calls (<per-tool-rollup>).<optional-status-suffix>` where total sums each response's `meta.sw_coins` (renamed to data credits at render time, missing/null = 0, emitted even if 0), the rollup is comma-separated `<count> <tool-suffix>` pairs (tool prefixes and `-agg` dropped; descending count then alphabetical), and the status suffix appears ONLY on failure or retry (no "All 200" noise).
+Every recipe ends its output with a single-line Sources rollup; when intent classifies as `handoff`, the § handoff-json-schema appendix follows it, otherwise Sources is the LAST element. Sources format: `**Sources:** <total> data credits across <N> calls (<per-tool-rollup>).<optional-status-suffix>` where total sums each response's `meta.data_credits_charged` (the live field, legacy fallback `meta.sw_coins`, renamed to data credits at render time; a call missing both is unknown not 0, see § citation block reference), the rollup is comma-separated `<count> <tool-suffix>` pairs (tool prefixes and `-agg` dropped; descending count then alphabetical), and the status suffix appears ONLY on failure or retry (no "All 200" noise).
 
 **Output-render targets:** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000; short form (narrow questions, any recipe) ~400-800, with the full report offered as a NEXT MOVES question instead of emitted. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
@@ -127,7 +127,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.16` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is the rename of MCP `meta.sw_coins` (see § citation block).
+The `version` literal `0.1.16` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is filled from MCP `meta.data_credits_charged` (the live field), falling back to the legacy `meta.sw_coins`; a call missing both is recorded with `data_credits: null` (unknown, never 0). See § citation block.
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 

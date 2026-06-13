@@ -42,7 +42,7 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-chann
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-- **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
+- **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (resolved per sw-foundation-core § default-country resolution: user-supplied wins, else the account-coverage default, else `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
 - **Secondary probe**: `get-websites-traffic-channels`, target, country=`$COUNTRY`, single-month window.
 - **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-channels`: ABORT with the caveat (there is no channel mix without it); OPTIONAL tools: skip their steps with one consolidated caveat line.
 - The smoke runs at the user country, so a country-coverage gap can hit the smoke itself: do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat, per sw-foundation-core § Skip + pivot rule.
@@ -86,7 +86,7 @@ Compute channel share % client-side from Call 1 visits (no separate tool call ne
 
 Sort `get-traffic-referrals-incoming` rows client-side by `share` descending before rendering.
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
 ## Step 6: Classify output intent
 

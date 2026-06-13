@@ -46,9 +46,9 @@ fi
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-- **Smoke**: `get-keywords-seo-overview` for the FIRST keyword from `--keywords` if supplied, else a clear prompt-derived seed term; country=us. The live schema has no keyword positional: realize the smoke as `domain = <target>` plus a `keywords_filter_rules` phrase-include on that keyword (consistent with `aeo-seo-overview-shape`). A 200 IS Call 2 (the SEO overview for the first keyword); reuse it, never re-call.
+- **Smoke**: `get-keywords-seo-overview` for the FIRST keyword from `--keywords` if supplied, else a clear prompt-derived seed term; country=`$COUNTRY` (resolved per sw-foundation-core § default-country resolution; documented default `us`). The live schema has no keyword positional: realize the smoke as `domain = <target>` plus a `keywords_filter_rules` phrase-include on that keyword (consistent with `aeo-seo-overview-shape`). A 200 IS Call 2 (the SEO overview for the first keyword); reuse it, never re-call.
 - If NO keywords were supplied AND the prompt carries no clear seed term, run Step 3 (keyword acquisition) BEFORE this smoke so the smoke spends on a keyword the audit will actually use; fall back to the target's brand term only when the prompt implies a brand-level audit.
-- **Secondary probe**: `get-websites-website-rank`, target domain, country=us. If the smoke is denied but the secondary probe returns 200, ABORT (the recipe cannot ship an AEO audit without SEO-overview signal); render Caveat "AEO audit requires `get-keywords-seo-overview`; tool not accessible on this plan."
+- **Secondary probe**: `get-websites-website-rank`, target domain, country=`$COUNTRY`. If the smoke is denied but the secondary probe returns 200, ABORT (the recipe cannot ship an AEO audit without SEO-overview signal); render Caveat "AEO audit requires `get-keywords-seo-overview`; tool not accessible on this plan."
 - **Pinned absence outcomes**: `get-keywords-seo-overview`: ABORT outright (no smoke retarget exists here; absence supersedes retargeting); `get-websites-serp-players-agg` or `get-websites-landing-pages-agg`: drop their sections and continue; `get-websites-website-rank`: degrade the rank context and derive end_date from the smoke's `meta.last_updated` (the seo-overview response carries it).
 - Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
@@ -121,7 +121,7 @@ Client-side derivations after responses arrive:
 
 5. **From Call 5 (if supplied):** if HTTP 200, parse the prompts payload (prompt text, LLM response, brands mentioned, citations, sentiment, source LLM); cap at 20 prompts for rendering. If HTTP 4xx, OMIT the `## Direct AI-engine signal` section and add Caveat: "Direct AI-engine signal call returned `<status_code>` `<error_message>`; proxy audit completed."
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
 ## Step 6: Classify output intent
 

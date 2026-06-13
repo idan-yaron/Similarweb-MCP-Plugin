@@ -44,8 +44,8 @@ echo "$COMPETITOR" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Invalid comp
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-- **Smoke**: `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain; country=us. Reuse a 200 as the first enrichment row in Call 4 if the seed term ends up in the gap-keywords list.
-- **Secondary probe**: `get-website-analysis-keywords-agg`, target domain, country=us, single-month window, `limit: 5`. If the smoke is denied but the secondary probe returns 200, ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
+- **Smoke**: `get-keywords-overview` for the FIRST keyword from any user-supplied keyword list, else the target's brand term derived from the root domain; country=`$COUNTRY` (resolved per sw-foundation-core § default-country resolution; documented default `us`). Reuse a 200 as the first enrichment row in Call 4 if the seed term ends up in the gap-keywords list.
+- **Secondary probe**: `get-website-analysis-keywords-agg`, target domain, country=`$COUNTRY`, single-month window, `limit: 5`. If the smoke is denied but the secondary probe returns 200, ship the gap table without enrichment (recipe stays viable since enrichment is OPTIONAL).
 - **Pinned absence outcomes**: `get-keywords-overview` (the documented smoke, itself OPTIONAL): retarget the smoke to `get-website-analysis-keywords-agg` and ship the gap table without enrichment (the claims probe is preserved; never skip the smoke); `get-website-analysis-keywords-agg`: ABORT with the caveat (it IS the gap table); `get-websites-website-rank`: degrade the headline and derive end_date from the smoke's `meta.last_updated`; `get-websites-keywords-competitors-agg`: skip Call 1 with its documented denial caveat.
 - Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
@@ -61,10 +61,10 @@ Per sw-foundation-core § bulk-input-from-context. If `--vs` was not supplied an
 | Call | Tool | Purpose |
 |------|------|---------|
 | 0 | `get-websites-website-rank` | Headline rank for BOTH target and competitor + derive effective `end_date` from `meta.last_updated` (NOT this recipe's smoke; the Step 2 smoke is `get-keywords-overview`). Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per call (2 calls = ~12 total). |
-| 1 | `get-websites-keywords-competitors-agg` | Top organic competitors of target, sanity-check that `--vs <competitor>` actually shares keywords. EXACT 3-month window required. ~3 sw_coins. |
-| 2 | `get-website-analysis-keywords-agg` | Target's top organic keywords (limit=25). 3-month window. ~2 sw_coins. |
-| 3 | `get-website-analysis-keywords-agg` | Competitor's top organic keywords (limit=25). 3-month window. ~2 sw_coins. |
-| 4 | `get-keywords-overview` | LOOPED per top-10 gap keyword (where competitor wins but target doesn't), enriches with volume + difficulty + CPC + intent volumes. ~1 sw_coin per keyword (10 calls = ~10 sw_coins). |
+| 1 | `get-websites-keywords-competitors-agg` | Top organic competitors of target, sanity-check that `--vs <competitor>` actually shares keywords. EXACT 3-month window required. ~3 data credits. |
+| 2 | `get-website-analysis-keywords-agg` | Target's top organic keywords (limit=25). 3-month window. ~2 data credits. |
+| 3 | `get-website-analysis-keywords-agg` | Competitor's top organic keywords (limit=25). 3-month window. ~2 data credits. |
+| 4 | `get-keywords-overview` | LOOPED per top-10 gap keyword (where competitor wins but target doesn't), enriches with volume + difficulty + CPC + intent volumes. ~1 data credit per keyword (10 calls = ~10 data credits). |
 
 Default total cost: ~30-40 data credits per run.
 
@@ -99,7 +99,7 @@ Client-side derivations after responses arrive:
 
 6. **Intent clustering (optional):** group gap keywords by their `primary_intent` (Navigational / Informational / Transactional / Local / Job_Search). The Transactional cluster typically has the highest commercial value.
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
 ## Step 6: Classify output intent
 

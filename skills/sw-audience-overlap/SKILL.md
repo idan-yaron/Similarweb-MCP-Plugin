@@ -74,7 +74,7 @@ Calls 1-4 are independent; parallelize. Call 5 loops; parallelize within the loo
 
 ## Step 5: Execute
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. Tolerate unknown meta keys as informational (e.g. `geography-agg` returns an extra `meta.query`).
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. Tolerate unknown meta keys as informational (e.g. `geography-agg` returns an extra `meta.query`).
 
 ### Call 5b derivations: Persona overlap (Jaccard) + Incremental reach decay
 

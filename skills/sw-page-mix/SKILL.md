@@ -36,7 +36,7 @@ echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-page-
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
-- **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (user-supplied or default `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
+- **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (resolved per sw-foundation-core § default-country resolution: user-supplied wins, else the account-coverage default, else `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
 - **Secondary probe**: `get-pages-popular-pages-agg`, target, country=`$COUNTRY`, single-month window, `web_source: total`, `limit: 5`.
 - **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; ONE pages tool: drop its section (the DEGRADABLE semantics below, same as denial); BOTH pages tools: abort with the caveat (nothing to render).
 - Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
@@ -53,10 +53,10 @@ Per sw-foundation-core § bulk-input-from-context. sw-page-mix is single-domain.
 | Call | Tool | Purpose |
 |------|------|---------|
 | 0 | `get-websites-website-rank` | The Step 2 smoke (reused, not re-called) + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. |
-| 1 | `get-pages-popular-pages-agg` | Top URLs by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 25`. 3-month window with `granularity: monthly` (omitting granularity defaults the endpoint to daily, which rejects any window past 28 days). ~75 sw_coins. |
-| 2 | `get-pages-leading-folders-agg` | Top folders by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 15`. 3-month window with `granularity: monthly` (same daily-default rejection). ~45 sw_coins. |
+| 1 | `get-pages-popular-pages-agg` | Top URLs by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 25`. 3-month window with `granularity: monthly` (omitting granularity defaults the endpoint to daily, which rejects any window past 28 days). ~75 data credits. |
+| 2 | `get-pages-leading-folders-agg` | Top folders by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 15`. 3-month window with `granularity: monthly` (same daily-default rejection). ~45 data credits. |
 
-Default total cost: ~125 sw_coins (rank smoke + 25 pages + 15 folders).
+Default total cost: ~125 data credits (rank smoke + 25 pages + 15 folders).
 
 ## Step 5: Execute
 
@@ -81,7 +81,7 @@ Client-side derivations after responses arrive:
    - `EXPOSE`: a content gap that the data implies (e.g., a folder with declining `change` that the top-3 URLs ignore; or the dominant folder concentrating risk).
    - `PLAY`: a follow-up question the user can ask the next recipe (e.g., "How does <target> compare to <competitor> on this folder?").
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
 ## Step 6: Classify output intent
 

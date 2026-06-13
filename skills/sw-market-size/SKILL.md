@@ -114,7 +114,7 @@ Client-side derivations after responses arrive:
 5. Compute HHI from top-10 `revenue_share` values: `hhi = sum(s * s for s in revenue_shares) * 10000`. Note: top-10 covers only ~80% of revenue, so HHI is an underestimate (call this out in the rendered section).
 6. Verify the click identity from Call 2: `total_clicks == category_paid_clicks + category_organic_clicks`. If the identity fails by more than 1 unit (rounding), flag with `[!gap]` in the rendered output (the grounded assumption has shifted).
 
-Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, sw_coins, last_updated}`. Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. For Call 6, distinguish `400 VALIDATION_ERROR` (unrecognized slug; ask the user to re-pick from the hardcoded list) from `404 NOT_FOUND` (recognized slug but no data for the country+window; report empty Web companion section with Caveat).
+Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped. For Call 6, distinguish `400 VALIDATION_ERROR` (unrecognized slug; ask the user to re-pick from the hardcoded list) from `404 NOT_FOUND` (recognized slug but no data for the country+window; report empty Web companion section with Caveat).
 
 ## Step 5.5: Brand-family consolidation check
 

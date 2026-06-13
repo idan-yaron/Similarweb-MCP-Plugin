@@ -106,13 +106,13 @@ Exactly one recipe clearly fits. Infer parameters from the prompt:
 
 - **Target domain**: the domain mentioned in the prompt (lowercase, strip protocol / trailing slash). If no domain is given but a brand is (e.g. "apple"), pick the canonical apex (`apple.com`).
 - **Competitors**: any other domains mentioned. If the prompt uses "and its competitors" or similar, pass through without explicit `--vs`; the recipe will infer.
-- **Country**: explicit country mention normalized to ISO-3166-1 alpha-2 (`"United States"` → `us`). Default `us` when not stated.
+- **Country**: explicit country mention normalized to ISO-3166-1 alpha-2 (`"United States"` → `us`). Default `us` when not stated, resolved against the account's coverage at recipe time per sw-foundation-core § default-country resolution (a worldwide-only plan resolves to `ww`).
 - **Window**: explicit time mention (e.g. "this quarter" → `--window quarter`, "last year" → `--window 12m`). Otherwise let the recipe use its default.
 - **Recipe-specific flags**: e.g. `--vs-period previous-quarter` if the prompt says "compared to last quarter", `--web-companion` if the market-size prompt mentions web traffic, `--keywords ...` if the AEO prompt lists keywords.
 
 Cite the decision in ONE line, then dispatch per § Dispatch mechanics. When ANY parameter was inferred (not stated by the user), the routing-decision line MUST surface the inference in natural language so the user can correct it before the recipe runs. Per sw-foundation-render § citation block conversational-tone rule, the inferred-default citation is phrased as a plain sentence, NOT as a `--flag` hint. Country and window are the two inferences most likely to silently mislead non-US or non-default-window users.
 
-- **Country inferred (not stated)**: append the default in a plain sentence, e.g. "Defaulting to country=us. Ask if you want a global view or a different market."
+- **Country inferred (not stated)**: the recipe resolves the actual country against the account's coverage per sw-foundation-core § default-country resolution, so phrase the printed line as the intent, e.g. "Defaulting to country=us (your plan's primary market; a worldwide-only plan renders ww). Ask if you want a different market."
 - **Window defaulted to non-obvious value**: cite the default in a plain sentence, e.g. "Defaulting to the last 90 days."
 - Both inferences fire when both apply; cite each on its own line under the routing decision.
 

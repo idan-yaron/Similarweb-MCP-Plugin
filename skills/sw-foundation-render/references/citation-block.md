@@ -15,7 +15,7 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 
 `**Sources:** <total> data credits across <N> calls (<per-tool-rollup>).<optional-status-suffix>`
 
-- `<total>` = sum of `data_credits` (mapped from each response's `meta.sw_coins`; missing/null = 0). Always emit even if 0. MCP-side field is `sw_coins`; the rename to "data credits" / `data_credits` happens at render/serialization time.
+- `<total>` = sum of `data_credits` per call. Read each response's `meta.data_credits_charged` (the live MCP field), falling back to the legacy `meta.sw_coins` for older server deploys. When a call carries NEITHER field, treat that call as unknown (not 0): sum the known calls and append ` (<K> call(s) of unknown cost)` to the total, so a missing field never silently renders as free. When every call's cost is known, emit the plain total even if it is 0. The rename to "data credits" / `data_credits` happens at render/serialization time; grounded in `cheap-probe-tool-per-category` (field rename observed 2026-06).
 - `<N>` = total call count.
 - `<per-tool-rollup>` = comma-separated `<count> <tool-suffix>` pairs. Drop the `get-` / `get-websites-` / `get-keywords-` / `get-categories-` / `get-apps-` / `get-brands-` / `get-traffic-` prefix and the `-agg` suffix (e.g., `4 rank`, `2 traffic-and-engagement`). Sort by descending count then alphabetical.
 - `<optional-status-suffix>` = appended ONLY when something interesting happened. On FULL success (every call 2xx on first attempt, no retries) the line ENDS after the per-tool-rollup's closing period. No "All 200" noise.
