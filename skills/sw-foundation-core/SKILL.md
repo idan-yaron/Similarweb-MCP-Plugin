@@ -189,3 +189,4 @@ This skill's behavior is live-validated against the following grounded assertion
 - describe-envelope-and-coverage-probe
 - audience-geography-shape
 - keywords-latest-agg-shape
+- referral-pipelines-divergence

@@ -14,6 +14,8 @@ State enum reduces to simple list semantics: `tools_inaccessible: ["get-X", "get
 
 **Special case:** if a recipe's REQUIRED tool returns access-denied AND there is no fallback path, render: "Tool {X} is not accessible on this plan. Required for this recipe. Aborting; contact your CSM if you believe you should have access." Exit cleanly with the Sources line.
 
+**Fallback-on-denial.** A recipe MAY define a FALLBACK tool that fires when a primary tool is denied (403 claims) OR absent (per § tool-surface presence), instead of only skipping or aborting. The primary call IS the probe: attempt it, and on the 403/absence (recorded as above), run the fallback in the SAME turn; subsequent runs read the recorded denial and skip straight to the fallback. A tool that is present-in-the-list-but-403 is NOT caught by absence detection, so the try-and-catch-403 pattern is the only reliable trigger for such tools. Canonical example: sw-aeo-audit attempts `get-ai-traffic-landing-pages-agg` (present-but-403 on accounts lacking the AI-research claim) and falls back to `get-websites-referrals-agg` for an AI-referrer proxy.
+
 ## In-run capability tracking
 
 Maintain an in-memory map `inaccessible_this_run: dict[tool_name, set[domain]]` from the start of every recipe turn. Before each MCP call, check the map. After each call:
