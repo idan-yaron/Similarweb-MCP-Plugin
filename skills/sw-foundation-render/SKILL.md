@@ -159,6 +159,7 @@ This skill's behavior is live-validated against the following grounded assertion
 
 - response-field-name-lookup
 - country-coverage-gap-shape
+- audience-geography-shape
 - unknown-tool-error-shape
 - unknown-tool-error-shape-other-platforms
 - website-rank-no-global-field
