@@ -190,3 +190,5 @@ This skill's behavior is live-validated against the following grounded assertion
 - audience-geography-shape
 - keywords-latest-agg-shape
 - referral-pipelines-divergence
+- technologies-agg-shape
+- traffic-by-demographics-semantics

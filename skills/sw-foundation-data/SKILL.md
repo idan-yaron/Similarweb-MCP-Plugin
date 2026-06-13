@@ -48,6 +48,10 @@ Per-tool credit cost varies by tool FAMILY, not one global rule. The charge is i
 
 This taxonomy is an empirical starting heuristic, re-grounded per tool, never a server guarantee; verify a new tool's shape at a second limit and window before asserting it.
 
+### § category-vocabulary
+
+The category string returned by `get-websites-website-rank` and `get-websites-similar-sites-agg` (e.g. `Lifestyle/Fashion_and_Apparel`) is DISPLAY taxonomy; it is NOT the slug vocabulary `get-websites-top-sites-by-category-agg` accepts (a transferred string 400s with "Selected category is not supported.") NOR the numeric Amazon category IDs the shopper tools use. Never transfer a category identifier across these families; each has its own vocabulary, and top-sites slugs come only from the hardcoded list a recipe pins. Per `categories-search-resolution` and `top-sites-by-category-shape`.
+
 ### § conversation-context
 
 When the conversation already contains a prior recipe's output (detected by the standard recipe header line and the bold Sources line), reuse it: skip redundant tool calls, reference prior findings, tighten NEXT MOVES. The detection pattern, the three reuse rules (window and freshness, competitor set, effective end_date), and the cross-reference sentence live in `references/conversation-context.md`; Read it when a prior recipe header is present in context. Hard floor kept inline: NEVER fabricate a prior-recipe finding (only what literally appears in context); when in doubt re-resolve with a fresh call (a redundant call is cheaper than a stale figure); when no prior recipe ran this session, skip this helper silently.
