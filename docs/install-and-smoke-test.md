@@ -6,10 +6,10 @@ Per-platform install instructions, verification steps, smoke tests, known limita
 
 Download the bundle for your AI client from the [Releases page](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest). The four AI-environment bundles ship as `.zip` assets attached to each release:
 
-- `similarweb-cowork-0.1.14.zip` (Cowork-native flagship; also accepted as `.plugin`)
-- `similarweb-claude-code-0.1.14.zip` (Claude Code bundle; skills + commands subset)
-- `similarweb-codex-0.1.14.zip` (Codex CLI bundle; skills-only subset)
-- `similarweb-cursor-0.1.14.zip` (Cursor bundle; skills + commands subset)
+- `similarweb-cowork-0.1.18.zip` (Cowork-native flagship; also accepted as `.plugin`)
+- `similarweb-claude-code-0.1.18.zip` (Claude Code bundle; skills + commands subset)
+- `similarweb-codex-0.1.18.zip` (Codex CLI bundle; skills-only subset)
+- `similarweb-cursor-0.1.18.zip` (Cursor bundle; skills + commands subset)
 
 The Cowork bundle is the flagship target with the full surface (skills + commands + agents + hooks + artifacts + connectors). The other three carry the skills (plus commands where the platform supports them) without the Cowork-only layer.
 
@@ -34,7 +34,7 @@ For each platform below, the "Verify MCP is configured" section tells you where 
 
 ### Where the bundle lives
 
-`similarweb-cowork-0.1.14.zip`
+`similarweb-cowork-0.1.18.zip`
 
 Contents (32 files):
 
@@ -83,7 +83,7 @@ In Cowork: **Customize > Connectors > Similarweb**. If the toggle is off or the 
 
 1. Open Cowork.
 2. Click **Customize > Plugins > Upload plugin**.
-3. Select `similarweb-cowork-0.1.14.zip`.
+3. Select `similarweb-cowork-0.1.18.zip`.
 4. Cowork validates the bundle (LF line endings, canonical frontmatter, hooks.json shape). The validator should accept the bundle on first try.
 5. Cowork loads the plugin into the active session. No restart required.
 
@@ -122,7 +122,7 @@ In Cowork: **Customize > Connectors > Similarweb**. If the toggle is off or the 
 
 ### Where the bundle lives
 
-`similarweb-claude-code-0.1.14.zip`
+`similarweb-claude-code-0.1.18.zip`
 
 Contents:
 
@@ -222,28 +222,45 @@ The Codex bundle is a spec-compliant Codex MARKETPLACE per [developers.openai.co
 
 ### Where the bundles live
 
-- `similarweb-codex-0.1.14.zip` is attached to the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest); download it from there.
-- `similarweb-codex-subagents-0.1.14/` (optional companion: 3 sub-agent TOMLs) is NOT attached to the official release. To get it, clone the repo and run `python3 build.py --build`; the directory and TOMLs appear under `dist/`.
+- `similarweb-codex-0.1.18.zip` is attached to the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest); download it from there.
+- `similarweb-codex-subagents-0.1.18/` (optional companion: 3 sub-agent TOMLs) is NOT attached to the official release. To get it, clone the repo and run `python3 build.py --build`; the directory and TOMLs appear under `dist/`.
 
 ### Codex marketplace bundle contents
 
 ```
 .agents/plugins/marketplace.json                            (Codex marketplace manifest)
 plugins/similarweb/.codex-plugin/plugin.json                (plugin manifest with full interface block)
-plugins/similarweb/.mcp.json.template                       (template; rename to .mcp.json after filling)
+plugins/similarweb/.mcp.json.template                       (shape reference only; Codex does not read it from the plugin dir)
 plugins/similarweb/assets/logo.png                          (install-card icon and logo)
 plugins/similarweb/skills/sw-aeo-audit/SKILL.md
 plugins/similarweb/skills/sw-aeo-audit/agents/openai.yaml
 ... (13 skills, each with its own agents/openai.yaml)
 ```
 
-Per-skill `skills/<name>/agents/openai.yaml` carries `interface` and `policy.allow_implicit_invocation` per the Codex spec. The seven user-invocable recipes get a full interface block (displayName, defaultPrompt) plus implicit invocation. Operator skills (sw-config, sw-setup), the router, and the three foundations get `policy.allow_implicit_invocation: true` only.
+Per-skill `skills/<name>/agents/openai.yaml` carries an `interface` block (snake_case `display_name`, `short_description`, and a scalar `default_prompt`, the shape the Codex skill loader honors) plus `policy.allow_implicit_invocation`. The seven recipes get the full interface block plus `allow_implicit_invocation: true`. The router, sw-setup, and sw-config get `allow_implicit_invocation: true` (policy only). The three foundations get `allow_implicit_invocation: false` so Codex never auto-selects a pure inherited helper standalone.
 
-### Verify MCP is configured (do this BEFORE installing the plugin)
+### Connect the Similarweb MCP server (do this BEFORE installing the plugin)
 
-Your Codex `mcp.json` must contain a `mcpServers.similarweb` block with the transport, command, and `SIMILARWEB_API_KEY` env var. Populate it from Similarweb's official Codex install instructions for your account.
+Codex connects to Similarweb data separately from the plugin (a plugin `.mcp.json` is never auto-loaded). Connect it one of these ways:
 
-The bundle ships `plugins/similarweb/.mcp.json.template` as a shape reference (transport, command, args, env var name). To use it: unzip the bundle, rename `.mcp.json.template` to `.mcp.json`, fill in your real values. Codex never reads `.mcp.json.template` directly, so no auto-spawn happens on the placeholder values.
+Option 0 (easiest), the OpenAI-curated Similarweb connector: in Codex Desktop, connect the Similarweb app from the connector catalog (it handles auth). Its tools register under an OpenAI app namespace as `get-websites-...`, and the recipes call them by name. Verified end-to-end on 2026-06-21: a channel-mix run drove `get-websites-website-rank`, `get-websites-traffic-channels`, `get-traffic-referrals-incoming`, `get-websites-ppc-spend`, and `get-website-analysis-ad-networks-agg` to completion and rendered the report.
+
+Method 1, bring-your-own stdio MCP server:
+
+```bash
+codex mcp add similarweb -- <your-similarweb-mcp-command> --stdio
+```
+
+Method 2, edit `~/.codex/config.toml` and add:
+
+```toml
+[mcp_servers.similarweb]
+command = "<your-similarweb-mcp-command>"
+args = ["--stdio"]
+env = { SIMILARWEB_API_KEY = "<your-similarweb-api-key>" }
+```
+
+Fill in the command, args, and env var from Similarweb's official MCP instructions for your account. Confirm with `codex mcp list` (the `similarweb` server should be listed) or by invoking any `similarweb` MCP tool by name in a fresh `codex` chat. The bundled `plugins/similarweb/.mcp.json.template` documents the shape only; it is never read from the plugin dir.
 
 ### Install (recommended: Codex Desktop UI)
 
@@ -253,7 +270,7 @@ The canonical Codex marketplace tree is committed at the repo root (`.agents/plu
 2. Click the marketplace dropdown next to the search bar (it defaults to **Built by OpenAI**) and choose **+ Add more**.
 3. In the **Add marketplace** dialog:
    - **Source**: `idan-yaron/Similarweb-MCP-Plugin`
-   - **Git ref**: `v0.1.14` (or `main` for the latest)
+   - **Git ref**: `v0.1.18` (or `main` for the latest)
    - **Sparse paths**: leave blank
 4. Click **Add marketplace**. The marketplace registers; the Similarweb plugin appears under the marketplace dropdown.
 5. Open a new chat in Codex and type `compare nike.com and adidas.com on similarweb`. The `sw-router` skill auto-dispatches to `sw-competitive-teardown` and you should see a structured response with rank, traffic, channels, audience overlap, and strategic insights.
@@ -264,11 +281,11 @@ Codex's manifest loader looks at the staging ROOT for `.agents/plugins/marketpla
 
 For users who prefer the terminal or want to point Codex at an unzipped Release bundle:
 
-1. Download `similarweb-codex-0.1.14.zip` from the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest).
+1. Download `similarweb-codex-0.1.18.zip` from the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest).
 2. From the directory containing the downloaded zip, run:
 
 ```bash
-unzip similarweb-codex-0.1.14.zip -d ./similarweb-codex
+unzip similarweb-codex-0.1.18.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
 codex plugin add similarweb@Similarweb
 ```
@@ -294,7 +311,7 @@ git clone https://github.com/idan-yaron/Similarweb-MCP-Plugin.git
 cd Similarweb-MCP-Plugin
 python3 build.py --build
 mkdir -p ~/.codex/agents
-cp dist/similarweb-codex-subagents-0.1.14/*.toml ~/.codex/agents/
+cp dist/similarweb-codex-subagents-0.1.18/*.toml ~/.codex/agents/
 ```
 
 After install the three agents are available in Codex's agent palette and via `@<agent-name>` dispatch.
@@ -323,16 +340,16 @@ Look for: the 10-channel taxonomy table, a delta column (current vs prior), an i
 ### Known limitations
 
 - Codex slash-command surface varies by version; if `/sw-config` is not accepted, invoke by saying "run sw-config" or "show similarweb config" and let the router dispatch.
-- Per-skill `policy.allow_implicit_invocation: true` causes the router and recipes to fire on natural-language prompts. If your Codex policy disables implicit invocation, invoke each recipe by name.
+- The seven recipes and the router carry `policy.allow_implicit_invocation: true`, so they fire on natural-language prompts; the three foundations carry `false` and are never auto-selected standalone. If your Codex policy disables implicit invocation, invoke each recipe by name.
 - Sub-agents are NOT bundled with the plugin (Codex spec puts them outside plugins). Install the companion artifact separately to get them.
-- **The Codex bundle ships no hooks (as of v0.1.10)**: hooks were no-ops on codex-cli 0.133.0-alpha.1 (live probes showed no hook execution or output in `exec` rollouts), and a later Codex build began running them at per-turn cost with no benefit, so the Codex bundle omits `hooks/` entirely. Hooks remain Cowork-only. The capability-map summary those hooks would inject is discovered lazily via the foundation skills at runtime. We will revisit Codex hooks if a future codex-cli documents and reliably executes hook output in `exec` mode.
+- **The Codex bundle ships no hooks (as of v0.1.10)**: hooks were no-ops on codex-cli 0.133.0-alpha.1 (live probes showed no hook execution or output in `exec` rollouts), and a later Codex build began running them at per-turn cost with no benefit, so the Codex bundle omits `hooks/` entirely. Re-confirmed live on codex-cli 0.134.0 (2026-06-20): a SessionStart hook's `additionalContext` did not surface to the model in an `exec` session (a marker-passphrase probe returned `NONE_INJECTED`), so re-enabling Codex hooks would add cost with no benefit. Hooks remain Cowork-only. The capability-map summary those hooks would inject is discovered lazily via the foundation skills at runtime. We will revisit Codex hooks if a future codex-cli documents and reliably surfaces hook output in `exec` mode.
 
 ### Troubleshooting
 
 - **`Error: invalid marketplace file ...: marketplace root does not contain a supported manifest`**: you pointed `codex plugin marketplace add` at a path that is not a Codex marketplace root. The bundle root must contain `.agents/plugins/marketplace.json`. If you unzipped to `./similarweb-codex/`, that directory IS the marketplace root and the manifest sits at `./similarweb-codex/.agents/plugins/marketplace.json`. Re-check the unzip step.
 - **Skills not discovered**: confirm each `plugins/similarweb/skills/sw-*/SKILL.md` exists and each frontmatter parses. Every SKILL.md must start with `---\n` and have `name:` and `description:` fields.
 - **Per-skill `agents/openai.yaml` errors on load**: open the file and check it carries exactly the documented two-key shape (an optional `interface:` block plus a `policy:` block); each file is hand-rolled by `build.py` with that fixed shape, so any deviation means a corrupted unzip or a stale build.
-- **`mcp_not_configured`**: same diagnosis as Claude Code; verify the `.mcp.json` exists at the plugin root after the rename step, or the `mcpServers.similarweb` block is in your global Codex MCP config.
+- **`mcp_not_configured`**: the Similarweb MCP server is not connected to Codex. Run `codex mcp list`; if `similarweb` is missing, add it with `codex mcp add similarweb -- <your-similarweb-mcp-command> --stdio` or an `[mcp_servers.similarweb]` block in `~/.codex/config.toml` (see "Connect the Similarweb MCP server" above). There is no rename step; Codex does not read a plugin `.mcp.json`.
 - **Recipe runs but renders no Sources line**: the foundation skill did not load. Confirm `plugins/similarweb/skills/sw-foundation-render/SKILL.md` is present; the foundations load via each recipe's `Inherits:` block, so re-invoke the recipe by name rather than relying on a bare keyword.
 - **Sub-agent palette empty**: confirm the companion TOMLs landed in `~/.codex/agents/` (or `.codex/agents/` for project scope). Validate each with `python3 -c "import tomllib; tomllib.load(open('similarweb-analyst.toml','rb'))"`.
 
@@ -342,7 +359,7 @@ Look for: the 10-channel taxonomy table, a delta column (current vs prior), an i
 
 ### Where the bundle lives
 
-`similarweb-cursor-0.1.14.zip`
+`similarweb-cursor-0.1.18.zip`
 
 Contents:
 
@@ -385,7 +402,7 @@ Cursor's plugin surface is the newest of the five targets and still shifting; tr
 Option A (in-app):
 
 1. In Cursor, run your version's plugin-install flow (e.g. an `/add-plugin` command-palette entry, or Settings > Plugins, where available).
-2. Point at the local path of `similarweb-cursor-0.1.14.zip` (or a directory containing the unzipped `.cursor-plugin/` tree).
+2. Point at the local path of `similarweb-cursor-0.1.18.zip` (or a directory containing the unzipped `.cursor-plugin/` tree).
 3. Reload the Cursor window.
 
 Option B (marketplace):
@@ -396,7 +413,7 @@ Option B (marketplace):
 ### Verify install
 
 - The sw-config command is available in the Cursor chat command palette (possibly namespaced under similarweb).
-- Settings > Plugins should list `similarweb` with version 0.1.14.
+- Settings > Plugins should list `similarweb` with version 0.1.18.
 - A free-form Similarweb prompt triggers sw-router.
 
 ### Smoke test
@@ -432,7 +449,7 @@ Look for:
 
 ### Where the bundles live
 
-`similarweb-claude-ai-0.1.14/` (a directory, NOT a single zip)
+`similarweb-claude-ai-0.1.18/` (a directory, NOT a single zip)
 
 Contents (13 per-skill zips, uploaded one at a time):
 

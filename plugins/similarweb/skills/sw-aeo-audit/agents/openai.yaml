@@ -1,6 +1,6 @@
 interface:
-  displayName: AEO Audit
-  defaultPrompt:
-    - "Audit chase.com Answer Engine Optimization posture"
+  display_name: AEO Audit
+  short_description: "Answer Engine Optimization posture audit for a domain."
+  default_prompt: "Audit chase.com Answer Engine Optimization posture"
 policy:
   allow_implicit_invocation: true

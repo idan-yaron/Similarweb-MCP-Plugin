@@ -107,7 +107,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -127,9 +127,11 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.17` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is filled from MCP `meta.data_credits_charged` (the live field), falling back to the legacy `meta.sw_coins`; a call missing both is recorded with `data_credits: null` (unknown, never 0). See § citation block.
+The `version` literal `0.1.18` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is filled from MCP `meta.data_credits_charged` (the live field), falling back to the legacy `meta.sw_coins`; a call missing both is recorded with `data_credits: null` (unknown, never 0). See § citation block.
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
+
+Persistent export (non-Cowork platforms). On platforms without the Cowork rich-render tiers (Codex, Claude Code, Cursor, Claude.ai) the conversation is the only default surface, so there is no saved artifact. When the user asks for a persistent or shareable deliverable (a file, a saved report, an export), write one to the working directory with the `Write` tool: either this handoff JSON as `similarweb-<recipe>-<target>.json`, or a markdown copy of the rendered output as `similarweb-<recipe>-<target>.md`, then cite the saved path. Do this only on request, never write files unprompted, and when no export was asked for, offer it as one NEXT MOVES option.
 
 ### § expert-heuristics
 

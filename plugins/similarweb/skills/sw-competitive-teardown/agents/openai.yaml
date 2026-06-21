@@ -1,6 +1,6 @@
 interface:
-  displayName: Competitive Teardown
-  defaultPrompt:
-    - "Compare nike.com vs adidas.com on Similarweb"
+  display_name: Competitive Teardown
+  short_description: "Full competitive profile of rank, traffic, channels, audience."
+  default_prompt: "Compare nike.com vs adidas.com on Similarweb"
 policy:
   allow_implicit_invocation: true

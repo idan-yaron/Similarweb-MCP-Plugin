@@ -1,6 +1,6 @@
 interface:
-  displayName: Channel Mix
-  defaultPrompt:
-    - "Break down apple.com traffic channels over the last 90 days"
+  display_name: Channel Mix
+  short_description: "Traffic-channel breakdown with period-over-period deltas."
+  default_prompt: "Break down apple.com traffic channels over the last 90 days"
 policy:
   allow_implicit_invocation: true

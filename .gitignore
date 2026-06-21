@@ -8,13 +8,11 @@ dist/
 # Autoresearch loop artifacts (probe reports + findings, local-only)
 autoresearch/
 
-# Local-only authoring + planning artifacts (never push to public repo)
+# Local-only authoring + planning artifacts (never push to public repo).
+# Everything under docs/ is local-only EXCEPT the public install + smoke-test guide.
 CLAUDE.md
-docs/superpowers/
-docs/plans/
-docs/brainstorms/
-docs/cowork-architecture-notes.md
-docs/codex-install-live-probe-*.md
+docs/*
+!docs/install-and-smoke-test.md
 
 # Similarweb product UI screenshots (brand/IP, never push)
 sw-*.png

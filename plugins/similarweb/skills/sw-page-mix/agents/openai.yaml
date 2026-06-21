@@ -1,6 +1,6 @@
 interface:
-  displayName: Page Mix
-  defaultPrompt:
-    - "Top URLs and folders for shopify.com"
+  display_name: Page Mix
+  short_description: "Top URLs and leading folders for a domain."
+  default_prompt: "Top URLs and folders for shopify.com"
 policy:
   allow_implicit_invocation: true

@@ -1,6 +1,6 @@
 interface:
-  displayName: Audience Overlap
-  defaultPrompt:
-    - "Audience overlap for nike.com vs adidas.com"
+  display_name: Audience Overlap
+  short_description: "Shared-audience analysis between two or more domains."
+  default_prompt: "Audience overlap for nike.com vs adidas.com"
 policy:
   allow_implicit_invocation: true

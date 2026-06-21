@@ -1,6 +1,6 @@
 interface:
-  displayName: Keyword Opportunity
-  defaultPrompt:
-    - "Keyword gaps between notion.so and evernote.com"
+  display_name: Keyword Opportunity
+  short_description: "Keyword-gap analysis between two domains."
+  default_prompt: "Keyword gaps between notion.so and evernote.com"
 policy:
   allow_implicit_invocation: true

@@ -103,36 +103,73 @@ CODEX_DEFAULT_PROMPTS = [
 CODEX_MARKETPLACE_NAME = "Similarweb"
 CODEX_MARKETPLACE_DISPLAY = "Similarweb"
 
+# Per-skill Codex install-card interface. snake_case keys with a SCALAR
+# default_prompt is the shape the Codex skill loader honors (camelCase + a list
+# default_prompt is silently ignored at the skill layer). Recipes only; the
+# router, operators, and foundations get policy-only openai.yaml.
 CODEX_SKILL_INTERFACES = {
     "sw-aeo-audit": {
-        "displayName": "AEO Audit",
-        "defaultPrompt": "Audit chase.com Answer Engine Optimization posture",
+        "display_name": "AEO Audit",
+        "short_description": "Answer Engine Optimization posture audit for a domain.",
+        "default_prompt": "Audit chase.com Answer Engine Optimization posture",
     },
     "sw-audience-overlap": {
-        "displayName": "Audience Overlap",
-        "defaultPrompt": "Audience overlap for nike.com vs adidas.com",
+        "display_name": "Audience Overlap",
+        "short_description": "Shared-audience analysis between two or more domains.",
+        "default_prompt": "Audience overlap for nike.com vs adidas.com",
     },
     "sw-channel-mix": {
-        "displayName": "Channel Mix",
-        "defaultPrompt": "Break down apple.com traffic channels over the last 90 days",
+        "display_name": "Channel Mix",
+        "short_description": "Traffic-channel breakdown with period-over-period deltas.",
+        "default_prompt": "Break down apple.com traffic channels over the last 90 days",
     },
     "sw-competitive-teardown": {
-        "displayName": "Competitive Teardown",
-        "defaultPrompt": "Compare nike.com vs adidas.com on Similarweb",
+        "display_name": "Competitive Teardown",
+        "short_description": "Full competitive profile of rank, traffic, channels, audience.",
+        "default_prompt": "Compare nike.com vs adidas.com on Similarweb",
     },
     "sw-keyword-opportunity": {
-        "displayName": "Keyword Opportunity",
-        "defaultPrompt": "Keyword gaps between notion.so and evernote.com",
+        "display_name": "Keyword Opportunity",
+        "short_description": "Keyword-gap analysis between two domains.",
+        "default_prompt": "Keyword gaps between notion.so and evernote.com",
     },
     "sw-market-size": {
-        "displayName": "Market Size",
-        "defaultPrompt": "Market size for cloud storage software",
+        "display_name": "Market Size",
+        "short_description": "Category market-size and demand estimate.",
+        "default_prompt": "Market size for cloud storage software",
     },
     "sw-page-mix": {
-        "displayName": "Page Mix",
-        "defaultPrompt": "Top URLs and folders for shopify.com",
+        "display_name": "Page Mix",
+        "short_description": "Top URLs and leading folders for a domain.",
+        "default_prompt": "Top URLs and folders for shopify.com",
     },
 }
+
+# Codex per-skill policy.allow_implicit_invocation. Default rule: a skill is
+# implicitly invocable unless its SKILL.md sets `user-invocable: false` (pure
+# inherited-helper content). The three foundations carry user-invocable: false,
+# so they emit allow_implicit_invocation: false and are never auto-selected
+# standalone on Codex (which has no slash commands; skills auto-select by
+# description). CODEX_FORCE_IMPLICIT overrides to true for background skills that
+# SHOULD stay auto-selectable: sw-router is the free-form dispatcher, so it must
+# stay implicit for prompts to reach a recipe. CODEX_FORCE_NON_IMPLICIT overrides
+# to false for default-invocable skills that should be explicit-only (empty today).
+# sw-router is the dispatcher; sw-setup is the capability-probe operator that
+# Codex has no slash-command wrapper for, so both must stay auto-selectable by
+# intent even though their SKILL.md marks them user-invocable: false for the
+# Claude Code command surface.
+CODEX_FORCE_IMPLICIT = {"sw-router", "sw-setup"}
+CODEX_FORCE_NON_IMPLICIT = set()
+
+
+def _codex_allow_implicit(skill_name, skill_fm):
+    """Resolve policy.allow_implicit_invocation for one skill's Codex openai.yaml.
+    Precedence: explicit FORCE sets win, then the user-invocable frontmatter rule."""
+    if skill_name in CODEX_FORCE_NON_IMPLICIT:
+        return False
+    if skill_name in CODEX_FORCE_IMPLICIT:
+        return True
+    return str(skill_fm.get("user-invocable", "true")).strip().lower() != "false"
 
 
 def is_text(path):
@@ -271,7 +308,8 @@ def _copy_skills(skills_target, exclude_cowork_only, strip_cowork, include_cowor
             dest_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(src, dest_file)
         if write_openai_yaml:
-            _write_codex_skill_openai_yaml(skill_target, name)
+            fm, _ = parse_frontmatter(path)
+            _write_codex_skill_openai_yaml(skill_target, name, _codex_allow_implicit(name, fm))
 
 
 def parse_frontmatter(skill_md_path):
@@ -532,8 +570,15 @@ def cmd_validate():
         if ": " in desc:
             errors.append(
                 f"{path}: description contains a colon followed by a space; strict YAML "
-                f"parsers (PyYAML, js-yaml) reject plain scalars containing ': '. "
-                f"Reword without the colon (e.g. 'such as' instead of ':')."
+                f"parsers (PyYAML, js-yaml, and Codex's loader) reject plain scalars "
+                f"containing ': ' with 'mapping values are not allowed here', so the skill "
+                f"silently fails to load on Codex. Reword without the colon (e.g. 'such as')."
+            )
+        if " #" in desc:
+            errors.append(
+                f"{path}: description contains a space followed by '#'; strict YAML parsers "
+                f"treat ' #' in a plain scalar as a comment and silently truncate the value. "
+                f"Reword without the '#'."
             )
     if not PLUGIN_MANIFEST.exists():
         errors.append(f"missing {PLUGIN_MANIFEST}")
@@ -703,6 +748,43 @@ def cmd_validate():
                         f"strips it from non-Cowork bundles): {offenders[:3]}. "
                         f"strip_cowork_sections or the copy filter missed it; re-run "
                         f"build.py --build."
+                    )
+
+        # Per-skill Codex openai.yaml must use the snake_case shape the skill
+        # loader honors, and the three foundations must be non-implicit so Codex
+        # never auto-selects a pure inherited helper standalone.
+        skills_mirror = plugin_at.parent.parent / "skills"
+        codex_foundations = {"sw-foundation-core", "sw-foundation-data", "sw-foundation-render"}
+        if skills_mirror.is_dir():
+            for sk in sorted(skills_mirror.iterdir()):
+                if not sk.is_dir():
+                    continue
+                oy = sk / "agents" / "openai.yaml"
+                if not oy.is_file():
+                    errors.append(
+                        f"{oy}: missing per-skill Codex openai.yaml. Re-run build.py --build."
+                    )
+                    continue
+                txt = oy.read_text(encoding="utf-8")
+                for bad in ("displayName", "defaultPrompt", "shortDescription", "brandColor"):
+                    if bad in txt:
+                        errors.append(
+                            f"{oy}: camelCase key '{bad}' present. The Codex skill loader honors "
+                            f"snake_case (display_name, default_prompt, short_description); fix "
+                            f"_write_codex_skill_openai_yaml and re-run build.py --build."
+                        )
+                if "allow_implicit_invocation:" not in txt:
+                    errors.append(
+                        f"{oy}: missing policy.allow_implicit_invocation. Re-run build.py --build."
+                    )
+                if re.search(r"default_prompt:\s*\n\s*-\s", txt):
+                    errors.append(
+                        f"{oy}: default_prompt is a list; the Codex skill loader expects a scalar string."
+                    )
+                if sk.name in codex_foundations and "allow_implicit_invocation: false" not in txt:
+                    errors.append(
+                        f"{oy}: foundation skill must emit allow_implicit_invocation: false "
+                        f"(pure inherited helper, never auto-selected standalone on Codex)."
                     )
 
     cc_marketplace = REPO_ROOT / ".claude-plugin" / "marketplace.json"
@@ -976,26 +1058,28 @@ def _wipe_codex_marketplace_dirs(root):
             shutil.rmtree(sub_path)
 
 
-def _write_codex_skill_openai_yaml(skill_dir, skill_name):
-    """Emit skills/<name>/agents/openai.yaml. Recipes carry displayName + defaultPrompt
-    for the Codex install card. Operators, router, and foundations get policy-only
-    (allow_implicit_invocation: true), matching the per-skill metadata adjunct shape
-    documented at developers.openai.com/codex/plugins/build."""
+def _write_codex_skill_openai_yaml(skill_dir, skill_name, allow_implicit):
+    """Emit skills/<name>/agents/openai.yaml in the snake_case shape the Codex
+    skill loader honors. Recipes carry interface.display_name plus a SCALAR
+    interface.default_prompt (and a short_description) for the install card.
+    policy.allow_implicit_invocation is decided per skill by the caller: pure
+    inherited-helper skills (the foundations) emit false so they are never
+    auto-selected standalone; user-facing skills emit true. snake_case keys and a
+    scalar default_prompt match OpenAI's own Codex plugins; the prior camelCase +
+    list default_prompt was silently ignored at the skill layer."""
     agents_dir = skill_dir / "agents"
     agents_dir.mkdir()
     interface = CODEX_SKILL_INTERFACES.get(skill_name)
+    lines = []
     if interface:
-        content = (
-            "interface:\n"
-            f"  displayName: {interface['displayName']}\n"
-            "  defaultPrompt:\n"
-            f"    - \"{interface['defaultPrompt']}\"\n"
-            "policy:\n"
-            "  allow_implicit_invocation: true\n"
-        )
-    else:
-        content = "policy:\n  allow_implicit_invocation: true\n"
-    (agents_dir / "openai.yaml").write_text(content, encoding="utf-8")
+        lines.append("interface:")
+        lines.append(f"  display_name: {interface['display_name']}")
+        if interface.get("short_description"):
+            lines.append(f'  short_description: "{interface["short_description"]}"')
+        lines.append(f'  default_prompt: "{interface["default_prompt"]}"')
+    lines.append("policy:")
+    lines.append(f"  allow_implicit_invocation: {'true' if allow_implicit else 'false'}")
+    (agents_dir / "openai.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def emit_codex_subagents(manifest, version):

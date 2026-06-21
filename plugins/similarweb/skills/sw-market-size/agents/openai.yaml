@@ -1,6 +1,6 @@
 interface:
-  displayName: Market Size
-  defaultPrompt:
-    - "Market size for cloud storage software"
+  display_name: Market Size
+  short_description: "Category market-size and demand estimate."
+  default_prompt: "Market size for cloud storage software"
 policy:
   allow_implicit_invocation: true
