@@ -46,7 +46,7 @@ The rank probe uses `end_date="latest"` (the server resolves to actual `meta.las
 
 ## Step 2: Write capabilities.json
 
-Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source; Python 3 via Bash, atomic write, no BOM, never improvised inline code). Pipe ONE JSON document on stdin to the script's init subcommand, e.g. `python3 scripts/capmap.py init <<'JSONEOF' ... JSONEOF`. Document shape (the AI client substitutes the actual probe outcomes; example values shown, apps probed via the sibling get-apps-details):
+Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source; Python 3, atomic write, no BOM, never improvised inline code). Write ONE JSON document to a temp file with the Write tool (cross-platform, no shell heredoc), then run `python3 scripts/capmap.py init --file <tempfile>` (use `python` if `python3` is unavailable, e.g. on Windows). Document shape (the AI client substitutes the actual probe outcomes; example values shown, apps probed via the sibling get-apps-details):
 
 ```json
 {
@@ -74,7 +74,7 @@ This write OVERWRITES any existing `capabilities.json` (including lazy-built app
 
 ## Step 2.5: Seed coverage (after the init write)
 
-After the init write succeeds, record the account's data coverage so recipes resolve their default country without burning a sacrificial country 400 (per sw-foundation-core § default-country resolution). Pipe ONE JSON document to the writer's `coverage` subcommand, e.g. `python3 scripts/capmap.py coverage <<'JSONEOF' ... JSONEOF`. Document shape (substitute the values captured by the Step 1 coverage seed):
+After the init write succeeds, record the account's data coverage so recipes resolve their default country without burning a sacrificial country 400 (per sw-foundation-core § default-country resolution). Write ONE JSON document to a temp file with the Write tool, then run `python3 scripts/capmap.py coverage --file <tempfile>`. Document shape (substitute the values captured by the Step 1 coverage seed):
 
 ```json
 {

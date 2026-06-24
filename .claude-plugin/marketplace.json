@@ -9,7 +9,7 @@
       "name": "similarweb",
       "source": "./",
       "description": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output.",
-      "version": "0.1.18",
+      "version": "0.1.19",
       "author": {
         "name": "Similarweb"
       },

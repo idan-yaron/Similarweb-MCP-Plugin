@@ -19,13 +19,23 @@ atomically (mkstemp + os.replace, UTF-8, no BOM). Python 3 stdlib only.
   init         stdin the full probe-outcome document (see sw-setup Step 2)
                overwrites the map with the v2 full-probe schema
   show         no stdin; renders the human capability summary
+  sched        no input; renders the grounding-schedule status block
+  recycle [NAME]  move a file under ~/.similarweb-plugin/ (default
+               capabilities.json) to the OS recycle bin / Trash
+
+The doc subcommands (fingerprint/deny/absent/coverage/init) accept `--file PATH`
+instead of stdin, so callers never need a shell heredoc. Run with `python3` or
+`python` (Windows often ships only `python`); the script uses no shell features,
+so it behaves identically under bash and PowerShell.
 """
 
 import collections
 import datetime
+import glob
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 
@@ -260,25 +270,88 @@ def cmd_show():
     return 0
 
 
+def cmd_sched():
+    """Render the grounding-schedule status block (no input). Centralized here so
+    sw-config needs no inline-Python heredoc, which PowerShell cannot run."""
+    plugin_dir = os.path.dirname(CAPS_PATH)
+    sched_path = os.path.join(plugin_dir, "grounding-schedule.json")
+    print("")
+    if os.path.isfile(sched_path):
+        try:
+            with open(sched_path, "r", encoding="utf-8") as f:
+                sched = json.load(f)
+            print(f"Grounding schedule: active ({sched.get('cadence', 'unknown')}, "
+                  f"task {sched.get('task_id', 'unknown')}, created {sched.get('created_at', 'unknown')})")
+        except (ValueError, OSError):
+            print("Grounding schedule: state file unreadable; on Cowork, turn scheduled grounding off and on again to repair.")
+    else:
+        print("Grounding schedule: not active.")
+    drift_files = sorted(glob.glob(os.path.join(plugin_dir, "drift-*.md")))
+    if drift_files:
+        print(f"Latest drift report: {drift_files[-1]}")
+    return 0
+
+
+def cmd_recycle(name_or_path):
+    """Move a file to the OS recycle bin / Trash (never a hard delete). A bare
+    NAME resolves under ~/.similarweb-plugin/; an absolute or separator-bearing
+    path is used as-is. Idempotent: a missing file is a no-op."""
+    plugin_dir = os.path.dirname(CAPS_PATH)
+    p = os.path.expanduser(name_or_path)
+    if not os.path.isabs(p) and os.sep not in name_or_path and (
+            os.altsep is None or os.altsep not in name_or_path):
+        p = os.path.join(plugin_dir, name_or_path)
+    if not os.path.isfile(p):
+        return 0
+    if sys.platform == "win32":
+        subprocess.run([
+            "powershell", "-NoProfile", "-Command",
+            "Add-Type -AssemblyName Microsoft.VisualBasic; "
+            "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile("
+            f'"{p}", "OnlyErrorDialogs", "SendToRecycleBin")',
+        ], check=False)
+    else:
+        import shutil
+        trash = os.path.expanduser("~/.local/share/Trash/files")
+        os.makedirs(trash, exist_ok=True)
+        shutil.move(p, os.path.join(trash, os.path.basename(p)))
+    return 0
+
+
 def main(argv):
-    if len(argv) != 2 or argv[1] not in ("fingerprint", "deny", "absent", "coverage", "init", "show"):
-        return _fail("usage: capmap.py fingerprint|deny|absent|coverage|init|show (JSON on stdin except show)")
-    sub = argv[1]
+    args = list(argv[1:])
+    file_path = None
+    if "--file" in args:
+        i = args.index("--file")
+        if i + 1 >= len(args):
+            return _fail("--file needs a path argument")
+        file_path = args[i + 1]
+        del args[i:i + 2]
+    doc_subs = ("fingerprint", "deny", "absent", "coverage", "init")
+    if not args or args[0] not in doc_subs + ("show", "sched", "recycle"):
+        return _fail("usage: capmap.py fingerprint|deny|absent|coverage|init|show|"
+                     "sched|recycle [--file PATH] (doc subcommands read JSON from "
+                     "stdin or --file)")
+    sub = args[0]
     if sub == "show":
         return cmd_show()
+    if sub == "sched":
+        return cmd_sched()
+    if sub == "recycle":
+        return cmd_recycle(args[1] if len(args) > 1 else CAPS_PATH)
     try:
-        doc = _stdin_doc()
-    except ValueError as e:
-        return _fail(f"invalid stdin JSON: {e}")
-    if sub == "fingerprint":
-        return cmd_fingerprint(doc)
-    if sub == "deny":
-        return cmd_deny(doc)
-    if sub == "absent":
-        return cmd_absent(doc)
-    if sub == "coverage":
-        return cmd_coverage(doc)
-    return cmd_init(doc)
+        if file_path is not None:
+            with open(file_path, "r", encoding="utf-8") as f:
+                raw = f.read()
+            if not raw.strip():
+                raise ValueError("the --file document is empty")
+            doc = json.loads(raw)
+        else:
+            doc = _stdin_doc()
+    except (ValueError, OSError) as e:
+        return _fail(f"invalid input JSON: {e}")
+    return {"fingerprint": cmd_fingerprint, "deny": cmd_deny, "absent": cmd_absent,
+            "coverage": cmd_coverage, "init": cmd_init}[sub](doc)
 
 
 if __name__ == "__main__":
