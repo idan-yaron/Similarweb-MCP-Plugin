@@ -1,6 +1,6 @@
 ---
 name: sw-competitive-teardown
-description: Competitive teardown of a target domain, with or without named rivals. Use for a teardown of one domain, competitive analysis, a head to head comparison, who is winning online, benchmarking against rivals, or a combined rank plus traffic plus channels plus overlap view of a comp set. Do not use when audience overlap is the main question (use sw-audience-overlap), for a single metric lookup (one MCP call suffices), for a vague analyze X prompt with no competitive angle (the router asks a clarifier), when the ask explicitly chains two analyses (the router plans chains), or on Cowork when five or more rivals are named (the competitive deep dive agent handles wide sets).
+description: Competitive teardown of a target domain, with or without named rivals. Use for a teardown of one domain, competitive analysis, a head to head comparison, who is winning online, benchmarking against rivals, or a combined rank plus traffic plus channels plus overlap view of a comp set. Do not use when audience overlap is the main question (use sw-audience-overlap), for a single metric lookup (one MCP call suffices), for a vague analyze X prompt with no competitive angle (the router asks a clarifier), on Cowork when five or more rivals are named (the competitive deep dive agent handles wide sets), or when the ask explicitly chains two analyses (the router plans chains).
 ---
 # sw-competitive-teardown
 

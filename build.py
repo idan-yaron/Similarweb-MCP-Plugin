@@ -4,7 +4,8 @@ build.py: translator and packager for similarweb-mcp-plugin.
 
 Modes:
   --validate  Structural validation (frontmatter, description cap, file presence). CI-safe.
-  --build     Emit five platform bundles plus the codex sub-agents companion to dist/.
+  --build     Emit five platform bundles plus two companions (codex sub-agents,
+              m365 converter input) to dist/.
   --test      Run local tests (requires tests/ directory).
   --ground    Stub: re-grounding is a manual process today (see CONTRIBUTING.md).
 
@@ -16,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import zipfile
@@ -160,6 +162,75 @@ CODEX_SKILL_INTERFACES = {
 # Claude Code command surface.
 CODEX_FORCE_IMPLICIT = {"sw-router", "sw-setup"}
 CODEX_FORCE_NON_IMPLICIT = set()
+
+# --- M365 Copilot converter-input target ------------------------------------
+# emit_m365 stages INPUT for Microsoft's Convert-ClaudePluginToMOS3.ps1 (Copilot
+# Cowork), not an installable package. Grounded 2026-07-06 against converter
+# SHA-256 335ab2bf7ce02c20ab3900cd122c290cf433097123665c784d84ce786c9726e6:
+# tests/grounded/m365-converter-mcp-json-shape, m365-converter-skills-verbatim,
+# m365-manifest-shape. The converter reads server entries by bare `url` (DCR is
+# live on mcp-auth.similarweb.com, so no auth block belongs here; auth type is
+# a converter parameter) and copies skills/ byte-verbatim, so every M365 skill
+# transform must happen at emit time.
+M365_MCP_SERVERS = {
+    "mcpServers": {
+        "similarweb": {
+            "url": "https://mcp.similarweb.com",
+            "description": (
+                "Similarweb digital intelligence tools for website traffic, "
+                "engagement, keywords, audience, and market analytics."
+            ),
+        }
+    }
+}
+
+# Description fragments dropped at M365 emit time. On Microsoft Copilot the word
+# "Cowork" reads as Microsoft's product, and the referenced Anthropic-Cowork
+# features (deep-dive agent, scheduled grounding, rich-render helper) do not
+# exist there. Source skills and the other bundles keep these clauses.
+# --validate enforces each fragment still exists verbatim in its source
+# description, and emit_m365 hard-fails if any emitted description still
+# mentions Cowork after the drops.
+M365_DESCRIPTION_DROPS = {
+    "sw-competitive-teardown": [
+        ", on Cowork when five or more rivals are named "
+        "(the competitive deep dive agent handles wide sets)",
+    ],
+    "sw-config": [
+        " Also hosts the opt in Cowork only scheduled grounding sub mode "
+        "that re validates fragile MCP assertions on a cadence.",
+    ],
+    "sw-foundation-render": [
+        "; richer rendering ships in a separate Cowork only helper",
+    ],
+}
+
+M365_ICON_SPECS = (("color.png", 192), ("outline.png", 32))
+
+# The converter copies plugin.json's description verbatim into the M365 app
+# manifest description.short/full (tests/grounded/m365-manifest-shape), so the
+# rival-platform sentence is dropped from the staged manifest.
+M365_MANIFEST_DESCRIPTION_DROPS = [
+    " Cross-platform (Claude Code, Codex, Cursor, Claude.ai).",
+]
+
+
+def _m365_transform_description(skill_name, desc):
+    """Apply M365_DESCRIPTION_DROPS to one description. Returns (new_desc, stale,
+    residual): stale lists fragments that no longer match the source verbatim,
+    residual is True when the result still mentions Cowork (case-insensitive).
+    Shared by cmd_validate (so violations fail at T0) and emit_m365 (backstop).
+    Non-string input (a malformed empty description parses as a list) passes
+    through untouched; the frontmatter checks own that failure mode."""
+    if not isinstance(desc, str):
+        return desc, [], False
+    stale = []
+    for fragment in M365_DESCRIPTION_DROPS.get(skill_name, ()):
+        if fragment in desc:
+            desc = desc.replace(fragment, "")
+        else:
+            stale.append(fragment)
+    return desc, stale, "cowork" in desc.lower()
 
 
 def _codex_allow_implicit(skill_name, skill_fm):
@@ -813,6 +884,55 @@ def cmd_validate():
         except (json.JSONDecodeError, OSError) as e:
             errors.append(f".claude-plugin/marketplace.json unreadable or invalid JSON: {e}")
 
+    # M365 converter-input target: committed icons and drop-table integrity.
+    # Icon dimensions are read from the PNG IHDR chunk (the converter itself
+    # never validates them; 192/32 are the platform expectations, see
+    # tests/grounded/m365-manifest-shape).
+    for icon_name, expected in M365_ICON_SPECS:
+        icon_path = REPO_ROOT / "assets" / "m365" / icon_name
+        if not icon_path.is_file():
+            errors.append(f"assets/m365/{icon_name}: missing (emit_m365 stages it at the tree root)")
+            continue
+        data = icon_path.read_bytes()
+        if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+            errors.append(f"assets/m365/{icon_name}: not a valid PNG (or IHDR is not the first chunk)")
+            continue
+        w, h = struct.unpack(">II", data[16:24])
+        if (w, h) != (expected, expected):
+            errors.append(
+                f"assets/m365/{icon_name}: {w}x{h}; M365 expects {expected}x{expected}"
+            )
+    known_skills = {s for s, _ in skills}
+    for m365_skill in sorted(M365_DESCRIPTION_DROPS):
+        if m365_skill not in known_skills:
+            errors.append(f"M365_DESCRIPTION_DROPS names missing skill '{m365_skill}'")
+    manifest_desc = load_plugin_manifest().get("description", "")
+    for fragment in M365_MANIFEST_DESCRIPTION_DROPS:
+        if fragment not in manifest_desc:
+            errors.append(
+                f"plugin.json: M365_MANIFEST_DESCRIPTION_DROPS fragment no longer matches "
+                f"the description verbatim; update the drop list in build.py so emit_m365 "
+                f"keeps the M365 manifest description clean. Fragment: {fragment!r}"
+            )
+    for m365_skill, m365_path in list_skills(exclude_cowork_only=True):
+        try:
+            fm, _ = parse_frontmatter(m365_path)
+        except ValueError:
+            continue
+        _, stale, residual = _m365_transform_description(m365_skill, fm.get("description", ""))
+        for fragment in stale:
+            errors.append(
+                f"{m365_path}: M365_DESCRIPTION_DROPS fragment no longer matches the "
+                f"description verbatim; update the drop table in build.py so emit_m365 "
+                f"does not ship a stale Cowork clause. Fragment: {fragment!r}"
+            )
+        if residual:
+            errors.append(
+                f"{m365_path}: description still mentions Cowork after M365_DESCRIPTION_DROPS; "
+                f"on Microsoft Copilot that word reads as Microsoft's product. Extend the "
+                f"drop table in build.py (emit_m365 would hard-fail on this at build time)."
+            )
+
     errors.extend(scan_personal_data())
     errors.extend(scan_em_dashes())
     errors.extend(scan_skill_file_pointers())
@@ -863,7 +983,8 @@ def _zip_target_dir(target_dir, zip_path):
 def cmd_build():
     """Emit five per-platform bundles to dist/. Cowork-native ships the full
     surface (skills + agents + hooks + connectors); the other four are
-    skills-only subsets."""
+    skills-only subsets. Companions (codex sub-agents, m365 converter input)
+    are built but never release-attached."""
     manifest = load_plugin_manifest()
     version = manifest["version"]
     DIST_DIR.mkdir(exist_ok=True)
@@ -873,7 +994,9 @@ def cmd_build():
     emit_codex_subagents(manifest, version)
     emit_cursor(manifest, version)
     emit_claude_ai(manifest, version)
-    print(f"OK: built five platform bundles plus codex sub-agents companion in {DIST_DIR}")
+    emit_m365(manifest, version)
+    print(f"OK: built five platform bundles plus codex sub-agents and m365 "
+          f"converter-input companions in {DIST_DIR}")
     return 0
 
 
@@ -1222,6 +1345,70 @@ def emit_claude_ai(manifest, version):
                     data = data.replace(b"\r\n", b"\n")
                 zf.writestr(f"{name}/{rel}", data)
         print(f"  claude-ai: {skill_zip}")
+
+
+def emit_m365(manifest, version):
+    """m365: staged INPUT for Microsoft's Convert-ClaudePluginToMOS3.ps1, which
+    turns it into an M365 Copilot Cowork app package. Companion artifact only:
+    NOT release-attached (the zip name matches none of release.yml's globs) and
+    NOT installable as-is. Converter behavior grounded 2026-07-06 (see the
+    M365 constants block); icons must sit at the tree ROOT as color.png /
+    outline.png and .mcp.json is consumed into the manifest, never packaged.
+    Runtime behavior on Microsoft's platform (Inherits cross-skill loading,
+    user-invocable ingestion, capmap.py execution) is UNVERIFIED pending the
+    tenant pilot in docs/m365-copilot-notes.md; commands/ is excluded because
+    the converter copies it but the manifest never references it."""
+    target_dir = DIST_DIR / "m365"
+    _prepare_target_dir(target_dir)
+    (target_dir / ".claude-plugin").mkdir()
+    # The converter consumes this DIRECTORY (not the LF-normalized zip), so every
+    # text write here is LF-normalized explicitly to keep the staged tree
+    # byte-identical across build hosts.
+    m365_manifest = dict(manifest)
+    for fragment in M365_MANIFEST_DESCRIPTION_DROPS:
+        m365_manifest["description"] = m365_manifest.get("description", "").replace(fragment, "")
+    with open(target_dir / ".claude-plugin" / "plugin.json", "w", encoding="utf-8", newline="") as f:
+        json.dump(m365_manifest, f, indent=2)
+        f.write("\n")
+    skills_target = target_dir / "skills"
+    skills_target.mkdir()
+    for name, path in list_skills(exclude_cowork_only=True):
+        fm, body = parse_frontmatter(path)
+        body = strip_cowork_sections(body)
+        fm = {k: v for k, v in fm.items() if k not in ("allowed-tools", "argument-hint")}
+        desc, stale, residual = _m365_transform_description(name, fm.get("description", ""))
+        if stale or residual:
+            raise SystemExit(
+                f"emit_m365: {name} description failed the M365 transform "
+                f"(stale drop fragments or residual Cowork mention); run "
+                f"build.py --validate for the specific violation"
+            )
+        fm["description"] = desc
+        skill_target = skills_target / name
+        skill_target.mkdir()
+        with open(skill_target / "SKILL.md", "w", encoding="utf-8", newline="") as f:
+            f.write(_rebuild_frontmatter(fm) + "\n" + body)
+        for rel, src in _skill_shipped_files(name, include_cowork_files=False).items():
+            dest_file = skill_target / rel
+            dest_file.parent.mkdir(parents=True, exist_ok=True)
+            data = src.read_bytes()
+            if is_text(src):
+                data = data.replace(b"\r\n", b"\n")
+            dest_file.write_bytes(data)
+    with open(target_dir / ".mcp.json", "w", encoding="utf-8", newline="") as f:
+        json.dump(M365_MCP_SERVERS, f, indent=2)
+        f.write("\n")
+    for icon_name, _ in M365_ICON_SPECS:
+        icon_src = REPO_ROOT / "assets" / "m365" / icon_name
+        if not icon_src.is_file():
+            raise SystemExit(
+                f"emit_m365: assets/m365/{icon_name} missing; the converter reads "
+                f"it from the staged tree root"
+            )
+        shutil.copy(icon_src, target_dir / icon_name)
+    zip_path = DIST_DIR / f"similarweb-m365-converter-input-{version}.zip"
+    _zip_target_dir(target_dir, zip_path)
+    print(f"  m365: {zip_path} (converter input, not release-attached)")
 
 
 def cmd_test():
