@@ -13,7 +13,8 @@ Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via yo
 
 ## Hard rules (NEVER violate)
 
-- NEVER promise direct AI-engine measurement without `--campaign-id`. The audit IS a proxy by default. Per `aeo-tool-availability`, `get-gen-ai-campaign-analysis-prompts` returns HTTP 400 `VALIDATION_ERROR: Requested campaign is unknown for your account` for any ad-hoc campaign_id because the customer must pre-configure an AI Tracker campaign in the Similarweb product UI by an account admin, AND the MCP catalog exposes no way to discover, enumerate, or create those campaigns. Recipe substitutes SEO + SERP + landing-pages as proxy. The proxy framing ships in the Executive read AND in an always-on Caveat.
+- NEVER promise direct AI-engine measurement without data in hand. The audit IS a proxy by default, and every direct door is claims-gated on the grounded connector. Per `aeo-tool-availability`, `get-gen-ai-campaign-analysis-prompts` returns HTTP 400 `VALIDATION_ERROR: Requested campaign is unknown for your account` for any ad-hoc campaign_id, because an account admin must pre-configure an AI Tracker campaign in the Similarweb product UI. Campaign enumeration DOES exist on the 2026-08 surface (`get-gen-ai-campaigns`), but it returned HTTP 403 `FORBIDDEN_ERROR: Access forbidden. Upgrade your account.`, so it is an opt-in attempt-then-degrade path behind `--discover-campaigns`, never a promise and never a default-path call. The `get-ai-traffic-*` family returns the same 403. Recipe substitutes SEO + SERP + landing-pages + the `Gen AI` traffic channel as the proxy. The proxy framing ships in the Executive read AND in an always-on Caveat.
+- NEVER sum the `Gen AI` channel and the `AI Search` row into one AI number. Report them separately, each with its own gloss. `Gen AI` is a first-class traffic channel; `AI Search` is an AI-answer surface counted INSIDE organic search (source_type `Search - Organic` in the channels-share tool). They are two separate measurement surfaces, so adding them double-counts nothing but implies a single metric that does not exist.
 - NEVER use `get-keywords-top-brands-agg` for AEO. That tool is Amazon-shopper-only (returns Amazon brand rankings inside the Amazon shopper graph, NOT general-web SERP brand presence). The general-web equivalent does not exist; recipe uses `get-websites-serp-players-agg` for share-of-voice via SERP-ranked-domains-by-keyword.
 - NEVER pass a date range wider than the rolling 3 months to `get-keywords-seo-overview` or `get-websites-serp-players-agg`. Server returns HTTP 400 `VALIDATION_ERROR` per `aeo-seo-overview-shape`, `aeo-serp-players-shape`. Recipe derives effective `end_date` per sw-foundation-data § window-resolution (the Call 1 rank call's `meta.last_updated`; this recipe's Step 2 smoke is `get-keywords-seo-overview`, not rank) and uses the relative-keyword window `start_date = "2_months_ago"`, `end_date = "latest"` (a 3-month INCLUSIVE span; computing end_date minus a literal 3 months yields a 4-month span the server rejects, per § window-resolution rule 3). Wider windows are rejected server-side.
 - NEVER pass a 3-month window to `get-websites-landing-pages-agg` with `granularity: "monthly"`. Per `landing-pages-window-constraint`, monthly granularity returns LAST MONTH ONLY (not 3 months); the server either truncates silently or returns `VALIDATION_ERROR`. Call 4 MUST special-case this window: `start_date = first day of effective_end_date's month`, `end_date = effective_end_date`. This is one calendar month, the most recent one.
@@ -38,7 +39,8 @@ COUNTRY="${COUNTRY:-us}"
 COUNTRY="${COUNTRY,,}"  # then apply sw-foundation-data § country-normalization map
 KEYWORDS="${KEYWORDS:-}"               # comma-separated csv; 5-10 brand-relevant terms; cap 10
 CAMPAIGN_ID="${CAMPAIGN_ID:-}"         # optional UUID; promotes audit from proxy to direct signal
-echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-aeo-audit <domain> [--country <iso-2>] [--keywords <k1,k2,...>] [--campaign-id <uuid>]"; exit 1; }
+DISCOVER_CAMPAIGNS="${DISCOVER_CAMPAIGNS:-}"  # optional flag; ONE get-gen-ai-campaigns attempt (Call 5b), off by default
+echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-aeo-audit <domain> [--country <iso-2>] [--keywords <k1,k2,...>] [--campaign-id <uuid>] [--discover-campaigns]"; exit 1; }
 if [ -n "$CAMPAIGN_ID" ] && ! echo "$CAMPAIGN_ID" | grep -qiE "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"; then
   echo "Invalid --campaign-id; expected UUID format (8-4-4-4-12 hex)"; exit 1
 fi
@@ -62,7 +64,15 @@ REQUIRED (proxy audit):
 OPTIONAL (direct-signal upgrade, ONLY when `--campaign-id` supplied):
 - `get-gen-ai-campaign-analysis-prompts`
 
-If `--campaign-id` was supplied but `get-gen-ai-campaign-analysis-prompts` is not accessible, skip Call 5 and note in Caveats: "AEO direct-signal tool not accessible on this plan; continuing with proxy audit."
+OPTIONAL (campaign discovery, ONLY when `--campaign-id` is ABSENT):
+- `get-gen-ai-campaigns`
+
+OPTIONAL (AI-referral ladder, Call 6; full rung definitions in Step 4):
+- `get-ai-traffic-landing-pages-agg` then `get-ai-traffic-overview` (rung 1, direct, claims-gated)
+- `get-website-analysis-traffic-channels` (rung 2, the DEFAULT proxy)
+- `get-website-analysis-traffic-channels-share` (rung 3, opt-in drill-down, never auto-fires)
+
+None of the OPTIONAL tools can abort the audit. If `--campaign-id` was supplied but `get-gen-ai-campaign-analysis-prompts` is not accessible, skip Call 5 and note in Caveats: "AEO direct-signal tool not accessible on this plan; continuing with proxy audit."
 
 ## Step 3: Pick up bulk inputs from context
 
@@ -81,9 +91,32 @@ Per sw-foundation-core § bulk-input-from-context. If `--keywords` was not suppl
 | 3 | `get-websites-serp-players-agg` | LOOPED per keyword (5-10 calls); brand's `traffic_share` + `serp_features` per keyword; competitive set |
 | 4 | `get-websites-landing-pages-agg` | Brand's organic landing pages; AEO-worthiness score per URL from answer-box-adjacent `serp_features` |
 | 5 | `get-gen-ai-campaign-analysis-prompts` | ONLY if `--campaign-id` supplied. Direct AI-engine signal; renders AFTER the proxy sections |
-| 6 | `get-ai-traffic-landing-pages-agg`, fallback `get-websites-referrals-agg` | AI-referral signal: is AI actually sending traffic to the target. Attempt `get-ai-traffic-landing-pages-agg` (target, country, latest); on a present-but-403 denial or absence, fall back to ONE `get-websites-referrals-agg` (referral_type incoming, limit 10) and scan its rows for AI-assistant referrer domains (chatgpt.com, perplexity.ai, gemini.google.com, copilot.microsoft.com, plus any obvious AI-assistant domain). Per `referral-pipelines-divergence` + `partial-access-envelope-shape` (try-primary-catch-403 per sw-foundation-core § capability-gating Fallback-on-denial). |
+| 5b | `get-gen-ai-campaigns` | OPT-IN ONLY (`--discover-campaigns`), never on the default path. ONE discovery attempt so the recipe can offer the account's real campaigns instead of asking the user blind. 403 on the grounded connector; degrade per the rung-1 rule below and keep the blind ask. Its 200 cost is UNGROUNDED (only a 403, which is uncharged, has ever been observed), so it stays off the default path rather than putting an unmeasured charge in every run |
+| 6 | AI-referral ladder (3 rungs, defined below) | AI-referral signal: is AI actually sending traffic to the target |
 
-Per-keyword fanout: Call 3 fans out to N keywords (default 5-10, capped at 10). Calls are independent; parallelize. Default audit total cost = ~12-13 data credits; the Call 6 AI-referral fallback adds ~30-40 credits ONLY when the AI-traffic tool is gated and the referral proxy runs.
+### Call 6: the AI-referral ladder
+
+Three rungs, cheapest-honest-first. Per `traffic-channels-tool-shape`, `referral-pipelines-divergence`, and `partial-access-envelope-shape`; the rung-1 attempt is the probe, per sw-foundation-core § capability-gating Fallback-on-denial (try-primary-catch-403). The referral-pipeline AI proxy this ladder replaces is gone: `get-websites-referrals-agg` was RETIRED in the 2026-08 surface change (never call it), and its AI rows did not move into the surviving referral tools, so never look for AI-assistant referrers in `get-website-analysis-traffic-referrals-incoming` or `get-website-analysis-traffic-referrals-aggregated` (a limit-100 scan of the aggregated tool surfaced no AI-assistant domain at all; AI referrers are served by the traffic-channels family now).
+
+**Rung 1: direct measurement, claims-gated.** Attempt `get-ai-traffic-landing-pages-agg` (target, country, latest), then `get-ai-traffic-overview`. Both returned HTTP 403 `FORBIDDEN_ERROR: Access forbidden. Upgrade your account.` (uncharged) on the grounded connector. A 403 here means the tool is PRESENT on the server and the AI-research claim is not enabled for this account: render it with exactly that framing per sw-foundation-render § error-rendering Pattern 3, never as "no AI data exists". On a 200, this rung IS the answer: label the section DIRECT measurement and skip rungs 2 and 3 unless the user also asked for channel context. NEVER describe any part of the audit as direct AI measurement unless one of these two tools returned data.
+
+**Rung 2: the DEFAULT proxy.** Runs whenever rung 1 is denied, absent, or fails for any other reason (a 5xx or timeout degrades here too; rung 2 is the floor, not a 403-only branch). ONE `get-website-analysis-traffic-channels` call (target, `country`, `granularity: "monthly"`, `web_source: "total"`). Pass the window EXPLICITLY as `start_date` = first day of the effective month from Call 1 and `end_date` = that same effective month end: one calendar month, 10 credits. NEVER omit both dates: the server default resolves to a multi-year span and charges ~370 credits (`traffic-channels-tool-shape`), and NEVER inherit Step 5's general 3-month window here, which would charge 30. 10 credits per requested month, window-priced, no `limit` parameter. The response carries `Gen AI` as a first-class channel with ABSOLUTE VISITS alongside the other nine (Affiliates, Direct, Display Ads, Mail, Organic Search, Organic Social, Paid Search, Paid Social, Referrals). Derive:
+
+```
+ai_visits    = visits of the row where source_type == "Gen AI"   (0.0 when the row is absent)
+total_visits = sum(visits) over ALL rows returned for that date
+ai_share     = ai_visits / total_visits    (guard: see the zero rule below)
+```
+
+Guard the denominator. When the response returns ZERO rows for the effective month, or `total_visits` is zero or null, the recipe measured NOTHING: render a data-unavailable Caveat per sw-foundation-render § error-rendering Pattern 1 and omit the AI-referral section. Do NOT compute `0 / 0` and do NOT render the no-measurable-traffic line, which is a claim about the world. Only an ABSENT `Gen AI` row inside a POPULATED response (`total_visits` greater than zero) sets `ai_visits = 0.0` and licenses the no-measurable-traffic finding.
+
+Iterate the returned rows; NEVER index a fixed month-by-channel grid, because the server may omit a sub-meaningful row (`traffic-channels-tool-shape`). Request the 3-month window (`start_date = "2_months_ago"`, `end_date = "latest"`, 30 credits) ONLY when the user asked for an AI trend; one month is the default.
+
+**Rung 3: opt-in drill-down that NAMES the AI sources.** Never auto-fires. ONE `get-website-analysis-traffic-channels-share` call at `limit: 50` (100 credits; this tool prices at exactly 2 credits per requested row). Rows are `{domain, source_type, share}`; `meta.visits` carries the period total. There is NO server-side `source_type` filter, so filter client-side: rows with `source_type == "Gen AI"` are the named AI-assistant referrers, and the `AI Search` row (source_type `Search - Organic`) is reported separately. `limit: 50` is a floor, not a preference: on nike.com `chatgpt.com` sits at rank 19 (so limit 25 or more) and `AI Search` at rank 41 (so limit 50 or more); a smaller limit silently returns no AI rows and reads as a false zero. Offer this rung in NEXT MOVES when rung 2 shows a non-trivial `Gen AI` share; run it only after the user says yes.
+
+Two-vocabulary discipline: the channels tool and the channels-share tool spell their `source_type` values differently (Mail vs Email, Organic Search vs Search - Organic). Never equate them, and never sum `Gen AI` with `AI Search` into one AI number without the gloss (hard rule above).
+
+Per-keyword fanout: Call 3 fans out to N keywords (default 5-10, capped at 10). Calls are independent; parallelize. Default audit total cost = ~12-13 data credits, plus 10 credits for the Call 6 rung-2 proxy (one month) whenever the direct rung is gated. Opt-in rungs are excluded from that default: rung 3 adds 100 credits at `limit: 50`, and `--discover-campaigns` (Call 5b) adds an UNGROUNDED amount, since only its uncharged 403 has ever been observed. The retired referral-based proxy cost ~30-40 credits, so the default ladder is CHEAPER than what it replaced, and the expensive rung is now opt-in.
 
 ## Step 5: Execute
 
@@ -91,7 +124,7 @@ Call 1 runs first. Derive the effective window per sw-foundation-data § window-
 
 **Window special-case for Call 4 (per `landing-pages-window-constraint`):** Calls 2 and 3 use the rolling 3-month window. Call 4 (`get-websites-landing-pages-agg`) is monthly-only-last-month: pass `start_date = first day of effective_end_date's month`, `end_date = effective_end_date`. Concretely if `end_date = 2026-04-30`, Call 4 uses `start_date = 2026-04-01, end_date = 2026-04-30` (the single most recent month) while Calls 2 and 3 use `start_date = 2026-02-01, end_date = 2026-04-30` (the rolling 3-month window). Passing a 3-month window to landing-pages-agg with monthly granularity returns last-month-only data anyway (silent truncation) or a VALIDATION_ERROR; this special-case avoids both failure modes.
 
-Calls 2 and 4 are independent given the resolved windows; parallelize with Call 3. Call 3 fans out per keyword and is itself independent across keywords; parallelize within the loop. Call 5 (if `--campaign-id`) runs in parallel with all proxy calls.
+Calls 2 and 4 are independent given the resolved windows; parallelize with Call 3. Call 3 fans out per keyword and is itself independent across keywords; parallelize within the loop. Call 5 (if `--campaign-id`) runs in parallel with all proxy calls; Call 5b runs only when `--discover-campaigns` was supplied, likewise in parallel. Call 6 rung 1 also runs in parallel with the proxy calls; rung 2 fires only after rung 1's outcome is known (it is the fallback), and rung 3 never fires inside the same turn as the initial render.
 
 Client-side derivations after responses arrive:
 
@@ -122,6 +155,10 @@ Client-side derivations after responses arrive:
 
 5. **From Call 5 (if supplied):** if HTTP 200, parse the prompts payload (prompt text, LLM response, brands mentioned, citations, sentiment, source LLM); cap at 20 prompts for rendering. If HTTP 4xx, OMIT the `## Direct AI-engine signal` section and add Caveat: "Direct AI-engine signal call returned `<status_code>` `<error_message>`; proxy audit completed."
 
+5b. **From Call 5b (campaign discovery, only when `--discover-campaigns` was supplied):** if HTTP 200 with campaigns, name them in the proxy-vs-direct caveat and ask which one to use instead of asking blind for a UUID. If 403 or absent, change nothing about the audit: keep the blind ask, and add the discovery Caveat line only when the user explicitly asked about AI Tracker campaigns.
+
+6. **From Call 6 (AI-referral ladder):** record which rung produced the section. Rung 1 200 gives direct rows as returned. Rung 2 gives `ai_visits`, `total_visits`, `ai_share` per the ladder formula; when the `Gen AI` row is absent from the returned rows, `ai_visits = 0.0` and the section renders the no-measurable-traffic line rather than a fabricated zero-share table. Rung 3 (only if the user opted in) gives the named `Gen AI` source rows and the separate `AI Search` row; keep the two lists apart.
+
 Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
 ## Step 6: Classify output intent
@@ -145,7 +182,12 @@ Sections in order (answer-first per sw-foundation-render):
 - `## Per-keyword SERP landscape` (one row per keyword from Call 3. Columns: `Keyword`, `Brand traffic share`, `Brand SERP features`, `Top non-brand competitor`, `Competitor share`, `Brand top URL`, `Brand top position`. `Brand SERP features` rendered as comma-separated list. Brand-absent rows render `0.00%` for traffic share, `n/a` for features and URL.).
 - `## AI-citation-worthy pages` (one row per URL from Call 4, sorted by `aeo_score` desc. Columns: `URL`, `AEO score`, `Answer-box features`, `Traffic share`, `Top keyword`. Answer-box features rendered from the 5-feature set only (NOT the full `serp_features` list). Footnote: "AEO score = count of answer-box-adjacent serp_features per URL (related_questions, featured_snippet, featured_answer, organic_sitelinks, organic_expanded_sitelinks). Pages with higher AEO scores are more likely to be cited by AI engines synthesizing answers. `featured_answer` is the live answer-box surface returned by the Similarweb MCP; `featured_snippet` is kept for forward-compat.").
 - `## Direct AI-engine signal` (ONLY if `--campaign-id` supplied AND Call 5 returned 200. Renders the prompts payload as a list capped at 20 entries with prompt text, source LLM, response, brands mentioned, citations, sentiment. Subtitle: "Direct AI Tracker measurement for campaign_id `<uuid>`.").
-- `## AI-referral signal` (from Call 6). If `get-ai-traffic-landing-pages-agg` returned 200, render its top AI-referred landing pages (URL, AI source, estimated visits). If that tool was gated and the `get-websites-referrals-agg` fallback ran, render the AI-assistant referrer rows it surfaced (referring domain, share, visits, change) under the subtitle "AI-referral PROXY (the direct AI-traffic tool is not on this plan; these are referral-pipeline rows from AI-assistant domains)." If neither produced AI-referrer rows, render one line: "No measurable AI-assistant referral traffic detected this period." NEVER compare these referral-pipeline shares against any traffic-channels share without the pipeline gloss, per `referral-pipelines-divergence`.
+- `## AI-referral signal` (from Call 6, rendered from whichever rung produced data).
+  - **Rung 1 (200):** render the direct AI-traffic rows as returned (landing page or AI source, estimated visits) under the subtitle "DIRECT AI-traffic measurement." This is the only wording in the whole recipe allowed to call anything direct.
+  - **Rung 2 (the default):** render one line plus a Unicode bar per sw-foundation-render § visualizations comparing `Gen AI` against the largest channel: `Gen AI` absolute visits, `ai_share` as a percent to 2 decimal places, and the same-window all-channel total. Subtitle: "AI-referral PROXY (the direct AI-traffic tools are present on the server but not enabled for this account; this is the `Gen AI` channel from the traffic-channels breakdown, `<month>`, `<country>`)." When a 3-month window was requested, add the month-over-month direction in one clause.
+  - **Rung 3 (only when the user opted in):** add a named-source table (`Source domain`, `Share`) from the `source_type == "Gen AI"` rows, then render the `AI Search` row on its own line glossed as "an AI-answer surface counted inside organic search, not inside the Gen AI channel". NEVER add the two figures together.
+  - **No signal:** if the `Gen AI` row is absent or its visits are 0, render one line: "No measurable Gen AI channel traffic detected this period."
+  - NEVER compare a traffic-channels or channels-share figure against a referral-pipeline share (`get-website-analysis-traffic-referrals-incoming` or `-aggregated`) without the pipeline gloss, per `referral-pipelines-divergence`; the referral tools carry no AI-assistant rows at all.
 - `## Recommendations` (two subsections: `### Top 5 keywords to defend` (ranked by current `brand_traffic_share` from Call 3, descending) and `### Top 5 pages to optimize` (ranked by `aeo_score` from Call 4, descending). Each item carries a one-line rationale (e.g., "currently winning featured_snippet + organic_sitelinks; defend by keeping content authoritative" or "currently absent from related_questions; add FAQ schema to capture that surface"). EVERY recommendation ends with a confidence label `(confidence: HIGH | MEDIUM | LOW)` per sw-foundation-render § expert-heuristics hypothesis calibration. HIGH for keywords with brand_traffic_share > 30% AND at least one answer-box-adjacent serp_feature; MEDIUM for keywords with brand_traffic_share 10-30% OR aeo_score >= 2; LOW for keywords with brand_traffic_share < 10% OR aeo_score == 0. NEVER ship without confidence labels. **Refusal-as-feature per sw-foundation-render § expert-heuristics**: if NO audited keyword shows brand_traffic_share > 5% AND NO landing-page URL has any answer-box-adjacent serp_feature (aeo_score = 0 across the board), REPLACE this section with a clear `## INSUFFICIENT AEO SIGNAL` block. Body: "No defensible AEO hook detected across the audited keyword set: brand absent or sub-5% on every keyword's top-10 SERP players; zero landing-page URLs carry answer-box-adjacent serp_features (related_questions, featured_snippet, featured_answer, organic_sitelinks, organic_expanded_sitelinks). Specific recommendations would be generic and unactionable. Re-run after the domain accumulates SERP presence, or share a broader keyword set if you want me to test a different keyword pool. Provide the actual data above as the diagnostic." NEVER ship a generic recommendation when this refusal condition fires.).
 - `## NEXT MOVES` (EXACTLY 2 backtick-quoted natural-language questions, each
   with a one-sentence rationale max. Per sw-foundation-render § citation block
@@ -159,6 +201,11 @@ Sections in order (answer-first per sw-foundation-render):
   - **Channel-mix to see if AEO trend matches traffic shift**:
     `"How did <target>'s channel mix shift over the last quarter?"`
     followed by one sentence on checking whether the AEO / SEO posture matches an underlying traffic shift.
+  - **Name the AI sources** (only when Call 6 rung 2 ran and the `Gen AI` share is
+    non-trivial; this is the opt-in rung-3 offer):
+    `"Which AI assistants are actually sending traffic to <target>?"`
+    followed by one sentence saying the follow-up names the individual Gen AI
+    source domains and costs 100 credits.
   - **Audience overlap with top AI-cited domains** (only when `--campaign-id` AND Call 5 returned a direct signal):
     `"What's <target>'s audience overlap with <top-cited-domain>?"`
     followed by one sentence on whether the AI-citation neighbor overlaps with the brand's existing audience.
@@ -168,7 +215,9 @@ Sections in order (answer-first per sw-foundation-render):
 - Sources line per sw-foundation-render § citation block (single line, NOT a table, NOT collapsible). Last element of the output unless `intent=handoff`.
 - `[optional] ## Handoff` (JSON, only when intent=handoff).
 
-Proxy-vs-direct caveat exact text class: "This audit approximates AEO from traditional SEO + SERP + landing-pages signals (the proxy). Direct AI-engine measurement requires a pre-configured AI Tracker campaign in the Similarweb product UI. If you have a campaign UUID, share it with me and I'll lift this from proxy to direct measurement."
+Proxy-vs-direct caveat exact text class, default (Call 5b not run, denied, or absent, which includes every run without `--discover-campaigns`): "This audit approximates AEO from traditional SEO + SERP + landing-pages signals plus the `Gen AI` traffic channel (the proxy). Direct AI-engine measurement requires a pre-configured AI Tracker campaign in the Similarweb product UI. If you have a campaign UUID, share it with me and I'll lift this from proxy to direct measurement."
+
+Variant when Call 5b returned 200 with campaigns: keep the first two sentences and replace the third with "Your account has these AI Tracker campaigns: `<names>`. Tell me which one to use and I'll lift this from proxy to direct measurement." NEVER invent a campaign name; this variant ships only from a 200 payload.
 
 ## Step 8: Citation + caveats + optional handoff
 
@@ -262,6 +311,10 @@ Field semantics:
 - **Target has no Similarweb coverage** (Call 1 rank returns null): print "Similarweb has no coverage for `<domain>`. Aborting AEO audit." Exit.
 - **User-supplied `end_date` is beyond `meta.last_updated`**: clamp per sw-foundation-data § window-resolution and note in Caveats with the canonical "end_date clamped from <requested> to <meta.last_updated>" wording.
 - **`get-gen-ai-campaign-analysis-prompts` access-denied at runtime AND `--campaign-id` was supplied**: skip Call 5; OMIT the `## Direct AI-engine signal` section; add Caveat: "AEO direct-signal tool not accessible on this plan; continuing with proxy audit." `direct_ai_signal` is `null` in handoff.
+- **`get-gen-ai-campaigns` (Call 5b) returns 403 or is absent**: not an error and not a blocker. The audit is unchanged and the default proxy-vs-direct caveat text ships verbatim. Add a Caveats line ("campaign discovery is present on the server but not enabled for this account") ONLY when the user explicitly asked about AI Tracker campaigns; otherwise stay silent, since a blind UUID ask was the pre-existing behavior anyway.
+- **Both rung-1 AI-traffic tools 403 AND the rung-2 traffic-channels call also fails or is absent**: OMIT the `## AI-referral signal` section entirely and add ONE consolidated Caveat naming both causes per sw-foundation-render § error-rendering Pattern 3 and Pattern 7. Never substitute a referral tool; the referral pipelines carry no AI-assistant rows.
+- **Rung 2 returns 200 but no `Gen AI` row**: render the no-measurable-traffic line. This is a real finding (below the reporting floor), not a failure, so it never becomes a Caveat about tool access.
+- **User asks to name the AI sources**: run rung 3 at `limit: 50` and say the cost before calling. Never downgrade the limit to save credits; below 50 the `AI Search` row and below 25 the `chatgpt.com` row fall off the response and read as a false zero.
 - **All keyword SERP calls fail with 5xx** (Call 3 entirely down): skip the `## Per-keyword SERP landscape` and `### Top 5 keywords to defend` sections; add Caveat. SEO context + AI-citation-worthy pages still ship.
 
 ## Grounded assertions
@@ -278,3 +331,4 @@ This skill's behavior is live-validated against the following grounded assertion
 - response-field-name-lookup
 - partial-access-envelope-shape
 - referral-pipelines-divergence
+- traffic-channels-tool-shape

@@ -20,16 +20,22 @@ Seven canonical patterns. Apply consistently:
    render `n/a` in the affected cell with a footnote `[1]` linking to the
    Caveats block where the classifier limitation is explained. Apply to any
    cell where the API returns exactly `0.0` AND the corresponding metric is
-   known to suffer from a classifier-rollup limitation (e.g., Paid Social
-   often rolls into Display Ads in Similarweb's `get-traffic-channels-share`).
-   The Caveats entry explains the rollup: "Paid Social returned `0.0%` from
-   `get-traffic-channels-share`; Similarweb's classifier often rolls paid
-   social into Display Ads. Treat as structural-zero, not measured-zero."
+   known to suffer from a classifier-rollup limitation (e.g., paid social
+   often rolls into Display Ads in Similarweb's
+   `get-website-analysis-traffic-channels-share`, where that channel's
+   source_type reads `Social - Paid`; the sibling
+   `get-website-analysis-traffic-channels` labels the same channel
+   `Paid Social`, so quote whichever label the tool you actually called uses).
+   The Caveats entry explains the rollup: "Paid social returned `0.0%` from
+   `<the tool actually called>`; Similarweb's classifier
+   often rolls paid social into Display Ads. Treat as structural-zero, not
+   measured-zero."
 
 5. **Systemic auth failure.** Trigger: when the FIRST 2 required tools called
    (drawn from the PRESENT subset per sw-foundation-core § tool-surface
-   presence) both return 403 with "missing the required claims" wording on
-   the FIRST domain attempted. This indicates an account-level claims
+   presence) both return 403 with `error.code` FORBIDDEN_ERROR (match on
+   status and code, never on message text, which drifts between server
+   releases) on the FIRST domain attempted. This indicates an account-level claims
    problem, not a per-domain restriction or transient error. When fewer than
    2 REQUIRED tools are present-and-accessible in the first place (absences
    and 403s counted together), this pattern's escalation fires via Pattern

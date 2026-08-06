@@ -1,6 +1,8 @@
 # § tool-surface presence, full rules (sw-foundation-core reference)
 
-Presence ("does this tool exist on this connector?") is a gating axis SEPARATE from access (403 claims) and country coverage. It is the only axis that is free to detect: the AI client hands every session the connector's tool list at zero data credits. Detect it live at planning time; never spend a call to discover what the list already states. Grounded in `mcp-tool-catalog-v1` (the surface drifts per account and per release: 90 tools on 2026-05-16, 80 on 2026-06-11 on the same connector; plan-gating vs server drift is unresolved per `plan-gating-vs-server-drift`) and `unknown-tool-error-shape`.
+Presence ("does this tool exist on this connector?") is a gating axis SEPARATE from access (403 claims) and country coverage. It is the only axis that is free to detect: the AI client hands every session the connector's tool list at zero data credits. Detect it live at planning time; never spend a call to discover what the list already states. Grounded in `mcp-tool-catalog-v1` (the surface drifts per account and per release: 90 tools on 2026-05-16, 80 on 2026-06-11, 113 on 2026-08-06, all on the same connector; plan-gating vs server drift is unresolved per `plan-gating-vs-server-drift`) and `unknown-tool-error-shape`.
+
+**Names drift, not just counts.** The 2026-08-06 enumeration retired 8 names in a single wave, all of them renames into the `get-website-analysis-*` namespace (the `get-traffic-*` prefix was eliminated entirely). A renamed tool reads as ABSENT to the pre-filter, so a stale catalog row silently fires a denial outcome on a capability the account fully has. When a documented tool reads absent, check the name-history map in `mcp-tool-catalog-v1` (Appendix C) before believing the absence: a live successor under a different name is the more likely explanation than a lost capability.
 
 ## Evidence rule (tri-state: present / absent / unknown)
 
@@ -42,7 +44,7 @@ When fewer than 2 of the recipe's REQUIRED tools are both present and accessible
 
 | Platform | Qualifying closed-list artifact | Status |
 |----------|--------------------------------|--------|
-| Claude Code | Session-start deferred-tools attachment | Grounded 2026-06-11 |
+| Claude Code | Session-start deferred-tools attachment | Grounded 2026-06-11, re-grounded 2026-08-06 |
 | Cowork | Not yet observed | Treat presence as unknown |
 | Codex | Not yet observed | Treat presence as unknown |
 | Cursor | Not yet observed | Treat presence as unknown |
