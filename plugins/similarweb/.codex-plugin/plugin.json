@@ -1,6 +1,6 @@
 {
   "name": "similarweb",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output. Cross-platform (Claude Code, Codex, Cursor, Claude.ai).",
   "author": {
     "name": "Similarweb"
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Similarweb",
     "shortDescription": "Expert co-pilot for the Similarweb MCP server: seven analyst recipes, auto-routing of free-form questions, capability discovery, intent-aware output. Cross-platform (Claude Code, Codex, Cursor, Claude.ai).",
-    "longDescription": "Expert co-pilot for the Similarweb MCP server. Seven analyst recipes (competitive teardown, audience overlap, channel mix, market size, AEO audit, page mix, keyword opportunity), free-form intent routing, lazy capability discovery, intent-aware output. Turns the Similarweb MCP from an 80-tool flat menu into deterministic multi-tool playbooks.",
+    "longDescription": "Expert co-pilot for the Similarweb MCP server. Seven analyst recipes (competitive teardown, audience overlap, channel mix, market size, AEO audit, page mix, keyword opportunity), free-form intent routing, lazy capability discovery, intent-aware output. Turns the Similarweb MCP from a hundred-plus-tool flat menu into deterministic multi-tool playbooks.",
     "developerName": "Similarweb",
     "category": "Marketing Analytics",
     "capabilities": [

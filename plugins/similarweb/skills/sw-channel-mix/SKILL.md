@@ -13,16 +13,17 @@ Load sw-foundation-core, sw-foundation-data, and sw-foundation-render now via yo
 
 ## Hard rules (NEVER violate)
 
-- NEVER call `get-segments-traffic-sources` for the "top referral sources" section. That tool requires a `segment` ID (a user-defined audience segment), NOT a `domain`, and returns per-segment marketing-channel mix, NOT a referrer list. The right tool is `get-traffic-referrals-incoming`. Per `traffic-sources-shape`.
+- NEVER call `get-segments-traffic-sources` for the "top referral sources" section. That tool requires a `segment` ID (a user-defined audience segment), NOT a `domain`, and returns per-segment marketing-channel mix, NOT a referrer list. The right tool is `get-website-analysis-traffic-referrals-incoming`. Per `traffic-sources-shape`.
+- NEVER swap `get-website-analysis-traffic-referrals-incoming` for `get-website-analysis-traffic-referrals-aggregated` in the Top referral sources section. The two diverge: `-incoming` reports subdomains as SEPARATE rows and carries no absolute `visits` on the row, while `-aggregated` ROLLS SUBDOMAINS UP into the parent domain and does return a per-row `visits` (live 2026-08-06 on nike.com: `-incoming` split narvar.com into tracking.narvar.com 6.65% plus nike.narvar.com 2.04%, where `-aggregated` showed narvar.com once at 8.68%). This recipe uses `-incoming` deliberately: subdomain-level rows expose the partner and tracking infrastructure the rollup hides, the section reports share of referrals rather than absolute visits, and `-incoming` is the cheaper of the two per row. Per `referral-pipelines-divergence`.
 - NEVER pass a full country name (`"United States"`) to any tool. All tools want ISO-3166-1 alpha-2 (`"us"`). Normalize before any call.
 - NEVER pass `end_date: <today>`. The server rejects future dates with `VALIDATION_ERROR / Dates not in range`. Derive effective `end_date` per sw-foundation-data § window-resolution (the Call 0 rank smoke's `meta.last_updated`).
-- NEVER fabricate a per-channel breakdown of PPC spend from `get-websites-ppc-spend` output alone. The tool returns ONE `ppc_spend` scalar per month with NO Paid Search vs Paid Social vs Display split. If per-channel paid attribution is required, compose with `get-websites-traffic-channels` Paid Search + Paid Social + Display Ads visits and qualify the result as "estimated allocation by paid-channel visit share."
+- NEVER fabricate a per-channel breakdown of PPC spend from `get-website-analysis-search-spend` output alone. The tool returns ONE `ppc_spend` scalar per month with NO Paid Search vs Paid Social vs Display split. If per-channel paid attribution is required, compose with `get-website-analysis-traffic-channels` Paid Search + Paid Social + Display Ads visits and qualify the result as "estimated allocation by paid-channel visit share."
 - NEVER label the referrals `share` column as "share of all traffic". `share` is fraction-of-inbound-referrals only; label the column "Share of referrals".
-- NEVER assume `get-traffic-referrals-incoming` rows are pre-sorted by `share`. Sort client-side (or pass `sort=share&asc=false`).
-- NEVER substitute one `get-websites-traffic-channels` call with a union date range for two calls when `--vs-period` is supplied. The tool returns a flat time series and cannot separate current from prior in one response.
+- NEVER assume `get-website-analysis-traffic-referrals-incoming` rows are pre-sorted by `share`. Sort client-side (or pass `sort=share&asc=false`).
+- NEVER substitute one `get-website-analysis-traffic-channels` call with a union date range for two calls when `--vs-period` is supplied. The tool returns a flat time series and cannot separate current from prior in one response.
 - NEVER look for a `global_rank` field in `get-websites-website-rank` responses. Per `website-rank-no-global-field`, the response has `country_rank` only; pass `country: "ww"` to get global. When the Rank + reach section's "Global rank" column is required, make a separate `country: "ww"` call.
-- NEVER pass `web_source: "mobile_web"` to `get-websites-ppc-spend`. Per spec Appendix C the constraint is `total` or `desktop` (the recipe relies on the server's default `total`, but if the call is explicit, do not pass `mobile_web`).
-- NEVER pass `web_source: "total"` or `web_source: "mobile_web"` to `get-website-analysis-ad-networks-agg`. Per spec Appendix C the constraint is `desktop` only (the recipe relies on the server's default `desktop`, but if the call is explicit, do not pass any other value).
+- NEVER pass `web_source: "mobile_web"` to `get-website-analysis-search-spend` under the deprecated `data_version: "VERSION_5.0"`. This recipe pins `data_version: "VERSION_6.0"`, which additionally accepts `mobile_web` and defaults to `total`; the recipe relies on that default and passes no `web_source` at all. Per `ppc-spend-shape`.
+- NEVER pass `web_source` explicitly to `get-website-analysis-display-networks-agg`. The valid value depends on `data_version`: the legacy shape is `desktop` only, while `VERSION_6.0` supports only `total`. The recipe passes neither parameter and relies on the server defaults, which returned 200 live on 2026-08-06. Per `ad-networks-shape`.
 
 ## Step 0 (silent): conversation-context scan
 
@@ -34,22 +35,22 @@ Apply sw-foundation-data § conversation-context to scan for prior recipe output
 TARGET="<first positional arg>"; WINDOW="${WINDOW:-last-90d}"; VS_PERIOD="${VS_PERIOD:-}"
 COUNTRY="${COUNTRY:-us}"
 COUNTRY="${COUNTRY,,}"  # then apply sw-foundation-data § country-normalization map
-CURRENCY="${CURRENCY:-usd}" # one of {usd, eur, gbp, aud, jpy}; passed to ppc-spend
+CURRENCY="${CURRENCY:-usd}" # one of {usd, eur, gbp, aud, jpy}; passed to search-spend
 CURRENCY="${CURRENCY,,}"
-WITH_SHARE_TOOL="${WITH_SHARE_TOOL:-false}"  # opt-in for get-traffic-channels-share long-tail referrer rows
+WITH_SHARE_TOOL="${WITH_SHARE_TOOL:-false}"  # opt-in for get-website-analysis-traffic-channels-share long-tail referrer rows
 echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-channel-mix <domain> [--window <range>] [--vs-period <previous>] [--country <iso-2>] [--currency <usd|eur|gbp|aud|jpy>] [--with-share-tool]"; exit 1; }
 ```
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
 
 - **Smoke**: `get-websites-website-rank`, target domain only, country=`$COUNTRY` (resolved per sw-foundation-core § default-country resolution: user-supplied wins, else the account-coverage default, else `us`), bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the Call 0 rank call; reuse it, never re-issue it.
-- **Secondary probe**: `get-websites-traffic-channels`, target, country=`$COUNTRY`, single-month window.
-- **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-channels`: ABORT with the caveat (there is no channel mix without it); OPTIONAL tools: skip their steps with one consolidated caveat line.
+- **Secondary probe**: `get-website-analysis-traffic-channels`, target, country=`$COUNTRY`, single-month window.
+- **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-website-analysis-traffic-channels`: ABORT with the caveat (there is no channel mix without it); OPTIONAL tools: skip their steps with one consolidated caveat line.
 - The smoke runs at the user country, so a country-coverage gap can hit the smoke itself: do NOT retry or mark fragile; pivot to `country=ww`, re-smoke ONCE at `ww`, and surface the worldwide caveat, per sw-foundation-core § Skip + pivot rule.
 - Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
-REQUIRED: `get-websites-website-rank`, `get-websites-traffic-channels`. OPTIONAL: `get-traffic-referrals-incoming`, `get-websites-ppc-spend`, `get-website-analysis-ad-networks-agg`. OPT-IN ONLY (when `--with-share-tool` supplied): `get-traffic-channels-share`.
+REQUIRED: `get-websites-website-rank`, `get-website-analysis-traffic-channels`. OPTIONAL: `get-website-analysis-traffic-referrals-incoming`, `get-website-analysis-search-spend`, `get-website-analysis-display-networks-agg`. OPT-IN ONLY (when `--with-share-tool` supplied): `get-website-analysis-traffic-channels-share`.
 
 ## Step 3: Pick up bulk inputs from context
 
@@ -60,12 +61,12 @@ Per sw-foundation-core § bulk-input-from-context. sw-channel-mix is single-doma
 | Call | Tool | Purpose |
 |------|------|---------|
 | 0 | `get-websites-website-rank` | The Step 2 smoke (reused, not re-called) + headline rank + derive effective `end_date` from `meta.last_updated`. Bound to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits vs ~74 for the default 36-month series. Per `website-rank-no-global-field`, the response has NO `global_rank` field; render the in-country rank from this single call. If the Rank + reach section needs an explicit global rank column too, make a SECOND call with `country: "ww"` (also bounded the same way). |
-| 1 | `get-websites-traffic-channels` | Current window |
-| 2 | `get-websites-traffic-channels` | Prior window (only if `--vs-period`) |
-| 3 | `get-traffic-channels-share` | OPT-IN ONLY (when `--with-share-tool` supplied). Long-tail referrer rows the traffic-channels tool does not surface. Default OFF: ~200 data credits per call avoided; for a typical single-domain run that's ~200 data credits saved. Share % view of the 10 channels is derived client-side from Call 1 visits (see the Step 5 derivation). The long-tail-referrer data is partially recovered from Call 4 (`get-traffic-referrals-incoming`) which this recipe already calls, so skipping it does not lose unique signal. |
-| 4 | `get-traffic-referrals-incoming` | Top referral sources by domain (only if accessible; `limit: 20`, sort client-side) |
-| 5 | `get-websites-ppc-spend` | Paid investment (only if accessible; single `ppc_spend` scalar per month, NO channel split) |
-| 6 | `get-website-analysis-ad-networks-agg` | Ad network breakdown (only if accessible; defaults: `ad_network_type: incoming, limit: 10`, 3-month window to cap cost at ~20 data credits) |
+| 1 | `get-website-analysis-traffic-channels` | Current window. Returns the ten-channel absolute-visit series, one row per channel per month (`{date, source_type, visits}`); there is NO `limit` parameter. 10 data credits per month of window (grounded at 1 and 3 months across two domains), so ~30 for the default 3-month window. |
+| 2 | `get-website-analysis-traffic-channels` | Prior window (only if `--vs-period`). Same cost shape, so `--vs-period` doubles the channels spend (~60 for two 3-month windows). |
+| 3 | `get-website-analysis-traffic-channels-share` | OPT-IN ONLY (when `--with-share-tool` supplied), `limit: 25`. Rows are `{domain, source_type, share}`: one row per REFERRING DOMAIN carrying a channel label, NOT a per-channel rollup. It cannot replace the Channel share % table (see the Step 5 derivation); its only unique signal is the long-tail referring domains plus the channel each one is attributed to. Cost is exactly 2 data credits per REQUESTED row (grounded at limits 10 / 25 / 50 / 100 on one window), so `limit: 25` costs 50 and `limit: 100` costs 200; cost shape not yet multi-point grounded across windows. Default OFF saves 50 data credits at the documented limit. Call 4 already surfaces referring domains, so skipping Call 3 loses only the channel label on those rows. |
+| 4 | `get-website-analysis-traffic-referrals-incoming` | Top referral sources by domain (only if accessible; `limit: 20`, sort client-side). Roughly 3 data credits per row (limit 25 cost 75 credits, 2026-08-06); cost shape not yet multi-point grounded. |
+| 5 | `get-website-analysis-search-spend` | Paid investment (only if accessible; single `ppc_spend` scalar per month, NO channel split). Pass `data_version: "VERSION_6.0"` (VERSION_5.0 is the deprecated legacy version). Monthly granularity ONLY, max span 39 months. 1 data credit per month of window (grounded at 1 and 3 months), so ~3 for the default window. |
+| 6 | `get-website-analysis-display-networks-agg` | Ad network breakdown (only if accessible; defaults: `ad_network_type: incoming, limit: 10`, 3-month window). Roughly 2.5 data credits per RETURNED row (limit 5 returned 5 rows for 14 credits; limit 25 returned 18 rows for 46), so expect ~25 at `limit: 10`; the exact model is unresolved, so treat the figure as approximate and cost shape not yet multi-point grounded. The panel is short (only 18 networks came back at limit 25 on a large domain), so raising the limit past ~20 buys nothing. |
 
 ## Step 5: Execute
 
@@ -79,12 +80,29 @@ Compute period-over-period deltas client-side:
 5. If user supplies asymmetric windows (e.g. `--window quarter --vs-period previous-month`), normalize to average-visits-per-month per window and compare those, not raw sums.
 6. Suppress channels below a visit-count floor (1% of total target traffic) from "biggest mover" candidacy in the executive read; % changes on small-base channels are not interesting.
 
-Compute channel share % client-side from Call 1 visits (no separate tool call needed by default):
+Compute channel share % client-side from Call 1 visits (no separate tool call is needed, and none can supply it):
 - `total_visits = sum(visits[ch] for ch in 10-channel taxonomy)` for the target's current window.
 - For each channel: `share[ch] = visits[ch] / total_visits` (guard division by zero; render `n/a` when `total_visits` is zero or null).
-- This replaces the default `get-traffic-channels-share` call (saves ~200 data credits per call). The derived share is mathematically identical to what the share tool would return for the 10-channel rollup. The share tool is only needed for its long-tail-referrer rows, which Call 4 (`get-traffic-referrals-incoming`) already surfaces.
+- This derivation is the ONLY source for the Channel share % table. `get-website-analysis-traffic-channels-share` does NOT return a per-channel rollup: its rows are one per referring domain, truncated at the requested `limit`, so summing them by `source_type` yields only the share carried by the top-N domains, never the channel total. Call 3 is therefore an addition, never a substitute, and leaving it off by default saves 50 data credits at the documented `limit: 25`.
 
-Sort `get-traffic-referrals-incoming` rows client-side by `share` descending before rendering.
+**The two `source_type` vocabularies are different strings and must NEVER be equated silently.** `get-website-analysis-traffic-channels` and `get-website-analysis-traffic-channels-share` label the same ten channels differently. Observed live 2026-08-06, the two sets map one to one:
+
+| channels `source_type` | channels-share `source_type` |
+|---|---|
+| Affiliates | Affiliates |
+| Direct | Direct |
+| Display Ads | Display Ads |
+| Gen AI | Gen AI |
+| Mail | Email |
+| Organic Search | Search - Organic |
+| Organic Social | Social - Organic |
+| Paid Search | Search - Paid |
+| Paid Social | Social - Paid |
+| Referrals | Referrals |
+
+Render every channel label using the channels-tool vocabulary (the left column) and translate Call 3 rows through this table before joining them to anything derived from Call 1. Do NOT string-match across the two vocabularies. Note also that Call 3 rows are keyed by referring domain and can carry synthetic entries (a row whose `domain` is `AI Search`, attributed to `Search - Organic`), so not every row is a real referring website.
+
+Sort `get-website-analysis-traffic-referrals-incoming` rows client-side by `share` descending before rendering.
 
 Execute via the AI client's MCP surface. Accumulate source records `{tool, params, status, data_credits, last_updated}` (data_credits per sw-foundation-render § citation block: meta.data_credits_charged, fallback meta.sw_coins, null if both absent). Per sw-foundation-render § error-rendering for null / non-2xx / capability-skipped.
 
@@ -109,10 +127,10 @@ Sections in order (answer-first per sw-foundation-render):
 - `## Rank + reach` (table: global rank, country rank, from Call 0). The Global rank column maps to the `country_rank` value from a `country="ww"` call (no `global_rank` field exists per `website-rank-no-global-field`). The Country rank column maps to the `country_rank` value from the `country="<user-country>"` call. When the user country IS `ww`, the Country rank column collapses to `n/a` and only one call is made.
 - `## Channel breakdown`. 10-channel taxonomy table from Call 1, columns: `Channel`, `Visits (window)`. Values are ABSOLUTE visits aggregated across the window's months. Rows sorted descending by visits. The 10 channels (alphabetical for reference): Affiliates, Direct, Display Ads, Gen AI, Mail, Organic Search, Organic Social, Paid Search, Paid Social, Referrals. Apply sw-foundation-render § error-rendering pattern 4 (structural-zero) specifically when Paid Social returns exactly `0.0`: render `n/a [1]` and surface the classifier-rollup Caveat. Similarweb's classifier often rolls paid social into Display Ads, so a literal `0.0%` is structural-zero, not measured-zero.
 - `## Period-over-period deltas` (only if `--vs-period`). Columns: `Channel`, `Current visits`, `Prior visits`, `Delta visits`, `% change`. Sorted by `abs(delta_visits)` descending.
-- `## Channel share %`. Same 10-channel taxonomy, columns: `Channel`, `Share %`. By default, derived client-side from Call 1 visits per the Step 5 derivation (`share[ch] = visits[ch] / sum(visits)`) so no separate tool call is needed; saves ~200 data credits per run. If `--with-share-tool` was supplied AND Call 3 returned data, use Call 3 server-side values instead (only worth it for the long-tail-referrer rows the share tool surfaces). Apply sw-foundation-render § error-rendering pattern 4 (structural-zero) specifically when Paid Social returns exactly `0.0`: render `n/a [1]` and surface the classifier-rollup Caveat. Similarweb's classifier often rolls paid social into Display Ads, so a literal `0.0%` is structural-zero, not measured-zero.
-- `## Top referral sources` (only if Call 4 accessible). Top 20 rows sorted client-side by `share` descending. Columns: `Referring domain`, `Share of referrals`, `Change vs prior period`. Context line: "{{meta.visits}} referral visits across {{meta.total_count}} referring domains." (both come free from the `get-traffic-referrals-incoming` meta). `change` field rendered as % when present, `n/a` when null.
+- `## Channel share %`. Same 10-channel taxonomy, columns: `Channel`, `Share %`. ALWAYS derived client-side from Call 1 visits per the Step 5 derivation (`share[ch] = visits[ch] / sum(visits)`); no separate tool call is needed. Call 3 NEVER replaces these values, because the share tool returns per-referring-domain rows rather than a channel rollup. When `--with-share-tool` was supplied AND Call 3 returned data, its rows instead add a `Source type` column to `## Top referral sources`, translated through the Step 5 vocabulary map. Apply sw-foundation-render § error-rendering pattern 4 (structural-zero) specifically when Paid Social returns exactly `0.0`: render `n/a [1]` and surface the classifier-rollup Caveat. Similarweb's classifier often rolls paid social into Display Ads, so a literal `0.0%` is structural-zero, not measured-zero.
+- `## Top referral sources` (only if Call 4 accessible). Top 20 rows sorted client-side by `share` descending. Columns: `Referring domain`, `Share of referrals`, `Change vs prior period`, plus a `Source type` column ONLY when `--with-share-tool` was supplied and Call 3 returned data. Context line: "{{meta.visits}} referral visits across {{meta.total_count}} referring domains." (both come free from the `get-website-analysis-traffic-referrals-incoming` meta). `change` field rendered as % when present, `n/a` when null. Rows are subdomain-level (a domain's tracking and partner subdomains appear separately) because this recipe calls `-incoming`, not `-aggregated`; say so in one clause if a subdomain pair is visible in the top 20.
 - `## PPC investment` (only if Call 5 accessible). Monthly time series table from Call 5. Columns: `Month`, `PPC spend`, `Currency`. Headline value above the table: "Total over window: {{sum(ppc_spend)}} {{currency}}." If `--vs-period`, render an adjacent "Prior window total: {{sum(prior)}} {{currency}}, delta = {{current - prior}}." (NO per-channel breakdown is rendered; the tool does not supply one.)
-- `## Ad networks` (only if Call 6 accessible). Top 10 rows from Call 6, pre-sorted server-side. Columns: `Ad network`, `Share`, `Change`. Render `share` as % (0..1 -> %.1f). Render `change` as `n/a` when null.
+- `## Ad networks` (only if Call 6 accessible). Top 10 rows from Call 6 (`{ad_network, share, change}`), pre-sorted server-side. Columns: `Ad network`, `Share`, `Change`. Render `share` as % (0..1 -> %.1f). Render `change` as `n/a` when null: it is populated for `ad_network_type: incoming` (this recipe's default) and is null throughout for `outgoing`, so an all-null Change column under `outgoing` is expected, not a data gap.
 - `## Root-cause hypotheses` (only if `--vs-period` AND the overall verdict was MATERIAL or MAJOR; SKIPPED entirely under WITHIN NOISE per Step 5 derivation #4). 2-3 ranked hypotheses for the biggest channel mover, each labeled `HIGH | MEDIUM | LOW` confidence per sw-foundation-render § expert-heuristics hypothesis calibration. Each hypothesis cites the SPECIFIC NUMBER from the data and a natural-language confirmation question the user might ask in chat (per sw-foundation-render § citation block conversational-tone rule, NEVER emit `/sw-X` slash-commands or `--flag` syntax). For example: "Organic Search dropped 18%; HIGH confidence; could be algorithm update, ranking loss, or seasonality; confirm by asking 'Is `<target>` showing up in AI answers for its top keywords?'". NEVER ship without confidence labels. NEVER introduce external-world speculation (algorithm-update dates, news events) the user did not supply; if you must, label it `UNCONFIRMED EXTERNAL HYPOTHESIS` and put it LAST.
 - `## NEXT MOVES` (EXACTLY 2 backtick-quoted natural-language questions, each
   with a one-sentence rationale max. Per sw-foundation-render § citation block
@@ -160,7 +178,7 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
 
 Field semantics:
 - `channels_prior` is `null` unless `--vs-period` was supplied.
-- `channels_share_pct` is populated by default from the client-side derivation (`share[ch] = visits[ch] / sum(visits)` from Call 1). If `--with-share-tool` was supplied AND Call 3 returned data, it is populated from the server response instead. The values are mathematically identical for the 10-channel rollup; the server tool only adds value for the long-tail-referrer rows (which sw-channel-mix surfaces via Call 4 `get-traffic-referrals-incoming` anyway).
+- `channels_share_pct` is ALWAYS populated from the client-side derivation (`share[ch] = visits[ch] / sum(visits)` from Call 1), never from Call 3. The share tool returns per-referring-domain rows truncated at `limit`, so it cannot produce a channel rollup; when supplied it only enriches `referrals_top` with the channel each referring domain is attributed to.
 - `referrals_top` rows are sorted client-side by `share_of_referrals` descending. `share_of_referrals` is fraction-of-inbound-referrals (0..1), NOT fraction-of-all-visits.
 - `ppc.monthly` rows are one per month; NO per-channel decomposition. If composing with traffic-channels for "estimated allocation by paid-channel visit share", emit a separate `ppc.estimated_by_channel` block and qualify it in the rendered output.
 - `ad_networks` rows: `share` is fraction-of-incoming-ad-network-traffic (0..1). `change` may be null.
@@ -169,10 +187,10 @@ Field semantics:
 
 - **Target has no Similarweb coverage** (Call 0 rank returns null): print "Similarweb has no coverage for {{target}}. Aborting." Exit.
 - **No `--vs-period`**: skip Call 2; skip the `## Period-over-period deltas` section; `channels_prior` and `channel_deltas` are null in handoff.
-- **`get-websites-ppc-spend` access-denied at runtime**: skip Call 5; skip the `## PPC investment` section; note in Caveats: "PPC investment not accessible on this plan." `ppc` key is null in handoff.
-- **`get-website-analysis-ad-networks-agg` access-denied at runtime**: skip Call 6; skip the `## Ad networks` section; note in Caveats: "Ad networks not accessible on this plan." `ad_networks` key is null in handoff.
-- **`get-traffic-referrals-incoming` access-denied at runtime**: skip Call 4; skip the `## Top referral sources` section; note in Caveats. `referrals_top` key is null in handoff.
-- **`get-traffic-channels-share` access-denied at runtime AND `--with-share-tool` was supplied**: skip Call 3; the `## Channel share %` section still renders from the client-side derivation (Call 1 visits); note the opt-in tool skip in Caveats. `channels_share_pct` is populated from the derivation, not null.
+- **`get-website-analysis-search-spend` access-denied at runtime**: skip Call 5; skip the `## PPC investment` section; note in Caveats: "PPC investment not accessible on this plan." `ppc` key is null in handoff.
+- **`get-website-analysis-display-networks-agg` access-denied at runtime**: skip Call 6; skip the `## Ad networks` section; note in Caveats: "Ad networks not accessible on this plan." `ad_networks` key is null in handoff.
+- **`get-website-analysis-traffic-referrals-incoming` access-denied at runtime**: skip Call 4; skip the `## Top referral sources` section; note in Caveats. `referrals_top` key is null in handoff.
+- **`get-website-analysis-traffic-channels-share` access-denied at runtime AND `--with-share-tool` was supplied**: skip Call 3; the `## Channel share %` section is unaffected (it always derives from Call 1 visits) and `## Top referral sources` simply drops its `Source type` column; note the opt-in tool skip in Caveats. `channels_share_pct` stays populated from the derivation, not null.
 - **User-supplied `end_date` is beyond `meta.last_updated`**: clamp per sw-foundation-data § window-resolution and note in Caveats with the canonical "end_date clamped from <requested> to <meta.last_updated>" wording.
 - **Full country name passed**: normalize per sw-foundation-data § country-normalization before any call. If not resolvable, ask one disambiguation question.
 - **A channel absent in prior window but present in current** (rare; only on taxonomy revisions): render `delta = current[ch]`, `pct_change = new` (NOT `+inf` or division-by-zero error).
