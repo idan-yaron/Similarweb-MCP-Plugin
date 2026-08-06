@@ -2,7 +2,19 @@
 
 Presence ("does this tool exist on this connector?") is a gating axis SEPARATE from access (403 claims) and country coverage. It is the only axis that is free to detect: the AI client hands every session the connector's tool list at zero data credits. Detect it live at planning time; never spend a call to discover what the list already states. Grounded in `mcp-tool-catalog-v1` (the surface drifts per account and per release: 90 tools on 2026-05-16, 80 on 2026-06-11, 113 on 2026-08-06, all on the same connector; plan-gating vs server drift is unresolved per `plan-gating-vs-server-drift`) and `unknown-tool-error-shape`.
 
-**Names drift, not just counts.** The 2026-08-06 enumeration retired 8 names in a single wave, all of them renames into the `get-website-analysis-*` namespace (the `get-traffic-*` prefix was eliminated entirely). A renamed tool reads as ABSENT to the pre-filter, so a stale catalog row silently fires a denial outcome on a capability the account fully has. When a documented tool reads absent, check the name-history map in `mcp-tool-catalog-v1` (Appendix C) before believing the absence: a live successor under a different name is the more likely explanation than a lost capability.
+**Names drift, not just counts.** The 2026-08-06 enumeration retired 8 names in a single wave, all of them renames into the `get-website-analysis-*` namespace (the `get-traffic-*` prefix was eliminated entirely). A renamed tool reads as ABSENT to the pre-filter, so a stale catalog row silently fires a denial outcome on a capability the account fully has. That is not hypothetical: it is exactly how the 2026-08 wave broke two shipped recipes.
+
+## § predecessor fallback (rename-transition safety)
+
+A rename is a two-sided hazard. A plugin pinned to the OLD name breaks the moment the server renames; a plugin pinned to the NEW name breaks on any connector still serving the old surface. Connectors do not all update together: the OpenAI-curated Similarweb connector is packaged separately from the direct MCP server, and a user's client may cache an older tool surface. So resolve a documented tool name to whichever of its names the LIVE list actually carries:
+
+1. The documented (current) name is present: use it. This is the normal path and costs nothing.
+2. The documented name is ABSENT and the name-history map in `mcp-tool-catalog-v1` Appendix C lists a retired predecessor whose successor is this tool, AND that predecessor IS present in the live list: call the PREDECESSOR, and treat the capability as PRESENT. Add one Caveats line: "this connector still exposes `<old-name>`; using it. Your Similarweb connector may be a release behind." Never abort, never drop the section.
+3. Neither name is present: this is a true absence; fall through to the Absent outcome.
+
+Two hard limits. Only entries with a REAL successor in Appendix C are eligible: an entry mapped to `none` (currently `get-websites-referrals-agg`) was retired outright, its data moved elsewhere, and calling it is never a substitute. And this fallback only covers renames that preserved the request and response contract, which is what Appendix C records; if a predecessor returns a shape the recipe cannot read, treat it as absent rather than rendering a wrong number.
+
+This is a transition affordance, not a permanent dual-target design. Retire a predecessor from Appendix C once no supported connector serves it.
 
 ## Evidence rule (tri-state: present / absent / unknown)
 
@@ -17,7 +29,8 @@ The presence pre-filter runs at planning time, BEFORE the capability-map read an
 ## Outcomes
 
 - **Present**: plan normally.
-- **Absent** (qualifying evidence positively omits the name): the outcome inherits the recipe's documented DENIAL outcome for that same tool (degrade, pivot offer, ask-user, abort; pinned per recipe in the smoke catalog reference and mirrored in each recipe's Step 2 parameter form), differing only in: zero calls, no denial-confirmation probe, no retry, Pattern 7 wording ("not exposed on this connector"), and persistence to `tools_absent` (capability map schema) instead of `tools_inaccessible`. Abort only where denial would abort.
+- **Renamed-predecessor present** (the documented name is absent BUT its retired predecessor is present, per § predecessor fallback below): call the predecessor and plan normally. This is NOT an absence.
+- **Absent** (qualifying evidence positively omits the name, AND the predecessor fallback found nothing): the outcome inherits the recipe's documented DENIAL outcome for that same tool (degrade, pivot offer, ask-user, abort; pinned per recipe in the smoke catalog reference and mirrored in each recipe's Step 2 parameter form), differing only in: zero calls, no denial-confirmation probe, no retry, Pattern 7 wording ("not exposed on this connector"), and persistence to `tools_absent` (capability map schema) instead of `tools_inaccessible`. Abort only where denial would abort.
 - **Unknown** (no qualifying evidence): skip the pre-filter entirely and proceed optimistically; call-time detection below is the only absence detector. Cached `tools_absent` entries may advisorily skip OPTIONAL tools, but NEVER abort or skip a REQUIRED tool from cache.
 
 ## Smoke retarget ladder
