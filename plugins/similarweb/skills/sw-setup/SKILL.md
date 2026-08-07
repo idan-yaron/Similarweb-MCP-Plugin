@@ -19,20 +19,22 @@ Runs ONLY when `/sw-config --refresh` explicitly invokes it. No auto-trigger.
 
 ## Step 1: Probe one tool per category
 
-Call each of these MCP tools (sequentially is fine; the cost is six cheap calls one-time). FIRST resolve presence per sw-foundation-core § tool-surface presence: tool surfaces are module-gated and drift with server releases, so a probe tool may be ABSENT from the list entirely (observed live for the apps surface). An absent tool is NOT called and NOT an error: record it in `tools_absent` (stamped per the capability map schema; never `tools_available = false`, never `tools_inaccessible`) and move on. If a category's documented probe tool is absent but a sibling tool for the same category exists in the live list (e.g. `get-apps-details` instead of `get-apps-search`), probe the sibling instead and record the SIBLING's outcome in `tools_available` under the sibling's name; the absent canonical tool stays in `tools_absent`. `categories_available` includes a category iff some PRESENT tool for it returned 2xx; a category whose probe tool is absent with no present sibling is `module_not_exposed`, persisted as the `tools_absent` entry plus the category's exclusion from `categories_available` (no separate field).
+Call each of these MCP tools (sequentially is fine; the cost is six cheap calls one-time). FIRST resolve presence per sw-foundation-core § tool-surface presence: tool surfaces are module-gated and drift with server releases, so a probe tool may be ABSENT from the list entirely (observed live for the apps surface). An absent tool is NOT called and NOT an error: record it in `tools_absent` (stamped per the capability map schema; never `tools_available = false`, never `tools_inaccessible`) and move on. If a category's documented probe tool is absent but the live list carries another tool serving the same category, probe that one instead and record ITS outcome in `tools_available` under its own name; the absent canonical tool stays in `tools_absent`. `categories_available` includes a category iff some PRESENT tool for it returned 2xx; a category whose probe tool is absent with no present alternative is `module_not_exposed`, persisted as the `tools_absent` entry plus the category's exclusion from `categories_available` (no separate field).
+
+**Apps has no alternative left.** `get-apps-details` is the canonical apps probe and the only apps tool on the live surface as of the 2026-08-06 enumeration; the previous apps probe target and its siblings were absent from two consecutive enumerations (2026-06-11 and 2026-08-06), so they are documented-absent in sw-foundation-core § apps-catalog rather than probed here. `get-apps-details` returned 403 on the grounded connector, and a 403 PROVES the tool is present, so IF this probe returns `403 FORBIDDEN_ERROR`, record it as a denial (`tools_available = false` plus the `tools_inaccessible` append), never as an absence. Do not presume the outcome: an account carrying the Apps module returns 2xx here, and that is a normal result. A 403 on this probe alone NEVER means the credentials are bad (see the auth-invalid edge case).
 
 | Category | MCP tool | Params |
 |----------|----------|--------|
 | websites | `get-websites-website-rank` | `{"domain": "google.com", "start_date": "2_months_ago", "end_date": "latest"}` |
 | keywords | `get-keywords-overview` | `{"keyword": "similarweb"}` |
-| apps | `get-apps-search` | `{"term": "instagram"}` |
+| apps | `get-apps-details` | `{"store": "apple", "app_id": "389801252"}` (both required per the live schema; this is the pair actually exercised live) |
 | brands | `get-brands-search` | `{"domain": "amazon.com", "search_term": "apple"}` |
 | categories | `get-categories-search` | `{"domain": "amazon.com", "search_term": "technology"}` |
 | lead-enrichment | `get-lead-enrichment-website` | `{"domain": "similarweb.com"}` |
 
 For each call:
 - Success (2xx with payload) => `tools_available[<tool>] = true`
-- HTTP 403 carrying "missing the required claims" (or an equivalent access-denied message, per `auth-invalid-envelope-shape`) => `tools_available[<tool>] = false` AND append the tool name to `tools_inaccessible`. This is the ONLY outcome that appends to `tools_inaccessible` (the v0.1.13 rule in sw-foundation-core § capability-gating: a validation 400 recorded as a denial would poison the map).
+- HTTP 403 with `error.code` FORBIDDEN_ERROR (match on status and code, never on message text: the wording drifted from "Access denied. The user might be missing the required claims for this tool." to "Access forbidden. Upgrade your account." between server releases, per `partial-access-envelope-shape`) => `tools_available[<tool>] = false` AND append the tool name to `tools_inaccessible`. This is the ONLY outcome that appends to `tools_inaccessible` (the v0.1.13 rule in sw-foundation-core § capability-gating: a validation 400 recorded as a denial would poison the map).
 - Any other `client_error` response (e.g. a validation 400 such as "Dates not in range") => `tools_available[<tool>] = false` only; do NOT append to `tools_inaccessible`.
 - Client-level unknown-tool error on a name the list contained (message-gated per `unknown-tool-error-shape`) => treat as absence: record in `tools_absent`, leave it out of `tools_available`, never `tools_inaccessible`.
 - `server_error` or unparseable => `tools_available[<tool>] = "pending"`
@@ -46,7 +48,7 @@ The rank probe uses `end_date="latest"` (the server resolves to actual `meta.las
 
 ## Step 2: Write capabilities.json
 
-Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source; Python 3, atomic write, no BOM, never improvised inline code). Write ONE JSON document to a temp file with the Write tool (cross-platform, no shell heredoc), then run `python3 scripts/capmap.py init --file <tempfile>` (use `python` if `python3` is unavailable, e.g. on Windows). Document shape (the AI client substitutes the actual probe outcomes; example values shown, apps probed via the sibling get-apps-details):
+Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source; Python 3, atomic write, no BOM, never improvised inline code). Write ONE JSON document to a temp file with the Write tool (cross-platform, no shell heredoc), then run `python3 scripts/capmap.py init --file <tempfile>` (use `python` if `python3` is unavailable, e.g. on Windows). Document shape. Every value below is ILLUSTRATIVE and MUST be replaced with what THIS run actually observed; never copy the booleans or the lists verbatim. The example happens to show an account whose apps, brands, and lead-enrichment probes returned 403 (denials, not absences) and one tool absent from the live surface, purely to exercise every field. An account with those claims writes `true` for them and a shorter `tools_inaccessible`:
 
 ```json
 {
@@ -57,14 +59,14 @@ Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-ti
   "tools_available": {
     "get-websites-website-rank": true,
     "get-keywords-overview": true,
-    "get-apps-details": true,
+    "get-apps-details": false,
     "get-brands-search": false,
     "get-categories-search": true,
     "get-lead-enrichment-website": false
   },
-  "tools_inaccessible": ["get-brands-search", "get-lead-enrichment-website"],
-  "tools_absent": ["get-apps-search"],
-  "categories_available": ["websites", "keywords", "apps", "categories"]
+  "tools_inaccessible": ["get-apps-details", "get-brands-search", "get-lead-enrichment-website"],
+  "tools_absent": [{"tool": "get-websites-conversion-rates-agg", "observed_under": "<surface-hash>", "observed_at": "<date>"}],
+  "categories_available": ["websites", "keywords", "categories"]
 }
 ```
 
@@ -96,7 +98,7 @@ Exit silently. Return control to sw-config with no user-visible output; sw-confi
 - **`$HOME/.similarweb-plugin/` not writable**: catch the error from `mkdir`, log to stderr ("filesystem read-only; capabilities will not persist this session"), keep the probe results in conversation context only.
 - **All six probes return 5xx**: write capabilities.json with `tools_available: {}` and `state: "probe_partial"`. Next refresh retries fully.
 - **MCP server not configured in the client**: `mcp_not_configured` requires ZERO Similarweb-scoped names in the live enumeration, or enumeration impossible AND every probe raising the client-level unknown-tool error. When enumeration found a non-empty Similarweb surface or ANY probe returned 2xx, a client-level unknown-tool error on one probe means that TOOL is absent (record in `tools_absent` per Step 1), never `mcp_not_configured`. Only in the true not-configured case: write `capabilities.json` with `state: "mcp_not_configured"` and exit; sw-config surfaces the configuration message.
-- **Auth-invalid envelope** (any probe returns `error.category == "client_error"` with `status_code` in `{401, 403}` per `auth-invalid-envelope-shape`): write `capabilities.json` with `state: "auth_invalid"`. sw-config surfaces a re-auth prompt instead of attempting tool calls.
+- **Auth-invalid envelope**: write `capabilities.json` with `state: "auth_invalid"` ONLY when the failure is account-wide, never on a single per-tool denial. Account-wide means: a probe returns `status_code: 401`, OR a 403 whose `error.code` is NOT `FORBIDDEN_ERROR`, OR EVERY probe in the matrix returns 401/403. A `403 FORBIDDEN_ERROR` on SOME probes is a per-tool claims denial per Step 1 and leaves `state: "ready"` (this is the EXPECTED outcome for the apps probe on accounts without the Apps module, so treating it as auth-invalid would tell a user with valid credentials that their key was rejected). Per `auth-invalid-envelope-shape` and `partial-access-envelope-shape`.
 
 ## Grounded assertions
 
