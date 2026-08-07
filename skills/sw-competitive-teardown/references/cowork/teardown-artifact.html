@@ -35,7 +35,7 @@
       const [ranks, traffic, channels, overlap] = await Promise.all([
         Promise.all(COMP_SET.map(d => window.cowork.callMcpTool(SW + 'get-websites-website-rank', { domain: d, country: 'ww', start_date: START, end_date: END }))),
         Promise.all(COMP_SET.map(d => window.cowork.callMcpTool(SW + 'get-websites-traffic-and-engagement', { domain: d, country: COUNTRY, start_date: START, end_date: END }))),
-        Promise.all(COMP_SET.map(d => window.cowork.callMcpTool(SW + 'get-websites-traffic-channels', { domain: d, country: COUNTRY, start_date: START, end_date: END }))),
+        Promise.all(COMP_SET.map(d => window.cowork.callMcpTool(SW + 'get-website-analysis-traffic-channels', { domain: d, country: COUNTRY, start_date: START, end_date: END }))),
         window.cowork.callMcpTool(SW + 'get-websites-audience-overlap-agg', { domains: COMP_SET.join(','), country: COUNTRY, start_date: START, end_date: END })
       ]);
       renderChannelChart(channels);
