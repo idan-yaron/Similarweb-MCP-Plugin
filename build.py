@@ -93,8 +93,8 @@ CODEX_LONG_DESCRIPTION = (
     "Expert co-pilot for the Similarweb MCP server. Seven analyst recipes "
     "(competitive teardown, audience overlap, channel mix, market size, AEO audit, "
     "page mix, keyword opportunity), free-form intent routing, lazy capability "
-    "discovery, intent-aware output. Turns the Similarweb MCP from an 80-tool flat "
-    "menu into deterministic multi-tool playbooks."
+    "discovery, intent-aware output. Turns the Similarweb MCP from a hundred-plus-tool "
+    "flat menu into deterministic multi-tool playbooks."
 )
 CODEX_DEFAULT_PROMPTS = [
     "Compare nike.com and adidas.com on Similarweb",
@@ -592,6 +592,154 @@ def scan_skill_file_pointers():
     return errors
 
 
+# --- Tool-name drift guard --------------------------------------------------
+# The 2026-08 rename wave shipped dead names through five surface types including
+# a shell grep pattern and JS strings in an HTML artifact, so the scan reads every
+# file type, not just markdown.
+TOOL_DRIFT_SCAN_ROOTS = ("skills", "agents", "commands", "hooks", "plugins", ".agents")
+TOOL_DRIFT_SCAN_FILES = ("README.md", "CONNECTORS.md", "CONTRIBUTING.md")
+TOOL_CATALOG_SNAPSHOT = REPO_ROOT / "tests" / "grounded" / "mcp-tool-catalog-v1.md"
+TOOL_CATALOG_SECTIONS = (
+    ("current", "### Appendix A: current tool names"),
+    ("documented-absent", "### Appendix B: documented-absent tool names"),
+    ("retired", "### Appendix C: retired names with successors"),
+)
+TOOL_CATALOG_ARROW = " -> "
+
+TOOL_NAME_BODY = r"(?:get|post)-[a-z0-9]+(?:-[a-z0-9]+)+"
+TOOL_NAME_RX = re.compile(rf"(?<![\w-])({TOOL_NAME_BODY})(?![\w-])")
+TOOL_NAME_PREFIXED_RX = re.compile(rf"mcp__[A-Za-z0-9_.\-]+__({TOOL_NAME_BODY})")
+TOOL_NAME_FULL_RX = re.compile(rf"{TOOL_NAME_BODY}\Z")
+
+
+class ToolCatalogError(Exception):
+    pass
+
+
+def _catalog_section_entries(lines, heading_prefix):
+    """Return {tool_name: successor_or_None} for the first fenced block following
+    the first heading line starting with heading_prefix. Entry grammar: one name
+    per line, optionally `retired-name -> successor-name`; `none` as a successor
+    means retired outright. Blank and non-tool-shaped lines are tolerated, and an
+    empty block is legal (Appendix B empties out when nothing is documented-absent).
+    Raises ToolCatalogError when the heading or its fenced block is malformed."""
+    for i, line in enumerate(lines):
+        if not line.strip().startswith(heading_prefix):
+            continue
+        j = i + 1
+        while j < len(lines) and not lines[j].strip().startswith("```"):
+            if lines[j].strip().startswith("#"):
+                raise ToolCatalogError(f"'{heading_prefix}' is not followed by a fenced block")
+            j += 1
+        if j >= len(lines):
+            raise ToolCatalogError(f"'{heading_prefix}' has no fenced block")
+        entries = {}
+        for raw in lines[j + 1:]:
+            if raw.strip().startswith("```"):
+                return entries
+            name, _, successor = raw.strip().partition(TOOL_CATALOG_ARROW)
+            name = name.strip()
+            successor = successor.strip()
+            if TOOL_NAME_FULL_RX.match(name):
+                entries[name] = successor if successor and successor != "none" else None
+        raise ToolCatalogError(f"'{heading_prefix}' has an unterminated fenced block")
+    raise ToolCatalogError(f"the snapshot has no '{heading_prefix}' heading")
+
+
+def _load_tool_catalog_snapshot():
+    """Return (sections, skip_reason). A MISSING snapshot skips (CI has no tests/);
+    a snapshot that exists but will not parse raises, because a broken guard is not
+    the same as an absent one and must not pass silently."""
+    if not TOOL_CATALOG_SNAPSHOT.is_file():
+        return None, "the local catalog snapshot is not present (CI has no tests/)"
+    try:
+        lines = TOOL_CATALOG_SNAPSHOT.read_text(encoding="utf-8", errors="replace").split("\n")
+    except OSError as e:
+        raise ToolCatalogError(f"the local catalog snapshot is unreadable ({e})")
+    return {key: _catalog_section_entries(lines, heading)
+            for key, heading in TOOL_CATALOG_SECTIONS}, None
+
+
+def _tool_families(sections):
+    """First two segments of every known name. A token whose family is unknown is
+    prose (`get-started-guide`, `post-mortem-review`), not a mistyped tool."""
+    families = set()
+    for entries in sections.values():
+        for name in entries:
+            families.add("-".join(name.split("-")[:2]))
+    return families
+
+
+def scan_tool_name_drift():
+    """Validate every tool-name-shaped token under the shipped dirs against the
+    local catalog snapshot. Returns (errors, warnings, notice).
+
+    ERROR only on a token in no section: a typo or an invented name. WARN on a
+    documented-absent or retired name and let a human decide. The asymmetry is
+    load-bearing: the surface drifts per account and per release (90 tools on
+    2026-05-16, 80 on 2026-06-11, 113 on 2026-08-06, same connector), so one
+    account's enumeration is not proof a name is gone. Erroring on absence would
+    enforce at build time exactly the inference the runtime presence-first
+    doctrine forbids.
+    """
+    try:
+        sections, skip_reason = _load_tool_catalog_snapshot()
+    except ToolCatalogError as e:
+        return [f"TOOL DRIFT: the catalog snapshot is present but unusable: {e}. "
+                f"Fix {TOOL_CATALOG_SNAPSHOT.name} or delete it to skip the check."], [], None
+    if sections is None:
+        return [], [], f"NOTICE: tool-name drift check skipped; {skip_reason}."
+    families = _tool_families(sections)
+    errors = []
+    warnings = []
+    paths = []
+    for root in TOOL_DRIFT_SCAN_ROOTS:
+        base = REPO_ROOT / root
+        if base.is_dir():
+            paths.extend(sorted(base.rglob("*")))
+    paths.extend(REPO_ROOT / name for name in TOOL_DRIFT_SCAN_FILES)
+    for path in paths:
+        if not path.is_file() or path.suffix.lower() in PII_SKIP_SUFFIXES:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        relpath = path.relative_to(REPO_ROOT).as_posix()
+        seen = {}
+        for i, line in enumerate(text.split("\n"), start=1):
+            for rx in (TOOL_NAME_RX, TOOL_NAME_PREFIXED_RX):
+                for m in rx.finditer(line):
+                    seen.setdefault(m.group(1), i)
+        for token, first_line in sorted(seen.items(), key=lambda kv: (kv[1], kv[0])):
+            if token in sections["current"]:
+                continue
+            if token in sections["documented-absent"]:
+                warnings.append(
+                    f"{relpath}:{first_line} references '{token}', absent from the "
+                    f"latest live enumeration but deliberately documented. Keep it "
+                    f"only inside an explicit absent-tool annotation."
+                )
+            elif token in sections["retired"]:
+                successor = sections["retired"][token]
+                replacement = f"renamed to '{successor}'" if successor else "retired with no successor"
+                warnings.append(
+                    f"{relpath}:{first_line} references retired tool '{token}' "
+                    f"({replacement}). Legitimate only inside a history or "
+                    f"name-map note; anywhere else it is a missed rename."
+                )
+            elif "-".join(token.split("-")[:2]) in families:
+                errors.append(
+                    f"TOOL DRIFT: {relpath}:{first_line} references '{token}', which "
+                    f"appears in no section of {TOOL_CATALOG_SNAPSHOT.name} (not "
+                    f"current, not documented-absent, not retired). A name in a known "
+                    f"tool family that the catalog has never recorded is a typo or a "
+                    f"guess; fix the name, or re-enumerate the live surface and update "
+                    f"the snapshot."
+                )
+    return errors, warnings, None
+
+
 def cmd_validate():
     """Frontmatter present, descriptions under Claude.ai cap, file presence per target,
     grounding citations resolve, pointer integrity for per-skill shipped files,
@@ -936,6 +1084,12 @@ def cmd_validate():
     errors.extend(scan_personal_data())
     errors.extend(scan_em_dashes())
     errors.extend(scan_skill_file_pointers())
+
+    drift_errors, drift_warnings, drift_notice = scan_tool_name_drift()
+    errors.extend(drift_errors)
+    warnings.extend(drift_warnings)
+    if drift_notice:
+        print(drift_notice)
 
     if errors:
         for e in errors:

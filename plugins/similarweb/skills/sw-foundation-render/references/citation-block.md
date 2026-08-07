@@ -17,7 +17,7 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 
 - `<total>` = sum of `data_credits` per call. Read each response's `meta.data_credits_charged` (the live MCP field), falling back to the legacy `meta.sw_coins` for older server deploys. When a call carries NEITHER field, treat that call as unknown (not 0): sum the known calls and append ` (<K> call(s) of unknown cost)` to the total, so a missing field never silently renders as free. When every call's cost is known, emit the plain total even if it is 0. The rename to "data credits" / `data_credits` happens at render/serialization time; grounded in `cheap-probe-tool-per-category` (field rename observed 2026-06).
 - `<N>` = total call count.
-- `<per-tool-rollup>` = comma-separated `<count> <tool-suffix>` pairs. Drop the `get-` / `get-websites-` / `get-keywords-` / `get-categories-` / `get-apps-` / `get-brands-` / `get-traffic-` prefix and the `-agg` suffix (e.g., `4 rank`, `2 traffic-and-engagement`). Sort by descending count then alphabetical.
+- `<per-tool-rollup>` = comma-separated `<count> <tool-suffix>` pairs. Drop the family prefix and the trailing `-agg` or `-aggregated` suffix (e.g., `4 rank`, `2 traffic-and-engagement`, `2 traffic-channels`, `2 search-spend`). Match the LONGEST prefix first, since several are prefixes of each other: `get-website-analysis-` / `get-websites-` / `get-website-content-` / `get-ai-traffic-` / `get-sales-signals-` / `get-industry-` / `get-retail-cross-` / `get-demand-search-trends-` / `get-keywords-` / `get-categories-` / `get-apps-` / `get-brands-` / `get-pages-` / `get-`. Sort by descending count then alphabetical. If two tools called in the same run would collapse to the SAME label (e.g. `get-demand-search-trends-keywords` and `get-website-analysis-keywords-agg` both shortening to `keywords`), keep enough of each name to tell them apart rather than merging their counts.
 - `<optional-status-suffix>` = appended ONLY when something interesting happened. On FULL success (every call 2xx on first attempt, no retries) the line ENDS after the per-tool-rollup's closing period. No "All 200" noise.
   - Failure: ` <failed-count> failed: <tool-1>, <tool-2>.`
   - Retry-and-success: ` <retried-count> retried after rate-limit.` (or `... after transient error.` for non-429).
@@ -27,8 +27,8 @@ Every recipe ends its output with a single-line Sources rollup. When intent clas
 Examples (full success / failure / retry):
 
 ```
-**Sources:** 158 data credits across 12 calls (4 rank, 2 traffic-and-engagement, 2 channels, 1 similar-sites, 1 audience-overlap, 2 ppc-spend).
-**Sources:** 84 data credits across 8 calls (2 rank, 2 traffic-and-engagement, 2 channels, 2 ppc-spend). 1 failed: get-websites-audience-overlap-agg.
+**Sources:** 158 data credits across 12 calls (4 rank, 2 traffic-and-engagement, 2 traffic-channels, 1 similar-sites, 1 audience-overlap, 2 search-spend).
+**Sources:** 84 data credits across 8 calls (2 rank, 2 traffic-and-engagement, 2 traffic-channels, 2 search-spend). 1 failed: get-websites-audience-overlap-agg.
 **Sources:** ... 1 retried after rate-limit.
 ```
 

@@ -39,22 +39,22 @@ echo "$TARGET" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-compe
 
 - **Smoke**: `get-websites-website-rank`, target domain only, country=ww, bounded `start_date = "2_months_ago"`, `end_date = "latest"`. The smoke IS the target's `country="ww"` rank call for Call 1; reuse it, never re-issue it.
 - **Secondary probe**: `get-websites-traffic-and-engagement`, target, country=us.
-- **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-and-engagement` or `get-websites-traffic-channels`: drop the dependent sections and continue (the teardown never aborts on a single tool); OPTIONAL tools: skip with one consolidated caveat line.
+- **Pinned absence outcomes**: `get-websites-website-rank`: retarget the smoke and degrade rank rendering; `get-websites-traffic-and-engagement` or `get-website-analysis-traffic-channels`: drop the dependent sections and continue (the teardown never aborts on a single tool); OPTIONAL tools: skip with one consolidated caveat line.
 - Emit the First read per this recipe's row in sw-foundation-render § insight-first delivery as soon as the first data-bearing call succeeds, before the remaining calls.
 - Procedure per sw-foundation-core § smoke-first sequencing, § tool-surface presence, and § capability-gating; parameters per the smoke catalog table there.
 
 REQUIRED:
 - get-websites-website-rank
 - get-websites-traffic-and-engagement
-- get-websites-traffic-channels
+- get-website-analysis-traffic-channels
 
 OPTIONAL (downgrade gracefully if absent):
 - get-websites-similar-sites-agg
 - get-websites-audience-overlap-agg
-- get-websites-ppc-spend
+- get-website-analysis-search-spend
 - get-keywords-top-brands-agg (ONLY when `--with-amazon-context` is supplied; default skipped)
 
-NOT CALLED by default: `get-traffic-channels-share` (~200 data credits per call) is partly redundant with `get-websites-traffic-channels` (~30 data credits, returns absolute visits per channel). The teardown derives share % client-side from absolute visits when needed: `share[ch] = visits[ch] / sum(visits)` per domain. For a 4-domain teardown that saves ~800 data credits. The long-tail-referrer rows the share tool exposes are not needed for the teardown's Channel breakdown section.
+NOT CALLED by default: `get-website-analysis-traffic-channels-share`. It is NOT a substitute for `get-website-analysis-traffic-channels` (10 data credits per month of window, returns absolute visits per channel): the share tool's rows are one per REFERRING DOMAIN carrying a channel label, not a per-channel rollup, and they are truncated at the requested `limit`, so they cannot produce a channel total at all. The teardown derives share % client-side from absolute visits instead: `share[ch] = visits[ch] / sum(visits)` per domain. The avoided cost is exactly 2 data credits per REQUESTED row (grounded at limits 10 / 25 / 50 / 100 on one window; cost shape not yet multi-point grounded across windows): a per-domain `limit: 100` call would cost 200 data credits and 800 across a 4-domain comp set, and even a modest `limit: 25` costs 50 per domain and 200 across the set. The long-tail referring-domain rows the share tool exposes are not needed for the teardown's Channel breakdown section.
 
 ## Step 3: Pick up bulk inputs from context
 
@@ -79,7 +79,7 @@ Always-included (filter against capabilities):
 
 - **Call 1**: `get-websites-website-rank` TWICE per domain: once with `country: "ww"` to populate the Global rank column (no `global_rank` field exists in the response; use `country_rank` from the `ww` call per `website-rank-no-global-field`), and once with `country: "<user-country>"` to populate the Country rank column. For the TARGET, the Step 2 smoke already IS the `ww` call; reuse its cached result and issue only the user-country call. Bound EACH call to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~6 data credits per bounded call (~2 per month of window). Total: ~12 data credits per domain (~6 for the target thanks to smoke reuse). When the user-supplied country IS `ww`, make only ONE call per domain (none for the target) and use that response for both the Global and Country columns (the Country rank column collapses to "n/a" in that case; surface in Caveats).
 - **Call 2**: `get-websites-traffic-and-engagement` per domain.
-- **Call 3**: `get-websites-traffic-channels` per domain (absolute visits per channel). If a share % view is needed for the Channel breakdown table, derive client-side from these visits: `share[ch] = visits[ch] / sum(visits)`. Do NOT call `get-traffic-channels-share` for the rollup; ~200 data credits per call avoided, ~800 data credits for a 4-domain teardown.
+- **Call 3**: `get-website-analysis-traffic-channels` per domain (absolute visits per channel; rows are `{date, source_type, visits}`, one per channel per month, and the tool takes NO `limit`). The live ten-channel taxonomy, alphabetically: Affiliates, Direct, Display Ads, Gen AI, Mail, Organic Search, Organic Social, Paid Search, Paid Social, Referrals. If a share % view is needed for the Channel breakdown table, derive client-side from these visits: `share[ch] = visits[ch] / sum(visits)`. Do NOT call `get-website-analysis-traffic-channels-share` for the rollup; it cannot produce one (see the NOT CALLED note in Step 2). Cost: 10 data credits per month of window per domain (grounded at 1 and 3 months across two domains), so ~30 per domain for the default 3-month window and ~120 across a 4-domain comp set.
 - **Call 4**: `get-websites-similar-sites-agg` for target, `limit: 4` (the only limit this recipe documents for the call, matching the Step 3 discovery shape; omit dates, or pass exactly the 3-month `2_months_ago`/`latest` span per `similar-sites-window-constraint`; reuse the Step 3 result if discovery already ran).
 
 Opt-in only when `--with-rank-delta` is supplied (default false):
@@ -89,7 +89,7 @@ Opt-in only when `--with-rank-delta` is supplied (default false):
 Optional, only if accessible:
 
 - **Call 5**: `get-websites-audience-overlap-agg` for [target, ...competitors] (batched, 2-5 domains max).
-- **Call 6**: `get-websites-ppc-spend` per domain.
+- **Call 6**: `get-website-analysis-search-spend` per domain. Pass `data_version: "VERSION_6.0"` (VERSION_5.0 is the deprecated legacy version). The row field is `ppc_spend`, one row per month; monthly granularity ONLY, max span 39 months. Cost: 1 data credit per month of window per domain (grounded at 1 and 3 months), so ~3 per domain for the default window.
 
 Opt-in only when `--with-amazon-context` was supplied:
 
@@ -165,7 +165,7 @@ classifier-rollup Caveat. Similarweb's classifier often rolls paid social
 into Display Ads, so a literal `0.0%` is structural-zero, not measured-zero.
 
 For the PPC investment section: add a derived `$ / visit` column to the
-PPC table when Call 6 (`get-websites-ppc-spend`) returned data AND Call 2
+PPC table when Call 6 (`get-website-analysis-search-spend`) returned data AND Call 2
 (`get-websites-traffic-and-engagement`) returned visits for the same
 period. Compute per domain per period: `cost_per_visit = ppc_spend / visits_in_period`
 (guard division by zero; render `n/a` when visits is zero or null).
@@ -240,7 +240,7 @@ intent classifies as `handoff`.
 {
   "rank_table": {"<domain>": {"global": N, "country": M, "delta_yoy": null, "country_param_global": "ww", "country_param_country": "us"}},
   "traffic_engagement": {"<domain>": {"visits": N, "pages_per_visit": M, "avg_visit_duration": "...", "bounce": 0.0}},
-  "channels": {"<domain>": {"Direct": N, "Organic Search": N}},
+  "channels": {"<domain>": {"Direct": N, "Organic Search": N, "Gen AI": N}},
   "similar_sites": [{"domain": "...", "similarity_score": 0.0}],
   "audience_overlap_rows": [{"subset": ["..."], "overlap_unique_visitors": N, "union_unique_users": N}],
   "ppc_spend": {"<domain>": {"monthly": [{"date": "YYYY-MM-DD", "ppc_spend": N, "currency": "usd", "cost_per_visit": null}]}},
@@ -310,7 +310,7 @@ Per sw-foundation-render-cowork § Tier 3. SUPPLEMENTAL to the markdown answer; 
 
 1. Header. Target + comp set + country + window + `meta.last_updated`. One line, matches the markdown header's identity columns.
 2. Toolbar. Two button groups: "filter by rank threshold" (`< 1000`, `< 10k`, `< 100k`, all) and "sort by" (visits, overlap, channel-mix-lead). Buttons toggle `aria-pressed`; click handlers re-render the chart + grid. NOT a `<form>`; `form-action` is `'none'` in CSP.
-3. Chart.js stacked bar of channel mix. One stacked bar per competitor; segments are the 10-channel taxonomy. Colors fixed per channel (Direct = gray, Organic Search = green, Paid Search = blue, Display Ads = orange, etc.).
+3. Chart.js stacked bar of channel mix. One stacked bar per competitor; segments are the live 10-channel taxonomy (Affiliates, Direct, Display Ads, Gen AI, Mail, Organic Search, Organic Social, Paid Search, Paid Social, Referrals). Colors fixed per channel (Direct = gray, Organic Search = green, Paid Search = blue, Display Ads = orange, Gen AI = purple, etc.); every one of the ten needs its own color so no channel silently merges into another.
 4. Grid.js sortable comp-set table. Columns: `domain`, `global_rank`, `monthly_visits`, `channel_mix_lead` (the dominant channel + its share %), `audience_overlap_pct` (vs target; `n/a` for the target row). Sort persists via `localStorage` key `sort-by-column`.
 5. Chart.js horizontal bar of `audience_overlap_pct` (each competitor against the target). Same color per competitor as the stacked bar above.
 6. Mermaid `sankey-beta` diagram. ONLY rendered when `get-websites-audience-overlap-agg` returned subset rows: top-3 source-to-target flows (e.g., "rival-a -> target: 12.4M shared", "rival-b -> target: 8.1M shared"). Skip this section if the audience-overlap tool was inaccessible.
@@ -321,10 +321,10 @@ The Similarweb MCP server prefix is environment-specific (`mcp__similarweb__` fo
 
 - `mcp__similarweb__get-websites-website-rank`
 - `mcp__similarweb__get-websites-traffic-and-engagement`
-- `mcp__similarweb__get-websites-traffic-channels`
+- `mcp__similarweb__get-website-analysis-traffic-channels`
 - `mcp__similarweb__get-websites-audience-overlap-agg`
 
-The page derives channel share client-side from the absolute visits (`share[ch] = visits[ch] / sum(visits)` per domain), same as the markdown path; binding `get-traffic-channels-share` here would re-spend the ~200 credits per domain per page load that the markdown path deliberately avoids.
+The page derives channel share client-side from the absolute visits (`share[ch] = visits[ch] / sum(visits)` per domain), same as the markdown path; binding `get-website-analysis-traffic-channels-share` here would re-spend 2 data credits per requested row per domain on every page load (200 at `limit: 100`, 50 at `limit: 25`) for rows that cannot even produce the channel rollup the page needs.
 
 Call pattern on page load: loop the per-domain tools in parallel (`Promise.all` over the comp set) and single-call the `-agg` tool. Cache results in `localStorage` (5-minute TTL; matches Cowork's read cache).
 

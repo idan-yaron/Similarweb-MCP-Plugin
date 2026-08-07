@@ -5,7 +5,7 @@
 **Turn the Similarweb MCP server into deterministic, analyst-grade playbooks across Cowork, Claude Code, Codex, Cursor, and Claude.ai.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.20-blue.svg)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.1.21-blue.svg)](.claude-plugin/plugin.json)
 [![Platforms](https://img.shields.io/badge/platforms-Cowork%20%7C%20Claude%20Code%20%7C%20Codex%20%7C%20Cursor%20%7C%20Claude.ai-blueviolet.svg)](#install)
 [![Python](https://img.shields.io/badge/python-3.x%20stdlib-blue.svg)](build.py)
 
@@ -17,9 +17,11 @@
 
 ## The problem this solves
 
-The Similarweb MCP exposes roughly 80 tools (the exact surface varies by plan and server release) across web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
+The Similarweb MCP exposes a large and moving tool surface: 113 tools at the 2026-08 enumeration, up from 80 two months earlier, with the exact set varying by plan and server release. It spans web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment, plus newer families for AI traffic, gen-AI campaigns, sales signals, demand search trends, industry analytics, retail cross-analysis, display advertising, segments, and contacts. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
 
 This plugin is the expert layer that sits between your LLM and the Similarweb MCP. Install it once, ask anything Similarweb-shaped in natural language, and get a structured analyst-grade response.
+
+This release re-grounds the plugin on the 2026-08 enumeration and restores the tools that release renamed. The recipes and the router cover the established families; the newer families are listed above for completeness but are not routed yet, and deeper coverage of them is arriving in the next release.
 
 ## See it work
 
@@ -78,7 +80,7 @@ adidas.com
   those partners or invest in equivalent reach (confidence: MEDIUM).
 
 Sources: 158 data credits across 12 calls (4 rank, 2 traffic-and-engagement,
-2 channels, 1 similar-sites, 1 audience-overlap, 2 ppc-spend).
+2 channels, 1 similar-sites, 1 audience-overlap, 2 search-spend).
 ```
 
 What the plugin did under the hood: one batched `get-websites-audience-overlap-agg` call instead of two looped overlap calls, derived the effective window from a single rank smoke probe, normalized country to `us` before any call, labelled the audience-overlap pair against the SAME POND / ADJACENT / COMPLEMENTARY / DISJOINT ladder, classified the +54.4% delta against the WITHIN NOISE / MATERIAL / MAJOR thresholds, ended each strategic insight with a confidence tag.
@@ -100,7 +102,7 @@ What the plugin did under the hood: one batched `get-websites-audience-overlap-a
 | [`/sw-competitive-teardown`](skills/sw-competitive-teardown/SKILL.md) | One brand against N competitors: rank, traffic, channels, similar sites, optional audience overlap and PPC, rendered as exec read + tables + sources. |
 | [`/sw-audience-overlap`](skills/sw-audience-overlap/SKILL.md) | Target vs up to 4 competitors: subset overlap with share-of-union, demographics, geography top 10, deduplicated reach, persona Jaccard. |
 | [`/sw-channel-mix`](skills/sw-channel-mix/SKILL.md) | Channel breakdown on the live 10-channel taxonomy, period-over-period deltas, top inbound referrers, PPC spend, ad networks. |
-| [`/sw-aeo-audit`](skills/sw-aeo-audit/SKILL.md) | Answer Engine Optimization proxy via SEO + SERP share-of-voice + answer-box-adjacent pages. Direct signal when a campaign UUID is supplied. |
+| [`/sw-aeo-audit`](skills/sw-aeo-audit/SKILL.md) | Answer Engine Optimization read via SEO + SERP share-of-voice + answer-box-adjacent pages, led by the Gen AI traffic channel as the grounded AI-referral proxy. The direct AI-traffic and campaign tools are attempted too, and render honestly when your plan does not expose them. |
 | [`/sw-market-size`](skills/sw-market-size/SKILL.md) | Category sizing across Amazon shopper categories or Web industry slugs, with optional web companion and traffic enrichment. |
 | [`/sw-page-mix`](skills/sw-page-mix/SKILL.md) | URL + folder content surface for a domain: top-N pages, folder hierarchy with traffic share, period-over-period change, HHI concentration verdict. |
 | [`/sw-keyword-opportunity`](skills/sw-keyword-opportunity/SKILL.md) | Keyword gap analysis vs a competitor: competitor wins, shared territory, target wins, ROI ranked by volume times position gap. |
@@ -112,7 +114,7 @@ What the plugin did under the hood: one batched `get-websites-audience-overlap-a
 
 ### Operator skills
 
-- **`sw-setup`** (a background skill with no slash command of its own; `/sw-config --refresh` invokes it for you) runs a thorough probe across all six tool categories and writes a known-state capability map to `~/.similarweb-plugin/capabilities.json`. Recipes do not require this map; they run lazily and discover access at runtime.
+- **`sw-setup`** (a background skill with no slash command of its own; `/sw-config --refresh` invokes it for you) runs a thorough probe across the core tool categories (websites, keywords, apps, categories, brands, lead enrichment) and writes a known-state capability map to `~/.similarweb-plugin/capabilities.json`. Probing of the newer tool families lands in the next release. Recipes do not require this map; they run lazily and discover access at runtime.
 - **`/sw-config`** inspects, refreshes, or wipes the capability map; on Cowork it can schedule weekly or monthly grounding re-validation.
 
 ## Quickstart
@@ -123,7 +125,7 @@ Pick the easiest path for your stack. Full per-platform details are in [`docs/in
 
 ```
 1. Configure the Similarweb MCP in Cowork (see Prerequisite)
-2. Download similarweb-cowork-0.1.20.zip from the Releases page:
+2. Download similarweb-cowork-0.1.21.zip from the Releases page:
    https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest
 3. Open Cowork: Customize > Plugins > Upload plugin, select the file
 4. Type: "compare nike.com and adidas.com on similarweb"
@@ -148,7 +150,7 @@ Grab the bundle for your AI client from the [Releases page](https://github.com/i
 <details>
 <summary><b>Cowork (Claude Desktop)</b></summary>
 
-Open Cowork, click **Customize > Plugins > Upload plugin**, select `similarweb-cowork-0.1.20.zip`. The validator should accept the bundle on first try.
+Open Cowork, click **Customize > Plugins > Upload plugin**, select `similarweb-cowork-0.1.21.zip`. The validator should accept the bundle on first try.
 
 After install: the seven recipe commands appear in the `/` menu (possibly namespaced under similarweb), three sub-agents appear in the agent palette, and Similarweb-shaped free-form prompts auto-suggest recipes via the UserPromptSubmit hook. To confirm the bundle is live, pick the sw-config command from the menu with `--show`, or just ask "show my similarweb plugin config".
 
@@ -181,7 +183,7 @@ The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.co
 2. Click the marketplace dropdown next to the search bar (it defaults to **Built by OpenAI**) and choose **+ Add more**.
 3. In the **Add marketplace** dialog:
    - **Source**: `idan-yaron/Similarweb-MCP-Plugin`
-   - **Git ref**: `v0.1.20` (or `main` for the latest)
+   - **Git ref**: `v0.1.21` (or `main` for the latest)
    - **Sparse paths**: leave blank
 4. Click **Add marketplace**. The marketplace registers and the Similarweb plugin appears under the dropdown.
 5. Open a new chat and type `compare nike.com and adidas.com on similarweb`. The `sw-router` skill auto-dispatches to `sw-competitive-teardown`.
@@ -190,7 +192,7 @@ The Codex bundle is a spec-compliant Codex marketplace per [developers.openai.co
 
 ```bash
 # From the directory containing the downloaded zip:
-unzip similarweb-codex-0.1.20.zip -d ./similarweb-codex
+unzip similarweb-codex-0.1.21.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
 codex plugin add similarweb@Similarweb
 ```
@@ -201,7 +203,7 @@ The subcommand is `codex plugin add`, not `codex plugin install`. The zip is on 
 
 The recipes need Similarweb data, which Codex connects to separately from the plugin (Codex does not auto-load a plugin `.mcp.json`, so the bundled `plugins/similarweb/.mcp.json.template` is a shape reference only). Two ways to connect:
 
-**Easiest, the OpenAI-curated Similarweb connector (one-click).** In Codex Desktop, open the connector catalog and connect the Similarweb app (handles auth). Its tools register under an OpenAI app namespace as `get-websites-...`, and the recipes call them by name. Verified end-to-end with these recipes on 2026-06-21: a channel-mix run drove `get-websites-website-rank`, `get-websites-traffic-channels`, `get-traffic-referrals-incoming`, `get-websites-ppc-spend`, and `get-website-analysis-ad-networks-agg` to completion and rendered the insight-first report.
+**Easiest, the OpenAI-curated Similarweb connector (one-click).** In Codex Desktop, open the connector catalog and connect the Similarweb app (handles auth). Its tools register under an OpenAI app namespace and the recipes call them by name. An end-to-end channel-mix run against this connector completed and rendered the insight-first report on 2026-06-21, but four of the five tools that run exercised were renamed in the 2026-08 server release. The current names for that path are `get-websites-website-rank`, `get-website-analysis-traffic-channels`, `get-website-analysis-traffic-referrals-incoming`, `get-website-analysis-search-spend`, and `get-website-analysis-display-networks-agg`. Re-verification of the connector against the renamed surface is pending; if your Codex connector still serves the pre-rename names, please open an issue so we can ship a transitional fallback.
 
 **Bring-your-own MCP server (stdio).** Add your own Similarweb MCP server to Codex:
 
@@ -222,11 +224,11 @@ Use the exact command, args, and env var from Similarweb's official MCP instruct
 
 #### Sub-agents companion (optional, source-build only)
 
-Per the Codex spec, sub-agents live in `~/.codex/agents/` outside any plugin. The three TOMLs are NOT attached to the GitHub release to keep the downloads page focused on the four installable AI environments. To get them, clone the repo and run `python3 build.py --build`; the TOMLs will appear under `dist/similarweb-codex-subagents-0.1.20/`. Then:
+Per the Codex spec, sub-agents live in `~/.codex/agents/` outside any plugin. The three TOMLs are NOT attached to the GitHub release to keep the downloads page focused on the four installable AI environments. To get them, clone the repo and run `python3 build.py --build`; the TOMLs will appear under `dist/similarweb-codex-subagents-0.1.21/`. Then:
 
 ```bash
 mkdir -p ~/.codex/agents
-cp dist/similarweb-codex-subagents-0.1.20/*.toml ~/.codex/agents/
+cp dist/similarweb-codex-subagents-0.1.21/*.toml ~/.codex/agents/
 ```
 
 Three power-user orchestrators then land in `~/.codex/agents/`, spawnable on demand (and via `@<agent-name>`):
@@ -245,14 +247,14 @@ codex-cli 0.133.0-alpha.1 does not execute plugin hooks in `exec` sessions (veri
 <details>
 <summary><b>Cursor</b></summary>
 
-Cursor's plugin surface is the newest of the five targets and still shifting; treat this bundle as experimental. Unzip `similarweb-cursor-0.1.20.zip` and install per your Cursor version's plugin flow (command palette, plugin settings, or its marketplace when published). After install, the sw-config command should be available (possibly namespaced under similarweb); natural-language prompts route via sw-router either way. Skills plus commands subset. Requires the Similarweb MCP server in Cursor's MCP settings (see Prerequisite).
+Cursor's plugin surface is the newest of the five targets and still shifting; treat this bundle as experimental. Unzip `similarweb-cursor-0.1.21.zip` and install per your Cursor version's plugin flow (command palette, plugin settings, or its marketplace when published). After install, the sw-config command should be available (possibly namespaced under similarweb); natural-language prompts route via sw-router either way. Skills plus commands subset. Requires the Similarweb MCP server in Cursor's MCP settings (see Prerequisite).
 
 </details>
 
 <details>
 <summary><b>Claude.ai</b></summary>
 
-Claude.ai installs skills one at a time: **Settings > Features > Skills > upload** each of the 13 per-skill zips from `similarweb-claude-ai-0.1.20/` individually.
+Claude.ai installs skills one at a time: **Settings > Features > Skills > upload** each of the 13 per-skill zips from `similarweb-claude-ai-0.1.21/` individually.
 
 Claude.ai has no slash command surface, so invocation is by name in natural language: "run sw-competitive-teardown on apple.com vs samsung.com" or just "compare apple.com and samsung.com on similarweb" (the router handles the natural-language dispatch). Skills-only subset. Requires the Similarweb MCP connector enabled in your Claude.ai account (see Prerequisite).
 
@@ -263,20 +265,20 @@ For click-by-click instructions, smoke-test prompts, known per-platform limitati
 ## How it works
 
 ```
-                      ┌──────────────────────────────────┐
-   user prompt ─────► │   sw-router (free-form classifier) │ ──► one of /sw-* recipes
-                      └──────────────────────────────────┘
+                  ┌──────────────────────────────────────────┐
+ user prompt ───► │     sw-router (free-form classifier)      │ ──► one of /sw-* recipes
+                  └──────────────────────────────────────────┘
                                        │
                                        ▼
-                      ┌──────────────────────────────────┐
-                      │   sw-foundation-core / data / render │
-                      │   (silent on every Similarweb turn)  │
-                      └──────────────────────────────────┘
+                  ┌──────────────────────────────────────────┐
+                  │    sw-foundation-core / data / render    │
+                  │    (silent on every Similarweb turn)     │
+                  └──────────────────────────────────────────┘
                                        │
                                        ▼
-                      ┌──────────────────────────────────┐
-                      │     Similarweb MCP (80 tools)     │
-                      └──────────────────────────────────┘
+                  ┌──────────────────────────────────────────┐
+                  │ Similarweb MCP (113 tools as of 2026-08) │
+                  └──────────────────────────────────────────┘
 ```
 
 Four moving parts:
