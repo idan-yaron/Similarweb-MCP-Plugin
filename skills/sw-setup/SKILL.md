@@ -44,7 +44,9 @@ Recommended approach: invoke each MCP tool via the AI client's native MCP surfac
 
 The rank probe uses `end_date="latest"` (the server resolves to actual `meta.last_updated`) per sw-foundation-data § window-resolution. Passing `end_date = today` or `end_date = first day of current month` 4xxs because `meta.last_updated` lags by days.
 
-**Coverage seed (free, uncharged).** Also call `get-user-segments-describe` (no params; it returns the `{response}` envelope, not the `{meta, data}` shape). From `response.traffic_and_engagement.countries` capture the covered country codes (the object keys; `world` is the alias for `ww`); from any one country entry capture its `start_date`/`end_date` (the account's `data_window`) and `fresh_data`; from `response.segments` capture the segment list. This is the seeding input for Step 2.5. A failed or absent describe simply skips the coverage write; the rest of setup is unaffected. Grounded in `describe-envelope-and-coverage-probe`.
+**Coverage seed: DISABLED. Do NOT call `get-user-segments-describe`.** It is free in credits and 23,918,985 characters on a real account (2026-08-07), which exhausts the context window rather than returning an error. Its advertised `length` and `chars` parameters are accepted but inert, so no bound makes it safe, and an overflow is not recoverable: there is no error envelope, no retry, and no turn left in which to apply a skip rule. Free in credits is not free in context, and the two are independent.
+
+The seed stays disabled until the platform can hand a raw tool result to a file before it reaches the model. No supported client is known to do that today, so treat this as off everywhere rather than as a condition that might fire. Skip Step 2.5 entirely and continue to Step 3; the rest of setup is unaffected. Grounded in `describe-envelope-and-coverage-probe`.
 
 ## Step 2: Write capabilities.json
 
@@ -74,9 +76,13 @@ Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-ti
 
 This write OVERWRITES any existing `capabilities.json` (including lazy-built append-only state). That is the point of `/sw-config --refresh`: a clean, full known-state map. If the script file is missing, skip the write, keep the probe results in conversation context, and surface one line that the plugin bundle is incomplete (reinstall to restore it); NEVER improvise replacement code.
 
-## Step 2.5: Seed coverage (after the init write)
+## Step 2.5: Seed coverage (DORMANT, not reachable)
 
-After the init write succeeds, record the account's data coverage so recipes resolve their default country without burning a sacrificial country 400 (per sw-foundation-core § default-country resolution). Write ONE JSON document to a temp file with the Write tool, then run `python3 scripts/capmap.py coverage --file <tempfile>`. Document shape (substitute the values captured by the Step 1 coverage seed):
+**This step does not run.** Its only input was the Step 1 coverage seed, which is disabled, so there is nothing to write. Skip straight from Step 2 to Step 3. The mechanism below is kept, not retired: `capmap.py coverage` still works and the schema still reads a coverage block, so restoring the seed later is a one-line change rather than a rebuild. Do NOT substitute another tool here to keep the step alive; `get-industry-demographics-describe` reports industry-module coverage, not `traffic_and_engagement` coverage, and treating those as equivalent would write a wrong coverage block rather than none.
+
+Recipes therefore resolve their default country from their documented default plus the country-coverage pivot (a sacrificial 400), which is the pre-v0.1.17 behavior. Two other consumers also go dark while the block is absent, and both fail open by design: the `data_window.start` clamp is unavailable, so a recipe that widens its window must not assume history it has not observed and stays within its own documented floor; and the `fresh_data` daily-slice hint is unavailable, which costs nothing because a live response's `meta.last_updated` was always the freshness source of truth.
+
+For reference, when the seed is restored: write ONE JSON document to a temp file with the Write tool, then run `python3 scripts/capmap.py coverage --file <tempfile>`. Document shape:
 
 ```json
 {
@@ -87,7 +93,7 @@ After the init write succeeds, record the account's data coverage so recipes res
 }
 ```
 
-`observed_under` is omitted on purpose: the writer stamps the coverage block with the map's current `tool_surface.hash` (just written by init) so a later surface change quarantines it automatically. The coverage write touches ONLY the coverage block, never `state` or the tool lists. If the Step 1 describe failed or returned no countries, SKIP this step entirely; recipes then fall back to their documented defaults plus the country-coverage pivot.
+`observed_under` is omitted on purpose: the writer stamps the coverage block with the map's current `tool_surface.hash` (just written by init) so a later surface change quarantines it automatically. The coverage write touches ONLY the coverage block, never `state` or the tool lists. While the seed is disabled there is no input, so this step is always skipped and no coverage block is written; recipes fall back to their documented defaults plus the country-coverage pivot.
 
 ## Step 3: Done
 

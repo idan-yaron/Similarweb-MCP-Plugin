@@ -14,8 +14,12 @@ atomically (mkstemp + os.replace, UTF-8, no BOM). Python 3 stdlib only.
                upserts tools_absent entries stamped with the hash
   coverage     stdin {"countries": [codes], "observed_under": surface-hash,
                optional "data_window": {start,end}, "fresh_data": date, "segments": []}
-               upserts the coverage block from get-user-segments-describe;
-               touches NO state/tools lists; prints ww-only | multi
+               upserts the coverage block; touches NO state/tools lists;
+               prints ww-only | multi. DORMANT: its only seed was
+               get-user-segments-describe, which is 23.9 MB with inert
+               length/chars bounds, so sw-setup no longer calls it and no
+               coverage block is written. Kept for when a platform can
+               buffer a raw tool result to a file.
   init         stdin the full probe-outcome document (see sw-setup Step 2)
                overwrites the map with the v2 full-probe schema
   show         no stdin; renders the human capability summary
