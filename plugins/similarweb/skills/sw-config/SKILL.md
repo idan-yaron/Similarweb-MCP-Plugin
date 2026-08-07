@@ -45,13 +45,9 @@ python3 scripts/capmap.py sched
 
 Apply the sw-setup skill inline (it ships in this plugin; follow its Step 1 to Step 3 directly in this conversation, or invoke it through the platform's skill mechanism if it is listed) to perform a thorough proactive probe across all 6 categories and OVERWRITE `capabilities.json` with a fresh known-state map (replacing any lazy-built append-only state). Never attempt to run sw-setup as a slash command; it has none.
 
-```bash
-python3 scripts/capmap.py recycle
-```
+NEVER clear the existing map first. `capmap.py init` writes through `os.replace`, an atomic rename over `capabilities.json`, so the previous map survives byte-intact until the replacement lands and no pre-clear is needed. Recycling before the probes means any mid-probe failure leaves the user with no map at all, which is the opposite of what a refresh promises. Recycling AFTER the write is worse, not better: a bare `capmap.py recycle` resolves to `capabilities.json` itself, so it would bin the map that was just written. `--refresh` runs no recycle at any point; only `--reset` (Step C) recycles.
 
-(The `recycle` subcommand moves `capabilities.json` to the OS recycle bin on Windows or `~/.local/share/Trash/` elsewhere, never a hard delete; a missing file is a no-op.)
-
-Then follow sw-setup's probe steps. sw-setup performs the proactive probe and writes the new `capabilities.json`. After it completes, print:
+Follow sw-setup's probe steps. sw-setup performs the proactive probe and writes the new `capabilities.json`. After it completes, print:
 
 ```
 Refreshed. <N> tools accessible across <K> categories.
