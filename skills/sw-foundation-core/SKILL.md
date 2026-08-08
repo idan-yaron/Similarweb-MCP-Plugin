@@ -122,6 +122,14 @@ The apps surface is module-gated: plans without the Apps module do not expose th
 
 Two tools enrich a website (by domain) or a company (by name or domain); the parameter table lives in `references/lead-enrichment-catalog.md`.
 
+### Commerce: the shopper and criq families
+
+Amazon on-site search (32 tools, the `get-categories-`, `get-brands-`, `get-products-`, `get-clicks-` names plus the six shopper `get-keywords-` names) and cross-retailer performance (the 12 `get-retail-cross-` names). Membership is taken from the live name enumeration; the `[shopper]` and `[criq]` prefixes that open each tool description are the per-tool confirmation, verified on a sample rather than on all 44. Neither takes a Similarweb domain, and they do not share identifiers with each other or with the web family. The `domain` parameter on a shopper tool names the MARKETPLACE (`amazon.com` and its five siblings), never the analysed brand, which is a separate `brand` parameter; criq keys on an ACCOUNT-SCOPED custom-category UUID plus a market code. Both families require an uncharged discovery call first (`get-categories-search`, `get-brands-search`, `get-retail-cross-analysis-describe`) because their ids cannot be guessed or carried across marketplaces. NEVER sum shopper `clicks` with web `visits`: different quantities on different surfaces. Watch the prefix trap: `get-keywords-performance` and its siblings are `[shopper]`, while `get-keywords-seo-overview`, `get-keywords-overview`, and `get-keywords-latest-agg` are `[web]` SEO tools. The full intent tables, the two-axis criq cost shape (`rows x (metrics + 1)`, the same shape geography-agg follows), and the silent window-widening trap live in `references/commerce-catalog.md`; Read it before planning any commerce call.
+
+### Buying signals
+
+Six event-detection tools keyed on a COMPANY rather than a page or keyword: intent, technology, ecommerce, traffic, ad-network, news. Five charged a FLAT 10 credits per call, measured across row counts from 1 to 12 and windows from one day to two years, and none accepts a `limit`, so the lever is WHICH tools to call, not how much to ask for. Three traps: `get-sales-signals-intent` accepts exactly ONE valid window (its latest update day) and 400s on any other, so pass no dates at all; an empty result is a POPULATED message-only row rather than an empty array, so `len(data)` is not an emptiness test; and the technology tool's `Dates not in range` 400 shares its status and category with the country-coverage gap, which is why that detection is message-gated. Payloads name real third-party vendors, so examples are always synthetic and a signal renders as "topic interest detected", never as a claim about the company's plans. The intent table and cadences live in `references/signals-catalog.md`; Read it before planning any sales-signals call.
+
 ## Tool-call economy rules
 
 1. **Prefer the aggregated variant for time aggregation** (spelled `-agg` in the older families and `-aggregated` in the newer `get-website-analysis-*` referral family; never guess which, resolve the name from the live tool list). When you need a single aggregated row (e.g. lifetime demographics, all-time conversion) rather than a time series, the `-agg` variant returns one row at substantially lower credit cost (about 37x cheaper for demographics, per `agg-variant-cost-savings`). For comparing N domains, loop the non-agg tool. The documented exception is `get-websites-audience-overlap-agg`, which accepts a comma-joined `domains` parameter (2-5 domains) and returns 2^N-1 subset rows in a single call.
@@ -210,3 +218,8 @@ This skill's behavior is live-validated against the following grounded assertion
 - harness-oversized-output-buffering
 - geography-agg-cost-shape
 - ai-traffic-vs-channel-proxy-completeness
+- commerce-surface-entity-models
+- sales-signals-family-shape
+- demand-trends-aggregation-semantics
+- criq-performance-cost-shape
+- web-family-cost-shapes-2026-08

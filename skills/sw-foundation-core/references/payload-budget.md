@@ -2,13 +2,13 @@
 
 Response SIZE is a planning axis independent of credits. This file carries the two short lists that decide behavior, plus reference measurements for choosing a bound. The inline `§ payload-budget` section in `SKILL.md` carries the invariants and the classes; this file is what you Read when planning a call to a tool you have not bounded before.
 
-Grounded in `payload-measurements` and `harness-oversized-output-buffering`.
+Grounded in `payload-measurements`, `harness-oversized-output-buffering`, and `demand-trends-aggregation-semantics`.
 
 ## Why bytes need their own axis
 
 Credits and bytes are independent, and the most dangerous call on this surface charges zero. `get-user-segments-describe` is uncharged and returned 23.9 MB on a real account, which is not an error the plugin can handle: a context overflow has no envelope, no retry, and no turn left in which to apply a skip rule. Every other gating axis (absence, a 403 denial, a country gap) hands back a response that a recipe can route. This one does not, so it must be prevented at planning time rather than handled at render time.
 
-The corollary that catches people: **a tool with no `limit` parameter is not therefore small.** Both never-inline tools below lack a working `limit`. Find the growth term (row count, date window, an explicit flag, a nested field) and bound that.
+The corollary that catches people: **a tool with no `limit` parameter is not therefore small.** Both never-inline tools below lack a working `limit`, and `get-demand-search-trends-keywords-aggregated` has none either yet returned 77 KB for zero credits. Find the growth term (row count, date window, keyword count behind a topic seed, an explicit flag, a nested field) and bound THAT.
 
 ## Scope: bytes only
 
@@ -46,6 +46,7 @@ Two tools in this class are safe at their DEFAULT and dangerous only under an ex
 
 - **`get-custom-industries-describe`**: 60 bytes at its server default, 5.0 MB with `include_shared: true`. The bound is "do not pass the flag".
 - **`get-sales-signals-news`**: about 8 KB at a 7-day window, 1.7 MB at the server default window. The bound is "pin the window to at most 7 days". Do not attempt to buffer the response instead; a skill cannot buffer what has already entered its context.
+- **`get-demand-search-trends-keywords-aggregated`**: about 77 KB and roughly 999 keywords on ONE common topic over two months, and it charges 0. It has no `limit` at all, so the bound is "narrow the topic, and shorten the window". A broad seed has no safe call, and the free charge is not a signal of a small response.
 
 ## The inline budget
 
@@ -71,6 +72,10 @@ Account-scoped, observed 2026-08-07 unless noted. **Every figure names the param
 | `get-ai-traffic-landing-pages-agg` | limit 2 | 1 KB | 1 per row |
 | `post-contact-search-contacts` | limit 1 | 1.9 KB | not recorded |
 | `post-contact-search-contacts` | limit 100 | 69 KB | not recorded |
+| `get-demand-search-trends-keywords-aggregated` | one common topic, 2 months (no limit param exists) | 77 KB | 0 |
+| `get-retail-cross-performance-categories-performance` | limit 20, default metrics | small | 60 |
+| `get-websites-demographics` | 1 month, 8 metrics | small | 8 |
+| `get-websites-serp-players` | limit 25, 1 month | small | 1 |
 
 **`post-contact-search-contacts` and `post-contact-enrichment-contacts` return personal data about real people.** The sizes above are per-row references for choosing a bound, not an invitation to widen a search. Both bounds are mandatory: an explicit `limit` (the server defaults it to 0 and then rejects 0, so omitting it always fails) AND `output_fields` restricted to the columns the answer actually renders. `output_fields` has NO server-side forcing function, so nothing fails when it is omitted; it just returns every field the server holds. Returned contact PII is never persisted anywhere outside the current answer: not the capability map, not a handoff, not a file, not a rendered artifact. Render only the fields the user asked for and drop the rest.
 

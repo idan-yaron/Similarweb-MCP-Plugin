@@ -83,3 +83,6 @@ This skill's behavior is live-validated against the following grounded assertion
 - referral-pipelines-divergence
 - geography-agg-cost-shape
 - payload-measurements
+- demand-trends-aggregation-semantics
+- criq-performance-cost-shape
+- web-family-cost-shapes-2026-08
