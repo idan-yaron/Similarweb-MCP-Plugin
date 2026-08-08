@@ -670,6 +670,133 @@ def _tool_families(sections):
     return families
 
 
+PAYLOAD_BUDGET_REF = ("skills", "sw-foundation-core", "references", "payload-budget.md")
+
+# Scanned roots. Deliberately NOT the generated mirrors under plugins/ and
+# .agents/: they are byte-copies of skills/, so scanning them doubles every
+# error and points the author at a file they must never hand-edit. Also not
+# hooks/ (shell keyword patterns, no call plans) or README.md (prose).
+PAYLOAD_SCAN_ROOTS = ("skills", "agents", "commands")
+
+# A call-plan row is a markdown table row whose FIRST cell is a call number
+# (`| 4 |`, `| 5b |`). That is the shape every recipe already uses, and it is
+# mechanical: prose that merely mentions a tool is not a call plan, so tool
+# inventories, freshness tables and cost tables do not trip the bound check.
+CALL_PLAN_ROW_RX = re.compile(r"^\|\s*\d+[a-z]?\s*\|")
+
+# Tokens that count as an explicit bound. `include_shared` and `output_fields`
+# qualify because for their tools the bound IS a named parameter decision.
+BOUND_TOKENS = ("limit", "metrics", "start_date", "end_date", "window",
+                "_id", "output_fields", "include_shared", "granularity")
+
+# Backticked parameter names count as bounds even when the bare word would be
+# too common to match on. `domains` is audience-overlap-agg's own bound (2-5
+# total); the bare word appears in almost every row, the backticked form does not.
+BOUND_PARAM_RX = re.compile(r"`domains`")
+
+# Rows that record a tool as NOT called are not call plans. Without this the
+# guard flags the very withdrawals it exists to encourage.
+NOT_A_CALL_RX = re.compile(r"withdrawn|not called|never called|no bounded call",
+                           re.IGNORECASE)
+
+NEVER_AUTO_INVOKE_PHRASE = "auto-invoke"
+PII_PHRASES = ("contact pii", "personal data")
+
+
+def _load_payload_lists():
+    """Return the four authoritative lists from the payload-budget reference.
+
+    Unlike the tool-catalog snapshot (which lives under the gitignored tests/
+    and is therefore legitimately absent in CI), this file SHIPS, so absence or
+    an unparseable block is a broken guard, never a reason to skip. Hard-error."""
+    path = REPO_ROOT.joinpath(*PAYLOAD_BUDGET_REF)
+    if not path.exists():
+        raise ToolCatalogError(
+            f"{'/'.join(PAYLOAD_BUDGET_REF)} is missing; the payload guard reads "
+            "its lists from that shipped file, so it cannot run")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return {key: set(_catalog_section_entries(lines, f"### List: {key}"))
+            for key in ("never-inline", "safe-unbounded",
+                        "never-auto-invoke", "pii-contact")}
+
+
+def scan_payload_budget():
+    """Enforce the payload and side-effect rules the foundations state in prose.
+
+    Returns (errors, warnings). Four checks, all keyed on the shipped lists:
+
+    1. A never-inline tool named anywhere must sit in a file that cites the
+       payload rule, so the reason it is not called travels with the name.
+    2. A tool named in a CALL PLAN row must carry an explicit bound unless it is
+       safe-unbounded. Unmeasured tools are in scope by design: the tool that
+       caused the original incident had no measurement, so a guard that only
+       covered measured tools would have passed it.
+    3. A file naming a side-effectful tool must carry the never-auto-invoke rule.
+    4. A file naming a contact tool must carry the PII handling rule.
+    """
+    errors, warnings = [], []
+    lists = _load_payload_lists()
+    ref_rel = "/".join(PAYLOAD_BUDGET_REF)
+
+    for rel, path in _shipped_files():
+        rel = rel.replace("\\", "/")
+        if not rel.endswith(".md"):
+            continue
+        if not any(rel.startswith(r + "/") for r in PAYLOAD_SCAN_ROOTS):
+            continue
+        # The reference itself names every tool by definition; so does the
+        # catalog row that documents a tool's own payload behavior.
+        if rel == ref_rel:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        low = text.lower()
+        named = set(TOOL_NAME_RX.findall(text))
+
+        for tool in sorted(named & lists["never-inline"]):
+            if "payload-budget" not in low:
+                errors.append(
+                    f"{rel} names never-inline tool '{tool}' without citing "
+                    f"§ payload-budget. A reader meeting the name here has no "
+                    f"way to learn why it must not be called.")
+
+        for tool in sorted(named & lists["never-auto-invoke"]):
+            if NEVER_AUTO_INVOKE_PHRASE not in low:
+                errors.append(
+                    f"{rel} names side-effectful tool '{tool}' without the "
+                    f"never-auto-invoke rule. That prohibition must never "
+                    f"travel separately from the tool name.")
+
+        for tool in sorted(named & lists["pii-contact"]):
+            if not any(p in low for p in PII_PHRASES):
+                errors.append(
+                    f"{rel} names contact tool '{tool}' without the PII "
+                    f"handling rule stated in the same file.")
+
+        for line in text.splitlines():
+            if not CALL_PLAN_ROW_RX.match(line.strip()):
+                continue
+            if NOT_A_CALL_RX.search(line):
+                continue
+            row_low = line.lower()
+            for tool in sorted(set(TOOL_NAME_RX.findall(line))):
+                if tool in lists["safe-unbounded"]:
+                    continue
+                if any(tok in row_low for tok in BOUND_TOKENS):
+                    continue
+                if BOUND_PARAM_RX.search(line):
+                    continue
+                errors.append(
+                    f"{rel}: call-plan row for '{tool}' passes no explicit "
+                    f"bound. Every tool that accepts one gets one, measured or "
+                    f"not; add a limit, metrics list, date window, or id "
+                    f"filter, or move it to the safe-unbounded list with a "
+                    f"measurement.")
+    return errors, warnings
+
+
 def scan_tool_name_drift():
     """Validate every tool-name-shaped token under the shipped dirs against the
     local catalog snapshot. Returns (errors, warnings, notice).
@@ -1090,6 +1217,15 @@ def cmd_validate():
     warnings.extend(drift_warnings)
     if drift_notice:
         print(drift_notice)
+
+    try:
+        payload_errors, payload_warnings = scan_payload_budget()
+        errors.extend(payload_errors)
+        warnings.extend(payload_warnings)
+    except ToolCatalogError as exc:
+        # The lists ship, unlike the tool-catalog snapshot, so a missing or
+        # unparseable block is a broken guard rather than a CI-shaped absence.
+        errors.append(f"payload guard could not run: {exc}")
 
     if errors:
         for e in errors:

@@ -81,3 +81,45 @@ Account-scoped, observed 2026-08-07 unless noted. **Every figure names the param
 ## Adding a tool to these lists
 
 A tool joins **never inline** only when no parameter brings it under budget, and the entry must say which parameters were tried and what they did. A tool joins **safe unbounded** only when it accepts no bound parameter AND has a recorded measurement. Everything else stays bound-required, which needs no entry at all. When in doubt, leave it out: the default is already the safe answer, and a wrong entry on either list is worse than no entry.
+
+## Machine-readable lists
+
+`build.py --validate` parses the four fenced blocks below and fails the build on a violation, so these are the authoritative lists and the prose above is the explanation. Keep them in sync: a name added to a human table but not to its block is unenforced, and a name in a block that no longer exists on the live surface trips the tool-name drift guard.
+
+### List: never-inline
+
+```
+get-user-segments-describe
+get-gen-ai-campaigns
+```
+
+Naming one of these in a shipped file requires citing `§ payload-budget` nearby, so a reader always meets the reason it is not called.
+
+### List: safe-unbounded
+
+```
+get-ai-traffic-overview
+get-ai-traffic-overview-aggregated
+get-industry-demographics-describe
+get-industry-unique-users-describe
+```
+
+These are exempt from the bound requirement because they accept no bound parameter. Everything NOT on this list needs an explicit bound in a call plan, measured or not.
+
+### List: never-auto-invoke
+
+```
+post-emails-outreach
+post-contacts-bulk
+```
+
+Side-effectful. Any shipped file naming one must carry the never-auto-invoke rule, so the prohibition can never travel separately from the tool name.
+
+### List: pii-contact
+
+```
+post-contact-search-contacts
+post-contact-enrichment-contacts
+```
+
+Return personal data. Any shipped file naming one must carry the PII handling rule in the same file.
