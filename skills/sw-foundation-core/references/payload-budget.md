@@ -33,7 +33,6 @@ These accept no bound parameter and have been measured small. Calling them witho
 
 | Tool | Observed | Credits |
 |---|---|---|
-| `get-ai-traffic-overview`, `get-ai-traffic-overview-aggregated` | about 1 KB; structurally capped by monthly granularity and a fixed source list | 0 |
 | `get-industry-demographics-describe`, `get-industry-unique-users-describe` | about 17 KB each, near-identical content; fetch one and reuse rather than both | 0 |
 
 ### Bound required
@@ -46,6 +45,7 @@ Two tools in this class are safe at their DEFAULT and dangerous only under an ex
 
 - **`get-custom-industries-describe`**: 60 bytes at its server default, 5.0 MB with `include_shared: true`. The bound is "do not pass the flag".
 - **`get-sales-signals-news`**: about 8 KB at a 7-day window, 1.7 MB at the server default window. The bound is "pin the window to at most 7 days". Do not attempt to buffer the response instead; a skill cannot buffer what has already entered its context.
+- **`get-ai-traffic-overview` and `get-ai-traffic-overview-aggregated`**: RECLASSIFIED here from safe-unbounded. The schema accepts `start_date`, `end_date`, and `metrics`, and the SERVER DEFAULT window is about three years, so calling it "as-is" asks for the widest window it offers. It returned 128 rows across 15 LLM sources on one domain with real AI traffic, uncharged. The bound is "pin the window". An earlier about-1-KB reading came from a domain or account with almost no AI data and did not transfer. Grounded in `ai-traffic-overview-window-default`.
 - **`get-demand-search-trends-keywords-aggregated`**: about 77 KB and roughly 999 keywords on ONE common topic over two months, and it charges 0. It has no `limit` at all, so the bound is "narrow the topic, and shorten the window". A broad seed has no safe call, and the free charge is not a signal of a small response.
 
 ## The inline budget
@@ -65,6 +65,7 @@ Account-scoped, observed 2026-08-07 unless noted. **Every figure names the param
 | `get-websites-audience-interests-agg` | server default (limit 100) | about 22 KB | 500 |
 | `get-website-content-technologies-agg` | server default (limit 100) | about 45 KB | 10 |
 | `get-website-analysis-traffic-channels-share` | limit 100 | about 12 KB | 200 |
+| `get-ai-traffic-overview` | no dates (server default, about 3 years) | 128 rows, not byte-measured | 0 |
 | `get-retail-cross-analysis-describe` | server default | 53.4 KB | 0 |
 | `get-retail-cross-analysis-describe` | limit 1 | 1.3 KB | 0 |
 | `get-gen-ai-campaign-analysis-prompts` | limit 1, `metrics` omitting `response` | 1.2 KB | not recorded |
@@ -103,8 +104,6 @@ Naming one of these in a shipped file requires citing `§ payload-budget` nearby
 ### List: safe-unbounded
 
 ```
-get-ai-traffic-overview
-get-ai-traffic-overview-aggregated
 get-industry-demographics-describe
 get-industry-unique-users-describe
 ```
