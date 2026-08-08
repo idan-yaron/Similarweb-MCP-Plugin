@@ -102,7 +102,7 @@ Rank, traffic-and-engagement, traffic channels (including the `Gen AI` channel),
 
 ### Apps-shaped queries
 
-The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (absent from the tool list rather than returning 403); resolve presence per § tool-surface presence before planning any apps call (absent means module_not_exposed, zero calls). `get-apps-details` is the ONLY apps tool on the live surface as of the 2026-08-06 enumeration, and it is itself 403 claims-gated on the grounded connector (so it renders as a denial, not an absence). The other six apps names are documented-absent across two consecutive enumerations. The active guidance and that documented-absent list live in `references/apps-catalog.md`; Read it only when an apps-shaped query is actually in play.
+The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (absent from the tool list rather than returning 403); resolve presence per § tool-surface presence before planning any apps call (absent means module_not_exposed, zero calls). `get-apps-details` is the ONLY apps tool on the live surface as of the 2026-08-07 enumeration, and its entitlement varies by account: the reference connector returned 403 through 2026-08-06 and 200 from 2026-08-07. Either outcome proves PRESENCE, so a denial renders as a denial, never as an absence. The other six apps names are documented-absent across two consecutive enumerations. The active guidance and that documented-absent list live in `references/apps-catalog.md`; Read it only when an apps-shaped query is actually in play.
 
 ### Brands and categories
 
