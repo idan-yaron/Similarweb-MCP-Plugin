@@ -209,3 +209,4 @@ This skill's behavior is live-validated against the following grounded assertion
 - payload-measurements
 - harness-oversized-output-buffering
 - geography-agg-cost-shape
+- ai-traffic-vs-channel-proxy-completeness
