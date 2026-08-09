@@ -42,14 +42,26 @@ __pycache__/
 .env.*
 .aider*
 
-# Stray screenshots and captures dropped in the repo root. Deliberately
-# root-only (a leading slash) so assets/ and docs/ images still track normally.
-# Four analyst screenshots were swept into a release commit by `git add -A`
-# on 2026-08-09; this keeps a loose file in the working directory from
-# becoming a public artifact again.
+# Stray captures and exports dropped in the repo root. Deliberately root-only
+# (a leading slash) so assets/ and docs/ images still track normally, and
+# scoped to types that are never source. Keeps a loose working-directory file
+# from becoming a published artifact.
 /*.png
 /*.jpg
 /*.jpeg
 /*.gif
 /*.webp
+/*.svg
 /*.pdf
+/*.mp4
+/*.mov
+/*.zip
+/*.tar
+/*.gz
+/*.csv
+/*.tsv
+/*.xlsx
+/*.xls
+/*.parquet
+/*.log
+/*.txt

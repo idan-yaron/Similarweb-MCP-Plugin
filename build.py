@@ -720,6 +720,79 @@ def _load_payload_lists():
                         "never-auto-invoke", "pii-contact")}
 
 
+# Every top-level entry that legitimately ships. A tracked file outside these is
+# almost always a stray drop rather than a deliberate addition. Adding a
+# genuinely new top-level entry means adding it here too; that friction is the
+# point.
+ALLOWED_TOP_LEVEL = frozenset({
+    ".agents", ".claude-plugin", ".gitattributes", ".github", ".gitignore",
+    "CONNECTORS.md", "CONTRIBUTING.md", "LICENSE", "README.md", "SECURITY.md",
+    "agents", "assets", "build.py", "commands", "docs", "hooks", "plugins",
+    "skills", "tools",
+})
+
+# Media and data blobs may only live in an assets directory. Anywhere else they
+# are either a stray capture or an export that does not belong in a public repo.
+MEDIA_SUFFIXES = (
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico",
+    ".pdf", ".mp4", ".mov", ".webm", ".zip", ".tar", ".gz",
+    ".xlsx", ".xls", ".csv", ".tsv", ".parquet",
+)
+ALLOWED_MEDIA_PREFIXES = ("assets/", "plugins/similarweb/assets/")
+
+
+def _tracked_files():
+    """Tracked paths per git, or None when git is unavailable.
+
+    Deliberately uses git rather than a filesystem walk: a walk would flag every
+    untracked local scratch file, and untracked files are not the hazard. What
+    ships is what is TRACKED."""
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "-z"], cwd=str(REPO_ROOT),
+            capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return [p for p in out.stdout.split("\0") if p]
+
+
+def scan_repo_hygiene():
+    """Fail the build when a tracked file is somewhere it does not belong.
+
+    Two independent checks, either of which alone is sufficient:
+
+    1. Top-level allowlist. A tracked path whose first segment is unknown.
+    2. Media placement. A binary or data blob outside an assets directory.
+
+    Returns (errors, warnings). A missing or non-functional git is a SKIP rather
+    than a failure, so the guard never blocks a source tarball build."""
+    errors, warnings = [], []
+    tracked = _tracked_files()
+    if tracked is None:
+        warnings.append(
+            "repo-hygiene guard skipped: could not read the tracked file list "
+            "(git unavailable)")
+        return errors, warnings
+
+    for path in tracked:
+        top = path.split("/", 1)[0]
+        if top not in ALLOWED_TOP_LEVEL:
+            errors.append(
+                f"'{path}' is tracked but '{top}' is not an allowed top-level "
+                f"entry. If this is a deliberate addition, add '{top}' to "
+                f"ALLOWED_TOP_LEVEL in build.py; if it is a stray file, remove "
+                f"it from the index")
+            continue
+        lower = path.lower()
+        if lower.endswith(MEDIA_SUFFIXES) and not path.startswith(ALLOWED_MEDIA_PREFIXES):
+            errors.append(
+                f"'{path}' is a tracked media or data blob outside an assets "
+                f"directory. Move it under assets/, or remove it from the index")
+    return errors, warnings
+
+
 # Recipes are the user-facing playbooks: every skill that is not a foundation,
 # an operator, or the router. CODEX_SKILL_INTERFACES is documented "recipes
 # only", so the two must agree exactly; that agreement is check 1 below.
@@ -1335,6 +1408,9 @@ def cmd_validate():
         count_errors, count_warnings = scan_recipe_count()
         errors.extend(count_errors)
         warnings.extend(count_warnings)
+        hygiene_errors, hygiene_warnings = scan_repo_hygiene()
+        errors.extend(hygiene_errors)
+        warnings.extend(hygiene_warnings)
     except ToolCatalogError as exc:
         # The lists ship, unlike the tool-catalog snapshot, so a missing or
         # unparseable block is a broken guard rather than a CI-shaped absence.
