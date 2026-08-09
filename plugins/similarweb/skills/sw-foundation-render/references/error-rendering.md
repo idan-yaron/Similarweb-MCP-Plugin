@@ -1,6 +1,6 @@
 # § error-rendering, full pattern text (sw-foundation-render reference)
 
-Seven canonical patterns. Apply consistently:
+Eight canonical patterns. Apply consistently:
 
 1. **Tool returned null or empty payload:** render `n/a` in the affected
    cell. NEVER fabricate. NEVER infer from training data. The cell stays
@@ -92,6 +92,50 @@ Seven canonical patterns. Apply consistently:
    accessible (absences and 403s counted together), escalate per Pattern 5
    semantics with the caveat naming BOTH causes instead of shipping a
    multi-section-dropped report.
+
+8. **Response too large to read inline (a 200 the AI client replaced with a
+   size notice instead of the payload):** evaluated BEFORE Pattern 1, because
+   this is the pattern most easily mistaken for a small success. Some clients
+   do not hand an oversized tool result to the model at all: they write it to a
+   session-local file and substitute a notice carrying the size, a path, and a
+   truncated preview of the first few kilobytes. That preview is valid-looking
+   data, so a reader who skips the notice will treat a fragment as the whole
+   response and under-report from it.
+
+   **Trigger, matched on SHAPE not wording.** A 2xx whose content is a size
+   statement plus a file path, in place of the expected envelope. Never match on
+   the exact notice text: it is an AI-client implementation detail that changes
+   in silent updates and differs per platform (grounded in
+   `harness-oversized-output-buffering`, which is `claim_scope: client` for
+   exactly this reason). The discriminators are the size statement and the fact
+   that the payload is absent, not any particular phrase.
+
+   **Action:**
+   1. Render "response too large to read inline" in the affected cell. NEVER
+      render figures parsed out of the preview: a preview is a prefix, not a
+      sample, so anything computed from it is wrong in an unknown direction.
+   2. One Caveats line naming the tool AND the bound that proved insufficient:
+      "`<tool>` returned more than the context budget at `<the bound actually
+      passed, or 'the server default' when the call passed none>`; re-run with
+      a tighter bound."
+   3. The NEXT MOVE offers the tighter re-call, naming a specific smaller bound.
+   4. Do NOT offer to read the buffered file. No shipped skill has a
+      buffered-read path, and inventing one couples the recipe to an
+      undocumented internal artifact of one AI client. The request is the only
+      portable lever.
+
+   **Distinct from Pattern 1**: an empty payload means the tool had no data;
+   this means the tool had too much. Rendering `n/a` here would state a fact
+   about the world that was never measured. **Distinct from Pattern 2**: this
+   is a 2xx and a retry reproduces it exactly, so retrying is pure waste; only
+   a tighter bound changes the outcome.
+
+   **This pattern is a backstop, not the mitigation.** On a client that does NOT
+   buffer, the oversized payload is inlined and the context is exhausted, which
+   leaves no turn in which to render anything at all. So the real defense is
+   preventive and lives at planning time in sw-foundation-core § payload-budget:
+   bound every call that accepts a bound, and never call a never-inline tool.
+   Pattern 8 catches the case where a call reached the server unbounded or under a bound that proved too loose.
 
 A `## Caveats` block appears at the bottom of the recipe output if and only
 if any of these fired. If no errors, no Caveats block.

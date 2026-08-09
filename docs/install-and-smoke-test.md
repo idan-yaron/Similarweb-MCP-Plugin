@@ -6,10 +6,10 @@ Per-platform install instructions, verification steps, smoke tests, known limita
 
 Download the bundle for your AI client from the [Releases page](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest). The four AI-environment bundles ship as `.zip` assets attached to each release:
 
-- `similarweb-cowork-0.1.22.zip` (Cowork-native flagship; also accepted as `.plugin`)
-- `similarweb-claude-code-0.1.22.zip` (Claude Code bundle; skills + commands subset)
-- `similarweb-codex-0.1.22.zip` (Codex CLI bundle; skills-only subset)
-- `similarweb-cursor-0.1.22.zip` (Cursor bundle; skills + commands subset)
+- `similarweb-cowork-0.1.23.zip` (Cowork-native flagship; also accepted as `.plugin`)
+- `similarweb-claude-code-0.1.23.zip` (Claude Code bundle; skills + commands subset)
+- `similarweb-codex-0.1.23.zip` (Codex CLI bundle; skills-only subset)
+- `similarweb-cursor-0.1.23.zip` (Cursor bundle; skills + commands subset)
 
 The Cowork bundle is the flagship target with the full surface (skills + commands + agents + hooks + artifacts + connectors). The other three carry the skills (plus commands where the platform supports them) without the Cowork-only layer.
 
@@ -34,7 +34,7 @@ For each platform below, the "Verify MCP is configured" section tells you where 
 
 ### Where the bundle lives
 
-`similarweb-cowork-0.1.22.zip`
+`similarweb-cowork-0.1.23.zip`
 
 Contents (32 files):
 
@@ -83,7 +83,7 @@ In Cowork: **Customize > Connectors > Similarweb**. If the toggle is off or the 
 
 1. Open Cowork.
 2. Click **Customize > Plugins > Upload plugin**.
-3. Select `similarweb-cowork-0.1.22.zip`.
+3. Select `similarweb-cowork-0.1.23.zip`.
 4. Cowork validates the bundle (LF line endings, canonical frontmatter, hooks.json shape). The validator should accept the bundle on first try.
 5. Cowork loads the plugin into the active session. No restart required.
 
@@ -122,7 +122,7 @@ In Cowork: **Customize > Connectors > Similarweb**. If the toggle is off or the 
 
 ### Where the bundle lives
 
-`similarweb-claude-code-0.1.22.zip`
+`similarweb-claude-code-0.1.23.zip`
 
 Contents:
 
@@ -222,8 +222,8 @@ The Codex bundle is a spec-compliant Codex MARKETPLACE per [developers.openai.co
 
 ### Where the bundles live
 
-- `similarweb-codex-0.1.22.zip` is attached to the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest); download it from there.
-- `similarweb-codex-subagents-0.1.22/` (optional companion: 3 sub-agent TOMLs) is NOT attached to the official release. To get it, clone the repo and run `python3 build.py --build`; the directory and TOMLs appear under `dist/`.
+- `similarweb-codex-0.1.23.zip` is attached to the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest); download it from there.
+- `similarweb-codex-subagents-0.1.23/` (optional companion: 3 sub-agent TOMLs) is NOT attached to the official release. To get it, clone the repo and run `python3 build.py --build`; the directory and TOMLs appear under `dist/`.
 
 ### Codex marketplace bundle contents
 
@@ -270,7 +270,7 @@ The canonical Codex marketplace tree is committed at the repo root (`.agents/plu
 2. Click the marketplace dropdown next to the search bar (it defaults to **Built by OpenAI**) and choose **+ Add more**.
 3. In the **Add marketplace** dialog:
    - **Source**: `idan-yaron/Similarweb-MCP-Plugin`
-   - **Git ref**: `v0.1.22` (or `main` for the latest)
+   - **Git ref**: `v0.1.23` (or `main` for the latest)
    - **Sparse paths**: leave blank
 4. Click **Add marketplace**. The marketplace registers; the Similarweb plugin appears under the marketplace dropdown.
 5. Open a new chat in Codex and type `compare nike.com and adidas.com on similarweb`. The `sw-router` skill auto-dispatches to `sw-competitive-teardown` and you should see a structured response with rank, traffic, channels, audience overlap, and strategic insights.
@@ -281,11 +281,11 @@ Codex's manifest loader looks at the staging ROOT for `.agents/plugins/marketpla
 
 For users who prefer the terminal or want to point Codex at an unzipped Release bundle:
 
-1. Download `similarweb-codex-0.1.22.zip` from the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest).
+1. Download `similarweb-codex-0.1.23.zip` from the [latest release](https://github.com/idan-yaron/Similarweb-MCP-Plugin/releases/latest).
 2. From the directory containing the downloaded zip, run:
 
 ```bash
-unzip similarweb-codex-0.1.22.zip -d ./similarweb-codex
+unzip similarweb-codex-0.1.23.zip -d ./similarweb-codex
 codex plugin marketplace add ./similarweb-codex
 codex plugin add similarweb@Similarweb
 ```
@@ -311,7 +311,7 @@ git clone https://github.com/idan-yaron/Similarweb-MCP-Plugin.git
 cd Similarweb-MCP-Plugin
 python3 build.py --build
 mkdir -p ~/.codex/agents
-cp dist/similarweb-codex-subagents-0.1.22/*.toml ~/.codex/agents/
+cp dist/similarweb-codex-subagents-0.1.23/*.toml ~/.codex/agents/
 ```
 
 After install the three agents are available in Codex's agent palette and via `@<agent-name>` dispatch.
@@ -359,7 +359,7 @@ Look for: the 10-channel taxonomy table, a delta column (current vs prior), an i
 
 ### Where the bundle lives
 
-`similarweb-cursor-0.1.22.zip`
+`similarweb-cursor-0.1.23.zip`
 
 Contents:
 
@@ -402,7 +402,7 @@ Cursor's plugin surface is the newest of the five targets and still shifting; tr
 Option A (in-app):
 
 1. In Cursor, run your version's plugin-install flow (e.g. an `/add-plugin` command-palette entry, or Settings > Plugins, where available).
-2. Point at the local path of `similarweb-cursor-0.1.22.zip` (or a directory containing the unzipped `.cursor-plugin/` tree).
+2. Point at the local path of `similarweb-cursor-0.1.23.zip` (or a directory containing the unzipped `.cursor-plugin/` tree).
 3. Reload the Cursor window.
 
 Option B (marketplace):
@@ -413,7 +413,7 @@ Option B (marketplace):
 ### Verify install
 
 - The sw-config command is available in the Cursor chat command palette (possibly namespaced under similarweb).
-- Settings > Plugins should list `similarweb` with version 0.1.22.
+- Settings > Plugins should list `similarweb` with version 0.1.23.
 - A free-form Similarweb prompt triggers sw-router.
 
 ### Smoke test
@@ -449,7 +449,7 @@ Look for:
 
 ### Where the bundles live
 
-`similarweb-claude-ai-0.1.22/` (a directory, NOT a single zip)
+`similarweb-claude-ai-0.1.23/` (a directory, NOT a single zip)
 
 Contents (13 per-skill zips, uploaded one at a time):
 

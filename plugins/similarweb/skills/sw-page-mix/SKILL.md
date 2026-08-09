@@ -31,7 +31,8 @@ DOMAIN="<first positional arg>"
 COUNTRY="${COUNTRY:-us}"
 COUNTRY="${COUNTRY,,}"  # then apply sw-foundation-data § country-normalization map
 FOLDER_DEPTH="${FOLDER_DEPTH:-2}"  # optional max folder depth to surface in strategic-insights commentary (NOT a tool param)
-echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-page-mix <domain> [--country <iso-2>] [--folder-depth <N>]"; exit 1; }
+WITH_SUBDOMAINS="${WITH_SUBDOMAINS:-false}"  # opt-in; also set true by a natural-language ask for the subdomain split
+echo "$DOMAIN" | grep -qE "^[a-z0-9.-]+\.[a-z]{2,}$" || { echo "Usage: /sw-page-mix <domain> [--country <iso-2>] [--folder-depth <N>] [--with-subdomains]"; exit 1; }
 ```
 
 ## Step 2: apply lazy capability gating + smoke-first probe (MANDATORY)
@@ -56,7 +57,9 @@ Per sw-foundation-core § bulk-input-from-context. sw-page-mix is single-domain.
 | 1 | `get-pages-popular-pages-agg` | Top URLs by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 25`. 3-month window with `granularity: monthly` (omitting granularity defaults the endpoint to daily, which rejects any window past 28 days). ~75 data credits. |
 | 2 | `get-pages-leading-folders-agg` | Top folders by traffic share. `web_source: total` (HARD CONSTRAINT). `limit: 15`. 3-month window with `granularity: monthly` (same daily-default rejection). ~45 data credits. |
 
-Default total cost: ~125 data credits (rank smoke + 25 pages + 15 folders).
+| 3 (OPT-IN) | `get-website-content-subdomains-agg` | Where the traffic sits ACROSS SUBDOMAINS. Fires ONLY when `--with-subdomains` is set or the user asks for the subdomain split. `web_source: desktop` (this tool takes desktop or mobile_web and REJECTS `total`, the exact inverse of Calls 1 and 2). `limit: 10` (mandatory explicit bound). Same 3-month window as Calls 1 and 2, `granularity: monthly`. 20 data credits at limit 10. NEVER pass `main_domain_only: true`: it returns HTTP 404 `NOT_FOUND` on this tool. Per `subdomains-agg-shape`. |
+
+Default total cost: ~125 data credits (rank smoke + 25 pages + 15 folders); the opt-in subdomain call adds 20 at `limit: 10`, priced at 2 credits per RETURNED row. Call 2 charges 1 credit per returned row plus 1 per non-null metric value, so its ~45 drops by 1 for every row whose `change` is null (`pages-leading-folders-shape`).
 
 ## Step 5: Execute
 
@@ -104,6 +107,7 @@ Sections in order (answer-first per sw-foundation-render):
 - `## Rank + reach` (table: country rank, from Call 0; if the user country IS `ww`, the table collapses to one row).
 - `## Top URLs` (table from Call 1, top 10 rows sorted by `share` descending. Columns: `Rank`, `URL`, `Traffic share`, `Change vs prior`. `share` rendered as percent to 2 decimals; `change` rendered as `+X%` / `-X%`, `n/a` when null. Pair with Unicode bar visualization.).
 - `## Folder hierarchy` (table from Call 2, all returned rows sorted server-side by `share` descending. Columns: `Rank`, `Folder`, `Traffic share`, `Change vs prior`. Pair with Unicode bar visualization. Sub-line below the table: "Folders nest; parent and child paths both appear when the server returns them. The top-5 folder concentration is X%.").
+- `## Subdomain split` (OPT-IN, only when Call 3 ran. Table sorted by the server: `Rank`, `Subdomain`, `Traffic share (desktop)`. Pair with Unicode bars per § visualizations. There is NO `change` field on these rows, so NEVER render or synthesize a `Change vs prior` column. Sub-line, denominator-safe: "Apex `<host>` holds X% of DESKTOP subdomain traffic. The folder and page tables above are total-source, so read this as where content sits, not as a coverage percentage for those tables." The device qualifier is MANDATORY in the header or sub-line: `mobile_web` returns a materially different roster on the same domain and window. Gloss obvious internal-tooling hosts (an intranet, a CI or docs host, a CDN or SSO host) in one clause as likely employee or infrastructure traffic rather than audience. NEVER sum these shares, compute a subdomain concentration figure, or compute an HHI on them: disjointness is NOT established (a nested host can be rolled into a shorter label), and thresholds and derived metrics stay owned by sw-foundation-render § expert-heuristics and § derived-metric-glossing. A subdomain absent from the returned rows is BELOW THE LIMIT, never zero.).
 - `## Concentration` (Unicode HHI threshold bar per § visualizations. Headline: `HHI: <value>  <bar>  <VERDICT>`. Sub-line citing the 1500 / 2500 thresholds. Sub-line: "HHI computed on the top-N folder subset; absolute HHI rises when the long tail is added.").
 - `## Strategic insights` (3 bullets per § expert-heuristics, each labeled `DEFEND` / `EXPOSE` / `PLAY` and ending with `(confidence: HIGH | MEDIUM | LOW)`. Reference the SPECIFIC numbers and URLs surfaced in this run.).
 - `## NEXT MOVES` (EXACTLY 2 backtick-quoted natural-language questions, each
@@ -124,6 +128,8 @@ Sections in order (answer-first per sw-foundation-render):
 - Sources line per sw-foundation-render § citation block (single line, NOT a table, NOT collapsible). Last element of the output unless `intent=handoff`.
 - `[optional] ## Handoff` (JSON, only when intent=handoff).
 
+**Degenerate folder response (zero extra calls).** When Call 2 returns FEWER THAN 3 rows, the folder tree is not describing the traffic. Observed live: a domain whose content lives entirely on a language subdomain returned exactly ONE folder row at a near-zero share, while that subdomain queried directly as the domain returned a full tree topped at 0.96. In every response probed, folder rows were rooted at the REQUESTED host, and toggling `main_domain_only` did not change that, so state the observation and NOT a mechanism. Render one Caveat: "Folder and page rows in this response are all rooted at `<target>` itself. The traffic may sit on subdomains, which these two tools did not return here." Then substitute in NEXT MOVES: replace the keyword-opportunity question with a subdomain question (e.g. `"Where does <target>'s traffic actually sit across its subdomains?"`), keeping the count at EXACTLY 2. Do NOT add a third question, and do NOT auto-fire Call 3.
+
 ## Step 8: Citation + caveats + optional handoff
 
 Per sw-foundation-render § citation block (pass the source records from Step 5). Per sw-foundation-render § handoff-json-schema, emit the `data` payload below when intent classifies as `handoff`.
@@ -137,6 +143,7 @@ Per sw-foundation-render § citation block (pass the source records from Step 5)
   "top_urls": [
     {"rank": 1, "url": "<url>", "share": 0.0, "change": 0.0}
   ],
+  "subdomains": null,
   "folders": [
     {"rank": 1, "folder": "<folder>", "share": 0.0, "change": 0.0, "depth": 0}
   ],
@@ -179,5 +186,6 @@ This skill's behavior is live-validated against the following grounded assertion
 - pages-popular-pages-shape
 - pages-leading-folders-shape
 - pages-tools-web-source-total
+- subdomains-agg-shape
 - website-rank-no-global-field
 - partial-access-envelope-shape

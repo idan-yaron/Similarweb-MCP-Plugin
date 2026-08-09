@@ -4,7 +4,7 @@ The apps surface is module-gated: plans without the Apps module do not expose th
 
 ## Active guidance
 
-`get-apps-details` is the ONLY apps tool on the live surface as of the 2026-08-06 enumeration (113 tools). It is itself 403 claims-gated on the grounded connector, so its presence is proven by the denial: plan for a Pattern 3 "not accessible on this plan" render, not a Pattern 7 absence render.
+`get-apps-details` is the ONLY apps tool on the live surface as of the 2026-08-06 enumeration (113 tools). Its entitlement is an ACCOUNT property and it moved: the reference connector returned 403 through 2026-08-06 and 200 at 7 credits on 2026-08-07. Either outcome proves PRESENCE, so plan for a Pattern 3 "not accessible on this plan" render on a denial, never a Pattern 7 absence render. The siblings did NOT reappear when that account gained the claim, which rules out claims-gating as the reason they are absent and leaves catalog-level exposure or product removal. The apps family is therefore NOT restored: one tool in it became callable.
 
 | Intent | Tool | Key params |
 |--------|------|------------|
