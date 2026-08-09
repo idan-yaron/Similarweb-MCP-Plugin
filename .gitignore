@@ -52,4 +52,17 @@ __pycache__/
 /*.jpeg
 /*.gif
 /*.webp
+/*.svg
 /*.pdf
+/*.mp4
+/*.mov
+/*.zip
+/*.tar
+/*.gz
+/*.csv
+/*.tsv
+/*.xlsx
+/*.xls
+/*.parquet
+/*.log
+/*.txt
