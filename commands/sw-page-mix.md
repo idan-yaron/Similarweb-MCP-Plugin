@@ -1,6 +1,6 @@
 ---
 description: URL-level and folder-level content surface for a domain.
-argument-hint: <domain> [--country <iso2>] [--folder-depth <N>]
+argument-hint: <domain> [--country <iso2>] [--folder-depth <N>] [--with-subdomains]
 allowed-tools:
   - Read
   - Write

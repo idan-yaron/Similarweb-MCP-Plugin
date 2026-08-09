@@ -19,9 +19,9 @@ Runs ONLY when `/sw-config --refresh` explicitly invokes it. No auto-trigger.
 
 ## Step 1: Probe one tool per category
 
-Call each of these MCP tools (sequentially is fine; the cost is six cheap calls one-time). FIRST resolve presence per sw-foundation-core § tool-surface presence: tool surfaces are module-gated and drift with server releases, so a probe tool may be ABSENT from the list entirely (observed live for the apps surface). An absent tool is NOT called and NOT an error: record it in `tools_absent` (stamped per the capability map schema; never `tools_available = false`, never `tools_inaccessible`) and move on. If a category's documented probe tool is absent but the live list carries another tool serving the same category, probe that one instead and record ITS outcome in `tools_available` under its own name; the absent canonical tool stays in `tools_absent`. `categories_available` includes a category iff some PRESENT tool for it returned 2xx; a category whose probe tool is absent with no present alternative is `module_not_exposed`, persisted as the `tools_absent` entry plus the category's exclusion from `categories_available` (no separate field).
+Call each of these MCP tools (sequentially is fine; the cost is ten calls one-time, 10 data credits in total). FIRST resolve presence per sw-foundation-core § tool-surface presence: tool surfaces are module-gated and drift with server releases, so a probe tool may be ABSENT from the list entirely (observed live for the apps surface). An absent tool is NOT called and NOT an error: record it in `tools_absent` (stamped per the capability map schema; never `tools_available = false`, never `tools_inaccessible`) and move on. If a category's documented probe tool is absent but the live list carries another tool serving the same category, probe that one instead and record ITS outcome in `tools_available` under its own name; the absent canonical tool stays in `tools_absent`. `categories_available` includes a category iff some PRESENT tool for it returned 2xx; a category whose probe tool is absent with no present alternative is `module_not_exposed`, persisted as the `tools_absent` entry plus the category's exclusion from `categories_available` (no separate field).
 
-**Apps has no alternative left.** `get-apps-details` is the canonical apps probe and the only apps tool on the live surface as of the 2026-08-06 enumeration; the previous apps probe target and its siblings were absent from two consecutive enumerations (2026-06-11 and 2026-08-06), so they are documented-absent in sw-foundation-core § apps-catalog rather than probed here. `get-apps-details` returned 403 on the grounded connector, and a 403 PROVES the tool is present, so IF this probe returns `403 FORBIDDEN_ERROR`, record it as a denial (`tools_available = false` plus the `tools_inaccessible` append), never as an absence. Do not presume the outcome: an account carrying the Apps module returns 2xx here, and that is a normal result. A 403 on this probe alone NEVER means the credentials are bad (see the auth-invalid edge case).
+**Apps has no alternative left.** `get-apps-details` is the canonical apps probe and the only apps tool on the live surface as of the 2026-08-06 enumeration; the previous apps probe target and its siblings were absent from two consecutive enumerations (2026-06-11 and 2026-08-06), so they are documented-absent in sw-foundation-core § apps-catalog rather than probed here. `get-apps-details` returned 403 on the reference connector through 2026-08-06 and 200 at 7 credits from 2026-08-07, so its outcome here is an account property and BOTH results are normal. A 403 still PROVES the tool is present, so IF this probe returns `403 FORBIDDEN_ERROR`, record it as a denial (`tools_available = false` plus the `tools_inaccessible` append), never as an absence. Do not presume the outcome: an account carrying the Apps module returns 2xx here, and that is a normal result. A 403 on this probe alone NEVER means the credentials are bad (see the auth-invalid edge case).
 
 | Category | MCP tool | Params |
 |----------|----------|--------|
@@ -31,6 +31,13 @@ Call each of these MCP tools (sequentially is fine; the cost is six cheap calls 
 | brands | `get-brands-search` | `{"domain": "amazon.com", "search_term": "apple"}` |
 | categories | `get-categories-search` | `{"domain": "amazon.com", "search_term": "technology"}` |
 | lead-enrichment | `get-lead-enrichment-website` | `{"domain": "similarweb.com"}` |
+| ai-traffic | `get-ai-traffic-overview` | `{"domain": "nike.com", "country": "ww", "start_date": "latest", "end_date": "latest"}` (PIN THE WINDOW: the server default spans about three years and rows are months times active LLM sources, so an unpinned probe is the widest call the tool offers) |
+| retail-cross | `get-retail-cross-analysis-describe` | `{"limit": 1}` (1.3 KB bounded, 53.4 KB at the server default) |
+| demand | `get-demand-search-trends-aggregated` | `{"country": "us", "topic": "running shoes", "granularity": "monthly", "start_date": "latest", "end_date": "latest"}` (uncharged, one `{volume}` row; NEVER probe the `-keywords-aggregated` sibling, which has no `limit` and returned about 77 KB) |
+| sales-signals | `get-sales-signals-traffic` | `{"company_domain": "shopify.com"}` (pass NO dates; flat 10 credits, the only charged probe in the matrix) |
+
+
+**Why these probe shapes, and what is deliberately NOT probed.** Every probe is either a bounded call or a describe that takes no bound. NO never-inline tool enters this matrix: `get-user-segments-describe` (23.9 MB) and `get-gen-ai-campaigns` (1.9 MB bare) are never called here or anywhere, per sw-foundation-core § payload-budget. The industry family is deliberately UNPROBED: its only free entry point is a describe of about 17 KB, and the payload budget binds the whole setup turn, so paying a third of the turn budget for one category is a bad trade when industry access has tracked the websites category on every account observed. If that ever diverges, add the probe and accept the cost. Ten probes at these shapes cost 10 data credits in total, all from the sales-signals row.
 
 For each call:
 - Success (2xx with payload) => `tools_available[<tool>] = true`
@@ -44,7 +51,7 @@ Recommended approach: invoke each MCP tool via the AI client's native MCP surfac
 
 The rank probe uses `end_date="latest"` (the server resolves to actual `meta.last_updated`) per sw-foundation-data § window-resolution. Passing `end_date = today` or `end_date = first day of current month` 4xxs because `meta.last_updated` lags by days.
 
-**Coverage seed: DISABLED. Do NOT call `get-user-segments-describe`.** It is free in credits and 23,918,985 characters on a real account (2026-08-07), which exhausts the context window rather than returning an error. Its advertised `length` and `chars` parameters are accepted but inert, so no bound makes it safe, and an overflow is not recoverable: there is no error envelope, no retry, and no turn left in which to apply a skip rule. Free in credits is not free in context, and the two are independent.
+**Coverage seed: DISABLED. Do NOT call `get-user-segments-describe`.** It is free in credits and 23,918,985 characters on a real account (2026-08-07), which exhausts the context window rather than returning an error. Its advertised `length` and `chars` parameters are accepted but inert, so no bound makes it safe, and an overflow is not recoverable: there is no error envelope, no retry, and no turn left in which to apply a skip rule. Free in credits is not free in context, and the two are independent; the tool is never-inline per sw-foundation-core § payload-budget.
 
 The seed stays disabled until the platform can hand a raw tool result to a file before it reaches the model. No supported client is known to do that today, so treat this as off everywhere rather than as a condition that might fire. Skip Step 2.5 entirely and continue to Step 3; the rest of setup is unaffected. Grounded in `describe-envelope-and-coverage-probe`.
 
@@ -68,7 +75,7 @@ Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-ti
   },
   "tools_inaccessible": ["get-apps-details", "get-brands-search", "get-lead-enrichment-website"],
   "tools_absent": [{"tool": "get-websites-conversion-rates-agg", "observed_under": "<surface-hash>", "observed_at": "<date>"}],
-  "categories_available": ["websites", "keywords", "categories"]
+  "categories_available": ["websites", "keywords", "categories", "ai-traffic", "demand"]
 }
 ```
 
@@ -102,7 +109,7 @@ Exit silently. Return control to sw-config with no user-visible output; sw-confi
 ## Edge cases
 
 - **`$HOME/.similarweb-plugin/` not writable**: catch the error from `mkdir`, log to stderr ("filesystem read-only; capabilities will not persist this session"), keep the probe results in conversation context only.
-- **All six probes return 5xx**: write capabilities.json with `tools_available: {}` and `state: "probe_partial"`. Next refresh retries fully.
+- **All ten probes return 5xx**: write capabilities.json with `tools_available: {}` and `state: "probe_partial"`. Next refresh retries fully.
 - **MCP server not configured in the client**: `mcp_not_configured` requires ZERO Similarweb-scoped names in the live enumeration, or enumeration impossible AND every probe raising the client-level unknown-tool error. When enumeration found a non-empty Similarweb surface or ANY probe returned 2xx, a client-level unknown-tool error on one probe means that TOOL is absent (record in `tools_absent` per Step 1), never `mcp_not_configured`. Only in the true not-configured case: write `capabilities.json` with `state: "mcp_not_configured"` and exit; sw-config surfaces the configuration message.
 - **Auth-invalid envelope**: write `capabilities.json` with `state: "auth_invalid"` ONLY when the failure is account-wide, never on a single per-tool denial. Account-wide means: a probe returns `status_code: 401`, OR a 403 whose `error.code` is NOT `FORBIDDEN_ERROR`, OR EVERY probe in the matrix returns 401/403. A `403 FORBIDDEN_ERROR` on SOME probes is a per-tool claims denial per Step 1 and leaves `state: "ready"` (this is the EXPECTED outcome for the apps probe on accounts without the Apps module, so treating it as auth-invalid would tell a user with valid credentials that their key was rejected). Per `auth-invalid-envelope-shape` and `partial-access-envelope-shape`.
 

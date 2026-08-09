@@ -9,6 +9,7 @@ Loads via each recipe's Inherits block and via sw-router dispatch. Does NOT call
 
 ## Hard rules (NEVER violate)
 
+- NEVER auto-invoke `post-emails-outreach` or `post-contacts-bulk`. The first SENDS EMAIL on the user's behalf; the second MUTATES contact data. Both are irreversible and both reach third parties, so no bound, limit, or payload class makes either safe. No skill, recipe, or router branch may plan them into a call sequence; they are reachable only through an explicit in-turn user confirmation naming the action. A request to find someone AND contact them is two steps: do the finding, then stop and ask.
 - NEVER invent data. If the MCP returns null, say null. No "estimated", no padding.
 - NEVER call N tools when an `-agg` variant returns the same shape in one call.
 - NEVER re-call a tool with the same params within the same turn.
@@ -101,7 +102,7 @@ Rank, traffic-and-engagement, traffic channels (including the `Gen AI` channel),
 
 ### Apps-shaped queries
 
-The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (absent from the tool list rather than returning 403); resolve presence per § tool-surface presence before planning any apps call (absent means module_not_exposed, zero calls). `get-apps-details` is the ONLY apps tool on the live surface as of the 2026-08-06 enumeration, and it is itself 403 claims-gated on the grounded connector (so it renders as a denial, not an absence). The other six apps names are documented-absent across two consecutive enumerations. The active guidance and that documented-absent list live in `references/apps-catalog.md`; Read it only when an apps-shaped query is actually in play.
+The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (absent from the tool list rather than returning 403); resolve presence per § tool-surface presence before planning any apps call (absent means module_not_exposed, zero calls). `get-apps-details` is the ONLY apps tool on the live surface as of the 2026-08-07 enumeration, and its entitlement varies by account: the reference connector returned 403 through 2026-08-06 and 200 from 2026-08-07. Either outcome proves PRESENCE, so a denial renders as a denial, never as an absence. The other six apps names are documented-absent across two consecutive enumerations. The active guidance and that documented-absent list live in `references/apps-catalog.md`; Read it only when an apps-shaped query is actually in play.
 
 ### Brands and categories
 
@@ -120,6 +121,14 @@ The apps surface is module-gated: plans without the Apps module do not expose th
 ### Lead enrichment
 
 Two tools enrich a website (by domain) or a company (by name or domain); the parameter table lives in `references/lead-enrichment-catalog.md`.
+
+### Commerce: the shopper and criq families
+
+Amazon on-site search (32 tools, the `get-categories-`, `get-brands-`, `get-products-`, `get-clicks-` names plus the six shopper `get-keywords-` names) and cross-retailer performance (the 12 `get-retail-cross-` names). Membership is taken from the live name enumeration; the `[shopper]` and `[criq]` prefixes that open each tool description are the per-tool confirmation, verified on a sample rather than on all 44. Neither takes a Similarweb domain, and they do not share identifiers with each other or with the web family. The `domain` parameter on a shopper tool names the MARKETPLACE (`amazon.com` and its five siblings), never the analysed brand, which is a separate `brand` parameter; criq keys on an ACCOUNT-SCOPED custom-category UUID plus a market code. Both families require an uncharged discovery call first (`get-categories-search`, `get-brands-search`, `get-retail-cross-analysis-describe`) because their ids cannot be guessed or carried across marketplaces. NEVER sum shopper `clicks` with web `visits`: different quantities on different surfaces. Watch the prefix trap: `get-keywords-performance` and its siblings are `[shopper]`, while `get-keywords-seo-overview`, `get-keywords-overview`, and `get-keywords-latest-agg` are `[web]` SEO tools. The full intent tables, the two-axis criq cost shape (`rows x (metrics + 1)`, the same shape geography-agg follows), and the silent window-widening trap live in `references/commerce-catalog.md`; Read it before planning any commerce call.
+
+### Buying signals
+
+Six event-detection tools keyed on a COMPANY rather than a page or keyword: intent, technology, ecommerce, traffic, ad-network, news. Five charged a FLAT 10 credits per call, measured across row counts from 1 to 12 and windows from one day to two years, and none accepts a `limit`, so the lever is WHICH tools to call, not how much to ask for. Three traps: `get-sales-signals-intent` accepts exactly ONE valid window (its latest update day) and 400s on any other, so pass no dates at all; an empty result is a POPULATED message-only row rather than an empty array, so `len(data)` is not an emptiness test; and the technology tool's `Dates not in range` 400 shares its status and category with the country-coverage gap, which is why that detection is message-gated. Payloads name real third-party vendors, so examples are always synthetic and a signal renders as "topic interest detected", never as a claim about the company's plans. The intent table and cadences live in `references/signals-catalog.md`; Read it before planning any sales-signals call.
 
 ## Tool-call economy rules
 
@@ -153,6 +162,18 @@ A second failure envelope, distinct from 403: the tool itself is accessible but 
 
 On the first (tool, country) gap: record it, skip ALL remaining not-yet-dispatched domains for that pair, and pivot to `country=ww` for that tool this turn (when the smoke itself gapped, re-smoke once at ww); when 2 or more distinct tools gap on the same country, skip subsequent (tool, country) batches entirely and fall back to ww immediately; render ONE consolidated Caveats line ("Country X not on this plan; rendered worldwide. Affected tools: ...") and let the header line show the pivoted country per sw-foundation-render § error-rendering Pattern 6 main text. The full 5-step rule with the parallel-batch and smoke-pairing notes lives in `references/country-gap.md`.
 
+### § payload-budget
+
+Response SIZE is a planning axis independent of credits, resolved before the call like presence and gating, not handled after it like a 403. Three invariants. **(1) Credits and bytes are independent.** The most dangerous call on this surface charges zero, and a context overflow is unrecoverable in a way every other failure is not: no envelope, no retry, no turn left in which to apply a skip rule. **(2) A tool with no `limit` parameter is not therefore small.** Find its growth term (row count, date window, an explicit flag) and bound that. **(3) The budget binds a TURN, not a call.** A recipe that fans out (per-keyword loops, comp sets, per-country batches) divides the budget by its fan-out factor when choosing a bound, and sequences rather than parallelizes when the product still exceeds it; ten individually compliant calls still overflow together.
+
+These classes are about response BYTES and say nothing about whether a call should be made at all; the never-auto-invoke rule for the two side-effectful tools is a Hard rule above, and it is not overridden by anything here.
+
+Three call classes, for read-only tools. **Never inline**: `get-user-segments-describe` and `get-gen-ai-campaigns`. No parameter brings them under budget (the first accepts `length` and `chars` and ignores both; the second is bounded only by an id obtainable from its own unbounded listing), so they are not called, and there is no buffered-read escape because an MCP result reaches the model before any script can touch it. **Safe unbounded**: `get-ai-traffic-overview`, `get-ai-traffic-overview-aggregated`, `get-industry-demographics-describe`, `get-industry-unique-users-describe`. These accept no bound parameter and are measured small. **Bound required**: every other READ-ONLY live tool, measured or not. Pass an explicit `limit`, `metrics` list, date window, or id filter, and never rely on server defaults. This class is not a licence to call: it answers "how do I shape a call I have already decided to make", never "may I make it".
+
+The default for an unmeasured tool is bound-required, never silence. Requiring a bound asserts nothing about safety and costs nothing; staying silent is a safety assertion by omission, and that is precisely the inference that shipped an unconditional 23.9 MB call. Two tools are safe at their DEFAULT and dangerous only under an explicit parameter: NEVER pass `include_shared: true` to `get-custom-industries-describe` (60 B to 5.0 MB), and pin `get-sales-signals-news` to a window of at most 7 days (8 KB to 1.7 MB).
+
+The inline budget is about 50 KB per response and is a conservative proxy, not a measured threshold; the exact number is not load-bearing because every bound-accepting tool is bounded regardless. Some clients replace an oversized result with a size notice and a preview instead of the payload, so a 200 does not guarantee the data is in front of you (see sw-foundation-render § error-rendering Pattern 8). The full lists, the reference measurements for choosing a bound, and the rule for adding a tool to either list live in `references/payload-budget.md`; Read it before bounding a tool for the first time.
+
 ### Distinction summary
 
 | Envelope | What it means | In-run map | Skip rule |
@@ -162,6 +183,7 @@ On the first (tool, country) gap: record it, skip ALL remaining not-yet-dispatch
 | HTTP 400 client_error OR HTTP 200 empty data, WITH a "no data for requested country" message | Country not on plan for that tool | `country_unavailable_this_run[(tool, country)]` | Skip remaining domains for that (tool, country); pivot to ww; if 2+ tools country-gap for same country, propagate to subsequent tools |
 | HTTP 200 + empty data for one specific domain (no country-coverage message) | That domain has no traffic for the window | NO tracking; just render n/a for that cell | None; per-domain absence is a real result |
 | HTTP 5xx / timeout / validation error WITHOUT a country-coverage message | Transient or schema problem | NO tracking | Retry once per § error-rendering Pattern 2 |
+| HTTP 2xx whose content is a size statement plus a file path instead of the payload (shape-matched, never on wording) | Response exceeded the AI client's inline budget; the client buffered it and the model never saw the data | `oversized_this_run[tool]` | Never retry (a 2xx reproduces exactly) and never parse the preview; render the cell, caveat the bound used, and OFFER one tighter re-call as a NEXT MOVE per sw-foundation-render § error-rendering Pattern 8. The re-call is the user's choice, not an automatic extra paid call. Prevention is the real control: bound every call per § payload-budget |
 
 ### § bulk-input-from-context
 
@@ -192,3 +214,13 @@ This skill's behavior is live-validated against the following grounded assertion
 - referral-pipelines-divergence
 - technologies-agg-shape
 - traffic-by-demographics-semantics
+- payload-measurements
+- harness-oversized-output-buffering
+- geography-agg-cost-shape
+- ai-traffic-vs-channel-proxy-completeness
+- commerce-surface-entity-models
+- sales-signals-family-shape
+- demand-trends-aggregation-semantics
+- criq-performance-cost-shape
+- web-family-cost-shapes-2026-08
+- ai-traffic-overview-window-default

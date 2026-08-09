@@ -97,7 +97,7 @@ Conversational tone: NEXT MOVES, Caveat unblock-suggestions, and "you could also
 
 ### § error-rendering
 
-Seven canonical patterns; the full pattern text (exact cell values, Caveats wording, escalation steps) lives in `references/error-rendering.md`. Read it the FIRST time any tool call in the run fails, returns empty, or is skipped, then apply consistently. Index: Pattern 1 null/empty payload (render `n/a`, never fabricate). Pattern 2 non-2xx (retry once after 2s, then "unavailable this run"). Pattern 3 capability-gate skip ("not accessible on this plan"). Pattern 4 structural-zero (`n/a` plus classifier footnote). Pattern 5 systemic auth failure (first 2 REQUIRED tools 403: stop, INSUFFICIENT SIGNAL verdict, capability-refresh question as the first NEXT MOVE). Pattern 6 country-coverage gap (message-gated, evaluated BEFORE Pattern 2: pivot to ww, ONE consolidated caveat, header renders the pivoted country). Pattern 7 not exposed on this connector (planning-time absence or message-gated unknown-tool error, evaluated BEFORE Pattern 2: zero retries, consolidated caveat naming connector-setting and plan-module causes; aggregate insufficiency escalates per Pattern 5 semantics). A `## Caveats` block appears at the bottom of the recipe output if and only if a pattern fired; no errors, no Caveats block.
+Eight canonical patterns; the full pattern text (exact cell values, Caveats wording, escalation steps) lives in `references/error-rendering.md`. Read it the FIRST time any tool call in the run fails, returns empty, is skipped, OR comes back 2xx with a size notice in place of its payload, then apply consistently. Index: Pattern 1 null/empty payload (render `n/a`, never fabricate). Pattern 2 non-2xx (retry once after 2s, then "unavailable this run"). Pattern 3 capability-gate skip ("not accessible on this plan"). Pattern 4 structural-zero (`n/a` plus classifier footnote). Pattern 5 systemic auth failure (first 2 REQUIRED tools 403: stop, INSUFFICIENT SIGNAL verdict, capability-refresh question as the first NEXT MOVE). Pattern 6 country-coverage gap (message-gated, evaluated BEFORE Pattern 2: pivot to ww, ONE consolidated caveat, header renders the pivoted country). Pattern 7 not exposed on this connector (planning-time absence or message-gated unknown-tool error, evaluated BEFORE Pattern 2: zero retries, consolidated caveat naming connector-setting and plan-module causes; aggregate insufficiency escalates per Pattern 5 semantics). Pattern 8 response too large to read inline (a 2xx whose payload the AI client replaced with a size notice plus a preview, evaluated BEFORE Pattern 1 because a preview reads like a small success: render "response too large to read inline", NEVER parse figures out of the preview, never retry since a 2xx reproduces exactly, and offer a tighter re-call). A `## Caveats` block appears at the bottom of the recipe output if and only if a pattern fired; no errors, no Caveats block.
 
 ### § handoff-json-schema
 
@@ -107,7 +107,7 @@ a final JSON code block in the output:
 ```json
 {
   "plugin": "similarweb",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "recipe": "sw-<name>",
   "generated_at": "<ISO 8601 timestamp>",
   "inputs": {
@@ -127,7 +127,7 @@ a final JSON code block in the output:
 }
 ```
 
-The `version` literal `0.1.20` MUST match `.claude-plugin/plugin.json`. `sources[].data_credits` is filled from MCP `meta.data_credits_charged` (the live field), falling back to the legacy `meta.sw_coins`; a call missing both is recorded with `data_credits: null` (unknown, never 0). See § citation block.
+The `version` field MUST match `.claude-plugin/plugin.json` exactly; do not restate the number here, so the sentence cannot drift out of sync with the block above. `sources[].data_credits` is filled from MCP `meta.data_credits_charged` (the live field), falling back to the legacy `meta.sw_coins`; a call missing both is recorded with `data_credits: null` (unknown, never 0). See § citation block.
 
 The outer envelope is shared across all recipes; the inner `data` object is recipe-specific (documented in each recipe's SKILL.md). When intent does NOT classify as `handoff`, recipes skip this block entirely; the Sources line is the last element of the output.
 
@@ -169,3 +169,4 @@ This skill's behavior is live-validated against the following grounded assertion
 - categories-performance-shape
 - aeo-seo-overview-shape
 - keywords-overview-3-month-max
+- harness-oversized-output-buffering

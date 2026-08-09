@@ -43,7 +43,7 @@ python3 scripts/capmap.py sched
 
 ## Step B: --refresh
 
-Apply the sw-setup skill inline (it ships in this plugin; follow its Step 1 to Step 3 directly in this conversation, or invoke it through the platform's skill mechanism if it is listed) to perform a thorough proactive probe across all 6 categories and OVERWRITE `capabilities.json` with a fresh known-state map (replacing any lazy-built append-only state). Never attempt to run sw-setup as a slash command; it has none.
+Apply the sw-setup skill inline (it ships in this plugin; follow its Step 1 to Step 3 directly in this conversation, or invoke it through the platform's skill mechanism if it is listed) to perform a thorough proactive probe across all 10 categories and OVERWRITE `capabilities.json` with a fresh known-state map (replacing any lazy-built append-only state). Never attempt to run sw-setup as a slash command; it has none.
 
 NEVER clear the existing map first. `capmap.py init` writes through `os.replace`, an atomic rename over `capabilities.json`, so the previous map survives byte-intact until the replacement lands and no pre-clear is needed. Recycling before the probes means any mid-probe failure leaves the user with no map at all, which is the opposite of what a refresh promises. Recycling AFTER the write is worse, not better: a bare `capmap.py recycle` resolves to `capabilities.json` itself, so it would bin the map that was just written. `--refresh` runs no recycle at any point; only `--reset` (Step C) recycles.
 
