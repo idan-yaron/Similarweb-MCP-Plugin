@@ -171,6 +171,7 @@ Cite the decision in ONE line, then list the planned calls:
 ```
 No specific recipe fits this question. Running a direct MCP plan:
   - get-website-content-subdomains-agg(domain="bbc.co.uk", start_date="2_months_ago", end_date="latest", limit=10)
+    Omitting `country` and `web_source` is answered at `ww` and `desktop` (both echoed in `meta.request`), so label the answer DESKTOP. This tool rejects `web_source: total`, the inverse of the pages tools, so a subdomain share and a page share never share a denominator. 2 credits per returned row.
 ```
 
 Then execute. If a planned tool turns out inaccessible (403) at runtime, drop it and note the skip in the Caveats block; if it fails with a client-level unknown-tool error (per `unknown-tool-error-shape`), treat it as not exposed on this connector: drop it with the "not exposed on this connector" caveat wording, zero retries, never retry guessed name variants. Do not exceed 3 calls for a typical direct-MCP question (the lead/contact enrichment carve-out below is the one exception, and it caps cost a different way). When the plan includes `get-websites-website-rank`, bound it to a known-safe window per sw-foundation-data § window-resolution (`start_date = "2_months_ago"`, `end_date = "latest"`); ~2-4 data credits vs ~74 for the default 36-month series. For "global rank" questions, pass `country: "ww"` and use the returned `country_rank` field (there is NO `global_rank` field per `website-rank-no-global-field`); for in-country rank, pass the ISO-2 country.
