@@ -52,7 +52,7 @@ Every tool below takes the marketplace `domain` plus its own entity, supports `l
 | A brand's top products | `get-brands-top-products`, `get-brands-top-products-agg` | brand plus category | Wide `metrics` enum (price, revenue, units_sold, rating, reviews, best-seller rank, and more). Every added metric widens the payload; request only what the answer renders. |
 | Product sales and revenue | `get-products-sales-performance`, `get-products-sales-performance-agg` | ASIN | ASIN must be exactly 10 uppercase alphanumeric characters. |
 | A product's top on-site keywords | `get-products-top-keywords`, `get-products-top-keywords-agg` | ASIN | |
-| One keyword's on-site performance | `get-keywords-performance`, `get-keywords-performance-agg` | keyword | FLAT 1 credit per call, window-independent across 1 and 3 months. Returns all seven metrics by default. |
+| One keyword's on-site performance | `get-keywords-performance`, `get-keywords-performance-agg` | keyword | Priced on ROWS TIMES METRICS in blocks of 100 cells, not flat: the same 52 weekly rows charged 1 credit at one metric and 4 at the default seven. **Trim the `metrics` list**, which is the real lever and the one most often left at its default, since all seven come back unless you ask otherwise. Unrequested metrics return as null. |
 | Brands ranking for a keyword | `get-keywords-top-brands`, `get-keywords-top-brands-agg` | keyword | |
 | Products ranking for a keyword | `get-keywords-top-products`, `get-keywords-top-products-agg` | keyword | |
 | A brand's click share within a category | `get-clicks-share`, `get-clicks-share-agg` | brand plus category | Share metrics are brand-within-category, so the denominator is the category and not the marketplace. |
