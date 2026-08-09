@@ -720,6 +720,116 @@ def _load_payload_lists():
                         "never-auto-invoke", "pii-contact")}
 
 
+# Recipes are the user-facing playbooks: every skill that is not a foundation,
+# an operator, or the router. CODEX_SKILL_INTERFACES is documented "recipes
+# only", so the two must agree exactly; that agreement is check 1 below.
+NON_RECIPE_SKILLS = {
+    "sw-foundation-core", "sw-foundation-data", "sw-foundation-render",
+    "sw-foundation-render-cowork", "sw-router", "sw-setup", "sw-config",
+}
+
+# "seven recipes", "all 7 recipes", "seven analyst recipes". Deliberately
+# requires the PLURAL, so Branch D's "chained 2-recipe plan" (a different
+# quantity entirely) is not swept up, and requires the word recipes rather than
+# any noun, so README's "seven artifacts" is left alone.
+_COUNT_ALT = r"(one|two|three|four|five|six|seven|eight|nine|ten|\d{1,2})"
+
+# Deliberately NARROW: only phrasings that assert the TOTAL number of recipes.
+# A broad "<number> recipes" sweep false-fires on every legitimate subset count
+# in the tree ("the four recipes whose documented default is us", Branch D's
+# "two recipes", Branch B's "2-3 recipes plausibly fit"), and a guard that
+# blocks every build gets deleted rather than obeyed. Missing a stray phrasing
+# is a cheaper failure than that, so the three forms below are the whole scope.
+RECIPE_COUNT_RX = re.compile(
+    "|".join([
+        rf"\ball\s+{_COUNT_ALT}\s+recipes\b",
+        rf"\bnone\s+of\s+the\s+{_COUNT_ALT}\s+recipes\b",
+        # The lookbehinds drop ranges ("two or three Similarweb recipes",
+        # "two to three"), which name a working subset rather than the total.
+        rf"(?<!or )(?<!to )\b{_COUNT_ALT}\s+"
+        rf"(?:analyst|user-invocable|deterministic|Similarweb)\s+recipes\b",
+    ]),
+    re.IGNORECASE,
+)
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                 "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+RECIPE_COUNT_ROOTS = ("skills", "commands", "agents")
+RECIPE_COUNT_EXTRA_FILES = ("README.md",)
+
+
+def discover_recipes():
+    """The recipe skills actually present on disk."""
+    if not SKILLS_DIR.is_dir():
+        return set()
+    return {d.name for d in SKILLS_DIR.iterdir()
+            if d.is_dir() and (d / "SKILL.md").is_file()
+            and d.name not in NON_RECIPE_SKILLS}
+
+
+def scan_recipe_count():
+    """Cross-check the recipe count against every literal that states it.
+
+    Two failure modes this catches, both of which have to be caught at build
+    time because neither surfaces at runtime:
+
+    1. A recipe is added or removed and CODEX_SKILL_INTERFACES is not updated,
+       so the Codex install card silently loses (or invents) a recipe.
+    2. A recipe is added or removed and the prose still says "seven recipes",
+       which then ships as a false statement in a description a user reads.
+
+    Returns (errors, warnings)."""
+    errors, warnings = [], []
+    recipes = discover_recipes()
+    if not recipes:
+        return errors, warnings
+    n = len(recipes)
+
+    described = set(CODEX_SKILL_INTERFACES)
+    for missing in sorted(recipes - described):
+        errors.append(
+            f"recipe '{missing}' has no CODEX_SKILL_INTERFACES entry; the Codex "
+            f"install card would ship without it")
+    for extra in sorted(described - recipes):
+        errors.append(
+            f"CODEX_SKILL_INTERFACES names '{extra}', which is not a recipe skill "
+            f"on disk (renamed or removed?)")
+
+    paths = []
+    for root in RECIPE_COUNT_ROOTS:
+        d = REPO_ROOT / root
+        if d.is_dir():
+            paths.extend(sorted(d.glob("**/*.md")))
+    for name in RECIPE_COUNT_EXTRA_FILES:
+        f = REPO_ROOT / name
+        if f.is_file():
+            paths.append(f)
+
+    for path in paths:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for match in RECIPE_COUNT_RX.finditer(line):
+                # One group per alternation branch; exactly one is populated.
+                raw = next((g for g in match.groups() if g), "").lower()
+                if not raw:
+                    continue
+                stated = _NUMBER_WORDS.get(raw)
+                if stated is None:
+                    try:
+                        stated = int(raw)
+                    except ValueError:
+                        continue
+                if stated != n:
+                    errors.append(
+                        f"{rel}:{lineno} says '{match.group(0).strip()}' but "
+                        f"{n} recipe skills exist ({', '.join(sorted(recipes))})")
+    return errors, warnings
+
+
 def scan_payload_budget():
     """Enforce the payload and side-effect rules the foundations state in prose.
 
@@ -1222,6 +1332,9 @@ def cmd_validate():
         payload_errors, payload_warnings = scan_payload_budget()
         errors.extend(payload_errors)
         warnings.extend(payload_warnings)
+        count_errors, count_warnings = scan_recipe_count()
+        errors.extend(count_errors)
+        warnings.extend(count_warnings)
     except ToolCatalogError as exc:
         # The lists ship, unlike the tool-catalog snapshot, so a missing or
         # unparseable block is a broken guard rather than a CI-shaped absence.
