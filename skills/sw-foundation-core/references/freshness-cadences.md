@@ -19,4 +19,4 @@ At the 2026-08-06 enumeration the latest published month across the website-anal
 
 [^demand-window]: `get-demand-search-trends` caps a request at 3 months ("Currently, this endpoint supports only an interval of 3 month(s) of data") while its SERVER DEFAULT window is 12 months, which 400s. An explicit window is therefore mandatory on every call, and `country` is required. It charged 0 credits on a 3-month monthly window.
 
-The near-real-time bucket that previously listed the `get-apps-*` active-users and downloads tools is retired: those names were absent from the live tool list at both the 2026-06-11 and the 2026-08-06 enumerations. See `references/apps-catalog.md`.
+The `get-apps-*` active-users and downloads tools sit in the near-real-time bucket when the connector exposes them; read `meta.last_updated` on the response as the authority, as everywhere else. Presence varies by account, so resolve it per § tool-surface presence rather than assuming the bucket is or is not reachable. See `references/apps-catalog.md`.
