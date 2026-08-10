@@ -1024,11 +1024,14 @@ def scan_catalog_staleness():
 # Deliberately NOT keyed on absence language near a tool name: 27 lines under
 # skills/ pair the two and only 3 were ever the harmful kind, so adjacency would
 # be almost entirely false positives and would flag the correct exemplars.
+# "not on the live surface" is deliberately NOT a marker: it reads identically in
+# an assertion and in a legitimate conditional ("if the tool is not on the live
+# surface, render Pattern 7"). Its one harmful instance is already covered by the
+# specific marker below.
 ABSENCE_ASSERTION_MARKERS = (
     "do not plan a call",
     "no live tool behind it",
     "is not restored",
-    "not on the live surface",
     "only apps tool on the live surface",
 )
 
@@ -1077,16 +1080,22 @@ def scan_absence_assertions():
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
             low = line.lower()
-            if any(ex in low for ex in ABSENCE_EXEMPT_PHRASES):
-                continue
-            for marker in ABSENCE_ASSERTION_MARKERS:
-                if marker in low:
-                    errors.append(
-                        f"{rel}:{lineno} states absence as a property of the tool "
-                        f"({marker!r}). Presence is per-account and per-moment: "
-                        f"resolve it from the live tool list and render Pattern 7 "
-                        f"when a qualifying list omits the name. Phrase it as "
-                        f"'presence varies by account', not as a fact.")
+            # Exempt per SENTENCE, not per line. These skills are written as long
+            # single-line paragraphs, so a whole-line exemption lets one correct
+            # conditional sentence suppress a harmful assertion elsewhere on the
+            # same line, which is precisely how the two appear together here.
+            for sentence in re.split(r"(?<=[.;:])\s+", low):
+                if any(ex in sentence for ex in ABSENCE_EXEMPT_PHRASES):
+                    continue
+                for marker in ABSENCE_ASSERTION_MARKERS:
+                    if marker in sentence:
+                        errors.append(
+                            f"{rel}:{lineno} states absence as a property of the "
+                            f"tool ({marker!r}). Presence is per-account and "
+                            f"per-moment: resolve it from the live tool list and "
+                            f"render Pattern 7 when a qualifying list omits the "
+                            f"name. Phrase it as 'presence varies by account', "
+                            f"not as a fact.")
             if low.lstrip().startswith("#") and "documented-absent" in low:
                 errors.append(
                     f"{rel}:{lineno} ships a documented-absent section heading. A "

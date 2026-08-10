@@ -33,19 +33,30 @@ Every tool below takes `app_id` plus `store`; most also require `country`. Pass 
 | Active users | `get-apps-active-users` | 1 credit per month | Monthly granularity gives MAU, daily gives DAU. ONE field, no split inside a call, so stickiness needs two calls. |
 | Session behaviour | `get-apps-sessions` | 1 credit per metric per month (5 metrics = 5, 1 metric = 1) | Five metrics available; unrequested ones return null. Trim the list, it is the cost lever. |
 | Store revenue and ARPU | `get-apps-revenue` | 2 credits per metric per month (2 metrics = 4, 1 metric = 2) | Monthly only. Payload carries `revenue_flag: "estimated"`. **Never present as reported financials.** Often null on sparse coverage. |
-| 30-day retention curve | `get-apps-retention` | **20 credits per month** (1 month = 20, 2 months = 40) | `store: "google"` only. Its schema has NO `metrics` parameter, so there is no lever except the window. The steepest per-month price in the family, and the window multiplies it directly; bound the window hard. |
+| 30-day retention curve | `get-apps-retention` | **20 credits per month** (1 month = 20, 2 months = 40) | `store: "google"` only. Its schema has NO `metrics` parameter, so there is no lever except the window. The steepest per-month price among the windowed tools, and the window multiplies it directly; bound the window hard. |
 | Store chart position over time | `get-apps-ranks` | **0 credits** | Daily. Rows per date x type x category x device, so multiple rows per app per date. **`limit` is ignored**, see the payload note below. |
-| Ratings and their distribution | `get-apps-ratings` | 1 credit per metric per month (1 metric = 1) | `google` or `apple`. Seven metrics including the 1-to-5 distribution; unrequested ones return null. |
+| Ratings | `get-apps-ratings` | 1 credit per month (1 month = 1, 3 months = 3, at both 1 and 2 metrics) | `google` or `apple`. The metrics list is NOT a cost lever here: two metrics over three months cost the same 3 as one metric would. **The 1-to-5 distribution is unreachable**, see the trap below; in practice only `average_ratings` returns a value. |
 | Leaderboard for a category | `get-apps-top-charts` | **0 credits** | Takes NO `app_id`: a leaderboard keyed on `category_id` + `country` + `store`. Only those three are required; the server defaults `device` and `type` and echoes them in `meta.request`. **`limit` is ignored**, see below. |
-| Audience age and gender | `get-apps-audience-demographics` | 1 credit per returned field (gender = 2, age = 5, both = 7) | FIVE age buckets and NO `_share` suffix, unlike the web demographics tools. Trim `metrics`, it is the cost lever. |
+| Audience age and gender | `get-apps-audience-demographics` | 1 credit per returned field at a one-month window (gender = 2, age = 5, both = 7) | FIVE age buckets and NO `_share` suffix, unlike the web demographics tools. Trim `metrics`, it is the cost lever. |
 | Audience interests | `get-apps-audience-interests` | **0 credits** | Overlapping apps with `cross_usage` and `affinity` plus app metadata, sorted by `cross_usage`. Free, so reach for it early. |
-| Install penetration | `get-apps-install-penetration` | 1 credit per month | `store: "google"` only. Single `install_penetration` field. |
+| Install penetration | `get-apps-install-penetration` | 1 credit per month (1 month = 1, 3 months = 3) | `store: "google"` only. Single `install_penetration` field. |
 | Category classification | `get-apps-iab-categories` | 1 credit per returned row (all versions = 7, `["v1"]` = 2) | Returns IAB v1, v2 and v3 rows, each `declared` or `inferred`. `iab_versions` is the cost lever. |
-| SDKs detected in the app | `get-apps-technographics-sdks` | **30 credits, no lever** | The most expensive call in the family. `date` must be `YYYY-MM-DD`; the keyword `"latest"` is rejected. The window is locked to exactly the last 28 days and cannot be narrowed, and `limit` bounds the rows but NOT the price. Call it only when the SDK list is the actual answer. |
+| SDKs detected in the app | `get-apps-technographics-sdks` | **10 credits per returned row** (3 rows = 30, 30 rows = 300) | By far the most expensive tool in the family: the full SDK list for one app cost 300. **`limit` is the cost lever and it works**, so always pass one. `date` must be `YYYY-MM-DD`; the keyword `"latest"` is rejected. The window is locked to exactly the last 28 days and cannot be narrowed, so `limit` is the ONLY lever. |
 
 Costs above were measured on one app, one month, at the parameter shape named in each row. Treat the shape as part of the claim: change the metrics list, the row count or the window and re-measure rather than extrapolating.
 
 **Two tools ignore `limit`.** `get-apps-top-charts` returns roughly 200 rows whatever limit you pass, and `get-apps-ranks` returns the same row set at any limit. Both are free in credits and neither is free in payload, so never inline a top-charts response on the assumption that a limit bounded it. Narrow `category_id` instead, or summarise rather than dumping rows.
+
+`limit` is NOT uniformly inert across the family, so check per tool rather than generalising from those two: on `get-apps-technographics-sdks` it bounds both rows and price, and skipping it there is a 300-credit call.
+
+## Trap: the ratings distribution cannot be requested
+
+`get-apps-ratings` advertises a 1-to-5 distribution that no call can actually retrieve, because the tool schema and the server disagree on the metric names:
+
+- The schema accepts `ratings_1_perc` through `ratings_5_perc`. Pass one and the SERVER rejects it, naming `ratings1_perc` through `ratings5_perc` as the allowed set.
+- Pass `ratings5_perc` instead and the CLIENT rejects it before the call leaves, because that value is not in the schema enum.
+
+The two lists intersect only at `average_ratings` and `ratings_count`, so those are the only requestable metrics. In practice `ratings_count` came back null as well, leaving `average_ratings` as the one field that carries a value. Do not plan a rating-distribution breakdown on this tool, and do not report the null distribution fields as "no ratings": they are unreachable, which is a different statement from absent.
 
 ## When the family is not exposed on a connector
 
