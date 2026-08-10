@@ -74,7 +74,7 @@ Feed the probe outcomes to the bundled writer at `scripts/capmap.py` (a build-ti
     "get-lead-enrichment-website": false
   },
   "tools_inaccessible": ["get-apps-details", "get-brands-search", "get-lead-enrichment-website"],
-  "tools_absent": [{"tool": "get-websites-conversion-rates-agg", "observed_under": "<surface-hash>", "observed_at": "<date>"}],
+  "tools_absent": [{"name": "get-websites-conversion-rates-agg", "observed_under": "<surface-hash>", "observed_at": "<date>"}],
   "categories_available": ["websites", "keywords", "categories", "ai-traffic", "demand"]
 }
 ```

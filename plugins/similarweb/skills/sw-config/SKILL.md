@@ -27,7 +27,19 @@ Inspect `$ARGUMENTS` (or whatever the AI client passes after `/sw-config`):
 
 ## Step A: --show (default)
 
-Render the capability summary via the bundled renderer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source), subcommand show, no stdin:
+**First refresh the tool-surface fingerprint, then render.** `/sw-config --show` is one of the three fingerprint triggers in sw-foundation-core § capability-map-schema, and it is the one a user reaches for precisely when they suspect the connector has changed. Rendering the summary without it reports the surface as it stood at the last write, so a connector that gained or lost tools since then still looks unchanged, and the refresh suggestion that exists to catch exactly that never fires.
+
+Resolve the live tool list per sw-foundation-core § tool-surface presence. Only a QUALIFYING enumeration counts (a closed list meeting the sentinel quorum). When presence is UNKNOWN, skip straight to the summary below, silently and with no write; an unknown surface is not a changed one.
+
+With a qualifying list, write ONE JSON document `{"tools": [the unqualified names], "prefix": "the observed prefix"}` to a temp file with the Write tool (cross-platform, no shell heredoc), then:
+
+```bash
+python3 scripts/capmap.py fingerprint --file <tempfile>
+```
+
+Render the refresh suggestion ONLY when it prints `changed`; `first` and `same` are silent. Never auto-probe on drift: the suggestion is the whole response, and re-probing stays user-consented. Upserting the hash here is also what re-stamps the map, so any `tools_absent` entry recorded under an older surface now renders with its stale-stamp marker in the summary rather than passing as current.
+
+Then render the capability summary via the bundled renderer at `scripts/capmap.py` (a build-time copy of sw-foundation-core's single source), subcommand show, no stdin:
 
 ```bash
 python3 scripts/capmap.py show
