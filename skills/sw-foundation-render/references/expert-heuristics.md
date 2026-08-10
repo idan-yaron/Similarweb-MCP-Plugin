@@ -64,3 +64,13 @@ Every bounded call returns a SAMPLE. Two free checks decide whether that sample 
 **Non-marketing surfaces are not performance.** Rows whose host or path indicates identity (`/auth/`, `/oauth`, `signin`, `iforgot`, `idmsa`, `account.`, `appstoreconnect`, a `/login` path), support, developer, or careers are real traffic and real findings, but they are NOT answer-engine or marketing content performance. Report them as a separate line, never inside a content ranking. Whether they dominate is a DOMAIN property: one grounded domain showed 8 of its top 10 rows as identity while a control domain at the identical shape showed none, so this is a detector applied to returned rows and never an assumption.
 
 This ladder is the defined trigger that makes tight default bounds safe: cheap by default, spend only on a signal.
+
+## Comparability before ranking
+
+A ranking asserts that two numbers were measured the same way. Before any A-versus-B claim, confirm the two sides share a BASIS: the same population, the same denominator, the same market, and the same window. Where the tool exposes the basis, read it rather than assuming it (criq categories carry a `domains` scope and a `description` with inclusion and exclusion rules; an empty `domains` list means unscoped, not unknown).
+
+**When the bases differ, the honest output is "not decidable on this panel", not a close call.** A rank computed across different bases is not a narrow result, it is an artifact, and presenting it as narrow implies a precision that does not exist. State what each side measured and what would make them comparable.
+
+**Watch the denominator specifically.** A per-unit efficiency figure (views per listing, clicks per keyword, revenue per SKU) inherits whatever the denominator counts. If one side's denominator includes inventory, resale, or partner listings the other's does not, the ratio inverts for reasons that have nothing to do with performance. Name what the denominator contains whenever a ratio is ranked.
+
+**Coverage asymmetry is a basis difference too.** Where a panel attributes one entity's activity far more completely than another's, the gap between them can be smaller than the gap in measurement quality. Say so instead of ranking.
