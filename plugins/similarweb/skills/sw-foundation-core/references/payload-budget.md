@@ -54,6 +54,8 @@ About 50 KB per response, and it is a **conservative proxy, not a measured thres
 
 Note that some clients replace an oversized result with a size notice and a preview rather than the payload, so a 200 does not guarantee the data is in front of you. See sw-foundation-render `§ error-rendering` Pattern 8 for how that renders.
 
+**An oversized result also hides what it cost.** The notice replaces the envelope, so the charge never reaches the model inline and the call reads as free. It is not: an unbounded call of this shape has been observed costing a four-figure credit total, invisibly. This is the strongest practical argument for the bound, ahead of the context budget: a payload you cannot see is one you paid for anyway. Pattern 8 permits a metadata-only extract to recover the figure where the client exposes the buffered file.
+
 ## Reference measurements for choosing a bound
 
 Account-scoped, observed 2026-08-07 unless noted. **Every figure names the parameter shape it was measured at**, because a bare number reads as a property of the tool and is usually a property of one call. Sizes move with account data volume; the growth term is what transfers between accounts.
