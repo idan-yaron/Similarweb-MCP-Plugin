@@ -14,7 +14,7 @@ The identifier and the store are one pair, not two independent parameters. Passi
 
 `get-apps-search` returns ids in the shape of the store you asked it for, so search and analyse in the same store. Live-verified both ways on 2026-08-10.
 
-**Store support differs per tool** and is enforced by the schema: retention is `google` only; ranks and ratings take `google` or `apple` but not `unified`; downloads, active-users and sessions accept all three. Read the schema rather than assuming the family is uniform.
+**Store support differs per tool** and is enforced by the schema: retention and install-penetration are `google` only; ranks, ratings and audience-demographics take `google` or `apple` but not `unified`; downloads, active-users and sessions accept all three. Read the schema rather than assuming the family is uniform.
 
 ## Discovery
 
@@ -33,17 +33,19 @@ Every tool below takes `app_id` plus `store`; most also require `country`. Pass 
 | Active users | `get-apps-active-users` | 1 credit per month | Monthly granularity gives MAU, daily gives DAU. ONE field, no split inside a call, so stickiness needs two calls. |
 | Session behaviour | `get-apps-sessions` | 1 credit per metric per month (5 metrics = 5, 1 metric = 1) | Five metrics available; unrequested ones return null. Trim the list, it is the cost lever. |
 | Store revenue and ARPU | `get-apps-revenue` | 2 credits per metric per month (2 metrics = 4, 1 metric = 2) | Monthly only. Payload carries `revenue_flag: "estimated"`. **Never present as reported financials.** Often null on sparse coverage. |
-| 30-day retention curve | `get-apps-retention` | **20 credits per month** (1 month = 20, 2 months = 40) | `store: "google"` only. Its schema has NO `metrics` parameter, so there is no lever except the window. By far the most expensive tool in the family; bound the window hard. |
-| Store chart position over time | `get-apps-ranks` | not measured | Daily granularity. Rows per date x type x category x device, so multiple rows per app per date. |
-| Ratings and their distribution | `get-apps-ratings` | not measured | `google` or `apple`. Seven metrics including the 1-to-5 distribution. |
-| Leaderboard for a category | `get-apps-top-charts` | not measured | Takes NO `app_id`: it is a leaderboard keyed on `category_id` + `country` + `store`. |
-| Audience age and gender | `get-apps-audience-demographics` | not measured | Field names differ from the web demographics tools; check the schema before mapping. |
-| Audience interests | `get-apps-audience-interests` | not measured | |
-| Install penetration | `get-apps-install-penetration` | not measured | |
-| Category classification | `get-apps-iab-categories` | not measured | |
-| SDKs detected in the app | `get-apps-technographics-sdks` | not measured | Daily granularity. |
+| 30-day retention curve | `get-apps-retention` | **20 credits per month** (1 month = 20, 2 months = 40) | `store: "google"` only. Its schema has NO `metrics` parameter, so there is no lever except the window. The steepest per-month price in the family, and the window multiplies it directly; bound the window hard. |
+| Store chart position over time | `get-apps-ranks` | **0 credits** | Daily. Rows per date x type x category x device, so multiple rows per app per date. **`limit` is ignored**, see the payload note below. |
+| Ratings and their distribution | `get-apps-ratings` | 1 credit per metric per month (1 metric = 1) | `google` or `apple`. Seven metrics including the 1-to-5 distribution; unrequested ones return null. |
+| Leaderboard for a category | `get-apps-top-charts` | **0 credits** | Takes NO `app_id`: a leaderboard keyed on `category_id` + `country` + `store`. Only those three are required; the server defaults `device` and `type` and echoes them in `meta.request`. **`limit` is ignored**, see below. |
+| Audience age and gender | `get-apps-audience-demographics` | 1 credit per returned field (gender = 2, age = 5, both = 7) | FIVE age buckets and NO `_share` suffix, unlike the web demographics tools. Trim `metrics`, it is the cost lever. |
+| Audience interests | `get-apps-audience-interests` | **0 credits** | Overlapping apps with `cross_usage` and `affinity` plus app metadata, sorted by `cross_usage`. Free, so reach for it early. |
+| Install penetration | `get-apps-install-penetration` | 1 credit per month | `store: "google"` only. Single `install_penetration` field. |
+| Category classification | `get-apps-iab-categories` | 1 credit per returned row (all versions = 7, `["v1"]` = 2) | Returns IAB v1, v2 and v3 rows, each `declared` or `inferred`. `iab_versions` is the cost lever. |
+| SDKs detected in the app | `get-apps-technographics-sdks` | **30 credits, no lever** | The most expensive call in the family. `date` must be `YYYY-MM-DD`; the keyword `"latest"` is rejected. The window is locked to exactly the last 28 days and cannot be narrowed, and `limit` bounds the rows but NOT the price. Call it only when the SDK list is the actual answer. |
 
-A row with "not measured" carries no cost claim. Measure before quoting a figure, and record the parameter shape with it.
+Costs above were measured on one app, one month, at the parameter shape named in each row. Treat the shape as part of the claim: change the metrics list, the row count or the window and re-measure rather than extrapolating.
+
+**Two tools ignore `limit`.** `get-apps-top-charts` returns roughly 200 rows whatever limit you pass, and `get-apps-ranks` returns the same row set at any limit. Both are free in credits and neither is free in payload, so never inline a top-charts response on the assumption that a limit bounded it. Narrow `category_id` instead, or summarise rather than dumping rows.
 
 ## When the family is not exposed on a connector
 
