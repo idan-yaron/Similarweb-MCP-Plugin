@@ -17,6 +17,7 @@ Classify user intent FIRST, then render:
 | "one-pager", "summarize", "exec read", "brief" | `narrative` (prose + key tables + collapsed sources) |
 | "slide", "deck", "presentation" | `slide` (bullet structure, ready for pptx skill) |
 | CSV in working directory that the recipe could enrich | `handoff` (append machine-readable JSON) |
+| "for the client", "goes to <company>", "hand this to", "deliverable", a named brief or copy deck | `client` (assert not explain; no vendor, tooling or credit vocabulary; Sources becomes a provenance line) |
 | Default | `narrative` |
 
 **Answer-first ordering (every mode).** The verdict or headline leads, supporting evidence (tables, charts, per-section detail) follows, and the compact closing blocks (Strategic insights, Caveats, NEXT MOVES, Sources, glossary footnotes) come last. Never open with method narration; the first content line after the header line is the answer. The early-headline contract and its supersession rule live in § insight-first delivery.
@@ -89,7 +90,7 @@ The final answer-first verdict supersedes the early headline:
 
 ### § citation block
 
-Every recipe ends its output with a single-line Sources rollup; when intent classifies as `handoff`, the § handoff-json-schema appendix follows it, otherwise Sources is the LAST element. Sources format: `**Sources:** <total> data credits across <N> calls (<per-tool-rollup>).<optional-status-suffix>` where total sums each response's `meta.data_credits_charged` (the live field, legacy fallback `meta.sw_coins`, renamed to data credits at render time; a call missing both is unknown not 0, see § citation block reference), the rollup is comma-separated `<count> <tool-suffix>` pairs (tool prefixes and `-agg` dropped; descending count then alphabetical), and the status suffix appears ONLY on failure or retry (no "All 200" noise).
+In `client` mode the Sources rollup is REPLACED by a one-line provenance statement (source, market, window, freshness, plus sample basis when the answer rests on a bounded sample); it carries no credits, no call counts and no tool names, because that rollup is the plugin's single largest vocabulary leak into a client artifact. The register, vocabulary boundary and output-hygiene rules live in `references/client-register.md`; Read it when intent classifies as `client`. Every other mode is unchanged: recipes end their output with a single-line Sources rollup; when intent classifies as `handoff`, the § handoff-json-schema appendix follows it, otherwise Sources is the LAST element. Sources format: `**Sources:** <total> data credits across <N> calls (<per-tool-rollup>).<optional-status-suffix>` where total sums each response's `meta.data_credits_charged` (the live field, legacy fallback `meta.sw_coins`, renamed to data credits at render time; a call missing both is unknown not 0, see § citation block reference), the rollup is comma-separated `<count> <tool-suffix>` pairs (tool prefixes and `-agg` dropped; descending count then alphabetical), and the status suffix appears ONLY on failure or retry (no "All 200" noise).
 
 **Output-render targets:** competitive-teardown ~2000-3000 chars, channel-mix ~2000-3000, market-size ~3000-4000, audience-overlap ~1500-2500, aeo-audit ~2500-3500, page-mix ~2000-3000, keyword-opportunity ~2000-3000; short form (narrow questions, any recipe) ~400-800, with the full report offered as a NEXT MOVES question instead of emitted. Single-line Sources + Unicode-first visualizations keep total render ~30-40% smaller than pre-compression iterations.
 
@@ -136,6 +137,10 @@ Persistent export (platforms without Anthropic Cowork's rich-render tiers). On p
 ### § expert-heuristics
 
 Quantified verdict thresholds, calibrated against real Similarweb behavior; never soften one without grounding. Recipes that surface a derived verdict, a confidence label, or a strategic recommendation MUST cite the relevant heuristic instead of inventing a threshold. The full ladders (engagement profile, channel-mix red flags, period-over-period WITHIN NOISE / MATERIAL / MAJOR, audience-overlap SAME POND through DISJOINT, HHI concentration, derived-metric formulas, HIGH / MEDIUM / LOW hypothesis calibration, refusal-as-feature with the INSUFFICIENT SIGNAL block) live in `references/expert-heuristics.md`; Read it before computing any verdict, confidence label, or recommendation.
+
+### § output-hygiene
+
+NEVER render an em dash (the long dash, Unicode U+2014) in output, in any mode. Use a comma, a colon, parentheses, or a sentence break. Also never ship an unresolved placeholder (`<target>`, a literal `X%`, a TODO) or an internal correction trace; if a figure was revised mid-run, render the current figure and keep the revision in the internal read. The full client-facing rules live in `references/client-register.md`.
 
 ### § derived-metric glossing
 

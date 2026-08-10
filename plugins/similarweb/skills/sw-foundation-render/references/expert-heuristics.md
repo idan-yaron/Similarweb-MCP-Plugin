@@ -42,3 +42,35 @@ Quantified thresholds recipes cite when interpreting raw data. These are calibra
 - DO NOT introduce external-world speculation (algorithm-update dates, news events) unless the user supplied that context. If you must, label `UNCONFIRMED EXTERNAL HYPOTHESIS` and put it LAST.
 
 **Refusal-as-feature:** if signal is thin (no defensible hook, no recent data, no meaningful delta), REFUSE to render the recommendation section. A generic recommendation is worse than no recommendation. Render an `INSUFFICIENT SIGNAL` block with the explicit reason (e.g., "no winning SERP positions across audited keywords; no answer-box-adjacent features on any landing page; recommend re-run after domain accumulates SERP presence"). Sources line still ships.
+
+## Sample composition, coverage and concentration (bounded-call ladder)
+
+Every bounded call returns a SAMPLE. Two free checks decide whether that sample can carry the claim, and they catch opposite failures, so run both before reporting on any ranked-share list.
+
+**Coverage.** When rows carry a share normalized against the entity total (`get-ai-traffic-landing-pages-agg` is the grounded case, per `ai-landing-pages-composition`), `sum(returned shares)` IS the fraction of the whole you actually saw. It costs nothing. State it whenever it is computable, and NEVER present a bounded sample as the whole.
+
+**Concentration.** `max(returned share)`, and the same by host, says whether one row or one surface is the story.
+
+**Operating thresholds.** These are CHOSEN thresholds, not measured constants, and they are stated here so recipes do not invent their own:
+
+| Signal | Threshold | Response |
+|---|---|---|
+| Coverage below 0.50 | the sample is a minority of the entity | widen ONCE, or caveat the section as a partial view and never quote a rank as if complete |
+| One URL or host above 0.25 of the entity total | one surface dominates | inspect composition BEFORE reporting; the headline is about that surface, not the category |
+| Both clean | proceed | report normally, still stating coverage |
+
+**Widen ONCE, then stop.** Diminishing returns are real: on a concentrated domain a 5x limit increase moved coverage 77.9% to 82.2%. A second widening is almost never worth its credits, and the payload budget still binds the turn.
+
+**Non-marketing surfaces are not performance.** Rows whose host or path indicates identity (`/auth/`, `/oauth`, `signin`, `iforgot`, `idmsa`, `account.`, `appstoreconnect`, a `/login` path), support, developer, or careers are real traffic and real findings, but they are NOT answer-engine or marketing content performance. Report them as a separate line, never inside a content ranking. Whether they dominate is a DOMAIN property: one grounded domain showed 8 of its top 10 rows as identity while a control domain at the identical shape showed none, so this is a detector applied to returned rows and never an assumption.
+
+This ladder is the defined trigger that makes tight default bounds safe: cheap by default, spend only on a signal.
+
+## Comparability before ranking
+
+A ranking asserts that two numbers were measured the same way. Before any A-versus-B claim, confirm the two sides share a BASIS: the same population, the same denominator, the same market, and the same window. Where the tool exposes the basis, read it rather than assuming it (criq categories carry a `domains` scope and a `description` with inclusion and exclusion rules; an empty `domains` list means unscoped, not unknown).
+
+**When the bases differ, the honest output is "not decidable on this panel", not a close call.** A rank computed across different bases is not a narrow result, it is an artifact, and presenting it as narrow implies a precision that does not exist. State what each side measured and what would make them comparable.
+
+**Watch the denominator specifically.** A per-unit efficiency figure (views per listing, clicks per keyword, revenue per SKU) inherits whatever the denominator counts. If one side's denominator includes inventory, resale, or partner listings the other's does not, the ratio inverts for reasons that have nothing to do with performance. Name what the denominator contains whenever a ratio is ranked.
+
+**Coverage asymmetry is a basis difference too.** Where a panel attributes one entity's activity far more completely than another's, the gap between them can be smaller than the gap in measurement quality. Say so instead of ranking.
