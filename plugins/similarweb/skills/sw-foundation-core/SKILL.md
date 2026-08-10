@@ -78,7 +78,7 @@ Lazy-mode minimal shape: `{schema_version: 2, last_updated, tools_inaccessible: 
 ## MCP tool catalog grouped by intent
 
 Note: the catalog below reflects the Similarweb MCP server as of the last
-grounded enumeration (2026-08-06, 113 tools) and drifts with server releases;
+grounded enumeration (2026-08-10, 129 tools) and drifts with server releases;
 the live tool list exposed by the client is always the source of truth for
 what exists. Presence is per-account and resolved at planning time per
 § tool-surface presence (live list, zero calls); access denials are handled
@@ -102,7 +102,7 @@ Rank, traffic-and-engagement, traffic channels (including the `Gen AI` channel),
 
 ### Apps-shaped queries
 
-The apps surface is module-gated: plans without the Apps module do not expose these tools AT ALL (absent from the tool list rather than returning 403); resolve presence per § tool-surface presence before planning any apps call (absent means module_not_exposed, zero calls). `get-apps-details` is the ONLY apps tool on the live surface as of the 2026-08-07 enumeration, and its entitlement varies by account: the reference connector returned 403 through 2026-08-06 and 200 from 2026-08-07. Either outcome proves PRESENCE, so a denial renders as a denial, never as an absence. The other six apps names are documented-absent across two consecutive enumerations. The active guidance and that documented-absent list live in `references/apps-catalog.md`; Read it only when an apps-shaped query is actually in play.
+App store analytics: installs, active users, sessions, revenue, retention, store rank, ratings, top charts, audience, SDKs. **Presence varies by account**, so resolve it per § tool-surface presence from the live tool list at planning time, and never assume either way. Presence and access stay separate axes: a 403 proves the tool IS present and renders as a denial (Pattern 3), while a name genuinely missing from a qualifying live list renders as an absence (Pattern 7) and offers the website-side pivot. Two traps worth carrying inline: `app_id` and `store` are ONE pair, and mismatching them returns a 404 that reads like genuine no-data; and costs across the family span 0 to 300 credits a call, with `get-apps-retention` at 20 per month and `get-apps-technographics-sdks` at 10 per returned row (300 unbounded, so always pass a `limit`), so check the catalog before calling either. The intent table, the per-tool store support, the measured costs, and the website-side pivot mapping live in `references/apps-catalog.md`; Read it when an apps-shaped query is in play.
 
 ### Brands and categories
 

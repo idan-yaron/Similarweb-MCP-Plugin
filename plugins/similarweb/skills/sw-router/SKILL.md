@@ -251,7 +251,7 @@ Estimated: ~6 minutes, ~250 data credits. Proceed?
 - **Multiple targets in the prompt, no clear lead** ("apple, samsung, google all on traffic"): Branch B; ask which one is the lead target, with the other two as `--vs` candidates.
 - **Domain is malformed** (typo, missing TLD): ask one clarifier with the closest canonical apex as the default.
 - **Recipe inventory drift**: if a recipe is renamed or dropped in a later phase, update the Step 2 table here. The router is the single source of truth for what the user can be routed to.
-- **Tool-surface drift**: the MCP tool surface itself drifts per account and per release (90 tools on 2026-05-16, 80 on 2026-06-11 on the same connector; per `mcp-tool-catalog-v1`). A call that fails as unknown-tool is handled by the Step 0 unknown-tool fallback or the Branch C absence rule above; never trust a remembered catalog over the live list.
+- **Tool-surface drift**: the MCP tool surface itself drifts per account and per release (90 tools on 2026-05-16, 80 on 2026-06-11, 129 on 2026-08-10 on the same connector, with names returning after two months absent; per `mcp-tool-catalog-v1`). A call that fails as unknown-tool is handled by the Step 0 unknown-tool fallback or the Branch C absence rule above; never trust a remembered catalog over the live list.
 
 ## Grounded assertions
 
