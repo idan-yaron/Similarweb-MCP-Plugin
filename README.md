@@ -17,7 +17,7 @@
 
 ## The problem this solves
 
-The Similarweb MCP exposes a large and moving tool surface: 113 tools at the 2026-08 enumeration, up from 80 two months earlier, with the exact set varying by plan and server release. It spans web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment, plus newer families for AI traffic, gen-AI campaigns, sales signals, demand search trends, industry analytics, retail cross-analysis, display advertising, segments, and contacts. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
+The Similarweb MCP exposes a large and moving tool surface: over 120 tools on the reference connector in 2026-08, and it has grown and shrunk repeatedly, with the exact set varying by plan and server release. Run `/sw-config --show` to see the surface your own connector exposes. It spans web traffic, SEO, audience, AEO, apps, brands, categories, and lead enrichment, plus newer families for AI traffic, gen-AI campaigns, sales signals, demand search trends, industry analytics, retail cross-analysis, display advertising, segments, and contacts. Out of the box the LLM treats them as a flat menu: it rediscovers tools every turn, picks suboptimal sequences, burns data credits, and produces shallow analyses.
 
 This plugin is the expert layer that sits between your LLM and the Similarweb MCP. Install it once, ask anything Similarweb-shaped in natural language, and get a structured analyst-grade response.
 
@@ -277,7 +277,7 @@ For click-by-click instructions, smoke-test prompts, known per-platform limitati
                                        │
                                        ▼
                   ┌──────────────────────────────────────────┐
-                  │ Similarweb MCP (113 tools as of 2026-08) │
+                  │  Similarweb MCP (surface varies by plan)  │
                   └──────────────────────────────────────────┘
 ```
 

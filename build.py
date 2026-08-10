@@ -13,6 +13,7 @@ Python 3 stdlib only. Runs developer-side. Customers never invoke this.
 """
 
 import argparse
+import datetime
 import json
 import os
 import re
@@ -980,6 +981,121 @@ def scan_payload_budget():
     return errors, warnings
 
 
+CATALOG_STALE_AFTER_DAYS = 30
+
+
+def scan_catalog_staleness():
+    """WARN when the local tool-catalog snapshot has not been re-enumerated lately.
+
+    Deliberately a warning and deliberately local-only. `tests/` is gitignored,
+    so CI checks out no snapshot and this skips by design; and a hard error would
+    block a release tag the moment a calendar boundary passed, with no code
+    change and nothing a release can do about it.
+
+    It earns its place because the snapshot going stale is not cosmetic: a stale
+    snapshot is what let shipped text keep refusing tools that had come back. The
+    surface moved four times in three months, so the useful signal is elapsed
+    time since the last enumeration, not a diff nobody ran.
+
+    Returns (errors, warnings)."""
+    if not TOOL_CATALOG_SNAPSHOT.is_file():
+        return [], []
+    try:
+        text = TOOL_CATALOG_SNAPSHOT.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return [], []
+    m = re.search(r"^last_validated:\s*(\d{4})-(\d{2})-(\d{2})\s*$", text, re.M)
+    if not m:
+        return [], ["tool-catalog snapshot has no parseable last_validated date"]
+    validated = datetime.date(*(int(g) for g in m.groups()))
+    age = (datetime.date.today() - validated).days
+    if age <= CATALOG_STALE_AFTER_DAYS:
+        return [], []
+    return [], [
+        f"tool-catalog snapshot last enumerated {age} days ago ({validated}), over "
+        f"the {CATALOG_STALE_AFTER_DAYS}-day mark. Re-enumerate the live tool list "
+        f"and diff it against Appendix A: names ADDED since the snapshot are the "
+        f"case that silently makes shipped guidance wrong."
+    ]
+
+
+# Fixed assertion markers: each states absence as a property of the TOOL rather
+# than of one account at one moment. Matched case-insensitively as substrings.
+# Deliberately NOT keyed on absence language near a tool name: 27 lines under
+# skills/ pair the two and only 3 were ever the harmful kind, so adjacency would
+# be almost entirely false positives and would flag the correct exemplars.
+ABSENCE_ASSERTION_MARKERS = (
+    "do not plan a call",
+    "no live tool behind it",
+    "is not restored",
+    "not on the live surface",
+    "only apps tool on the live surface",
+)
+
+# Runtime-conditional phrasings. These describe what to do IF a tool turns out to
+# be absent, which is the doctrine working, and must never trip the guard. Pinned
+# as negative cases in tests/build-guards so the guard's narrowness is enforced
+# rather than assumed.
+ABSENCE_EXEMPT_PHRASES = (
+    "absent or denied",
+    "if absent",
+    "when absent",
+    "pinned absence outcomes",
+    "presence varies by account",
+    "may be absent",
+    "is absent from the live list",
+)
+
+
+def scan_absence_assertions():
+    """Fail on shipped text that asserts a tool is absent as a property of the tool.
+
+    Presence is an account-and-moment fact, resolved from the live tool list at
+    planning time. Writing it into a shipped file converts one connector's
+    enumeration into a permanent claim about every connector, and the file then
+    keeps refusing a tool long after the tool comes back.
+
+    That is not hypothetical. Shipped text once carried a literal `Do NOT plan a
+    call` on six apps tools; all six later returned HTTP 200 on the reference
+    connector, so the plugin was refusing tools that worked. The names had been
+    absent across two consecutive enumerations, which felt like enough evidence
+    and was not: a third enumeration found every one of them present.
+
+    The guard keys ONLY on fixed assertion markers, never on absence language
+    near a tool name. Runtime-conditional phrasing is the doctrine working and is
+    explicitly exempt. Returns (errors, warnings)."""
+    errors, warnings = [], []
+    for rel, path in _shipped_files():
+        rel = rel.replace("\\", "/")
+        if not rel.endswith(".md"):
+            continue
+        if not any(rel.startswith(r + "/") for r in PAYLOAD_SCAN_ROOTS):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), 1):
+            low = line.lower()
+            if any(ex in low for ex in ABSENCE_EXEMPT_PHRASES):
+                continue
+            for marker in ABSENCE_ASSERTION_MARKERS:
+                if marker in low:
+                    errors.append(
+                        f"{rel}:{lineno} states absence as a property of the tool "
+                        f"({marker!r}). Presence is per-account and per-moment: "
+                        f"resolve it from the live tool list and render Pattern 7 "
+                        f"when a qualifying list omits the name. Phrase it as "
+                        f"'presence varies by account', not as a fact.")
+            if low.lstrip().startswith("#") and "documented-absent" in low:
+                errors.append(
+                    f"{rel}:{lineno} ships a documented-absent section heading. A "
+                    f"standing list of absent tools is a claim about every "
+                    f"connector; record absence in the capability map at runtime "
+                    f"instead.")
+    return errors, warnings
+
+
 def scan_tool_name_drift():
     """Validate every tool-name-shaped token under the shipped dirs against the
     local catalog snapshot. Returns (errors, warnings, notice).
@@ -987,10 +1103,11 @@ def scan_tool_name_drift():
     ERROR only on a token in no section: a typo or an invented name. WARN on a
     documented-absent or retired name and let a human decide. The asymmetry is
     load-bearing: the surface drifts per account and per release (90 tools on
-    2026-05-16, 80 on 2026-06-11, 113 on 2026-08-06, same connector), so one
-    account's enumeration is not proof a name is gone. Erroring on absence would
-    enforce at build time exactly the inference the runtime presence-first
-    doctrine forbids.
+    2026-05-16, 80 on 2026-06-11, 113 on 2026-08-06, 129 on 2026-08-10, same
+    connector), so one account's enumeration is not proof a name is gone. Names
+    absent across two consecutive enumerations came back on the third, which is
+    the case that settles it. Erroring on absence would enforce at build time
+    exactly the inference the runtime presence-first doctrine forbids.
     """
     try:
         sections, skip_reason = _load_tool_catalog_snapshot()
@@ -1411,6 +1528,12 @@ def cmd_validate():
         hygiene_errors, hygiene_warnings = scan_repo_hygiene()
         errors.extend(hygiene_errors)
         warnings.extend(hygiene_warnings)
+        absence_errors, absence_warnings = scan_absence_assertions()
+        errors.extend(absence_errors)
+        warnings.extend(absence_warnings)
+        stale_errors, stale_warnings = scan_catalog_staleness()
+        errors.extend(stale_errors)
+        warnings.extend(stale_warnings)
     except ToolCatalogError as exc:
         # The lists ship, unlike the tool-catalog snapshot, so a missing or
         # unparseable block is a broken guard rather than a CI-shaped absence.

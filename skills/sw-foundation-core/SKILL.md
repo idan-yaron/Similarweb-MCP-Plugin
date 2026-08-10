@@ -78,7 +78,7 @@ Lazy-mode minimal shape: `{schema_version: 2, last_updated, tools_inaccessible: 
 ## MCP tool catalog grouped by intent
 
 Note: the catalog below reflects the Similarweb MCP server as of the last
-grounded enumeration (2026-08-06, 113 tools) and drifts with server releases;
+grounded enumeration (2026-08-10, 129 tools) and drifts with server releases;
 the live tool list exposed by the client is always the source of truth for
 what exists. Presence is per-account and resolved at planning time per
 § tool-surface presence (live list, zero calls); access denials are handled
