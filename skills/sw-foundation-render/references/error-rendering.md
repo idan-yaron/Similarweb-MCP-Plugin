@@ -119,10 +119,25 @@ Eight canonical patterns. Apply consistently:
       passed, or 'the server default' when the call passed none>`; re-run with
       a tighter bound."
    3. The NEXT MOVE offers the tighter re-call, naming a specific smaller bound.
-   4. Do NOT offer to read the buffered file. No shipped skill has a
-      buffered-read path, and inventing one couples the recipe to an
-      undocumented internal artifact of one AI client. The request is the only
-      portable lever.
+   4. Do NOT read the DATA out of the buffered file. No shipped skill has a
+      buffered-read path over the payload, and inventing one couples the recipe
+      to an undocumented internal artifact of one AI client. The request is the
+      only portable lever for getting the data.
+   5. **The charge is NOT zero, and it is recoverable.** The oversized notice
+      replaces the envelope, so `meta.data_credits_charged` never reaches the
+      model inline and the call reads as free. It is not: this shape has been
+      observed costing a four-figure credit total on a single call. Where the
+      client exposes the buffered file, a bounded METADATA-ONLY extract is
+      permitted and expected: match `data_credits_charged` and `meta.request`,
+      nothing else. That is a fixed-size read of two known keys, not a payload
+      read, and it keeps the Sources rollup honest and reveals the window the
+      server actually applied. Where the client exposes no such file, record the
+      call as UNKNOWN cost in the rollup, never as 0 (see the citation-block
+      reference: a call missing the field is unknown, not zero).
+   6. Re-calling at a tighter bound does NOT refund the first call. The oversized
+      attempt has already been paid for, so the tighter re-call is a second
+      charge. Say so when offering it, and prefer the smallest bound that answers
+      the question rather than the next size down.
 
    **Distinct from Pattern 1**: an empty payload means the tool had no data;
    this means the tool had too much. Rendering `n/a` here would state a fact
