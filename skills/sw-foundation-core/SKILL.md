@@ -224,3 +224,4 @@ This skill's behavior is live-validated against the following grounded assertion
 - criq-performance-cost-shape
 - web-family-cost-shapes-2026-08
 - ai-traffic-overview-window-default
+- branded-flag-semantics
