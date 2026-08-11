@@ -23,7 +23,7 @@ What survives the translation, always: the number, the market, the window, the c
 
 In `client` mode these NEVER appear in rendered output:
 
-- **The vendor and its product names.** The data source is named once, plainly, as the provenance line requires; internal product and module names are not.
+- **The vendor and its product names.** The data source is named once, plainly, as the provenance line requires; internal product and module names are not. The denylist, explicit because an abstract rule failed live while the concrete term sat in the user's own prompt: Shopper Intelligence, Sales Intelligence, Digital Research Intelligence, Digital Marketing Intelligence, App Intelligence, Stock Intelligence, CRIQ. The list binds in any casing, spacing, or hyphenation (a lowercase hyphenated FILENAME was the leak actually observed), and it covers filenames, headings, and chart titles as well as prose. A term appearing in the user's own prompt does not license it into a deliverable; substitute a plain description of the surface. This same list ships inline in sw-foundation-core § client-output so it reaches sessions where this file never loads; keep the two lists identical when editing either.
 - **Tooling.** MCP tool names, any `get-` or `post-` method name, the word endpoint, parameter names such as `limit` or `granularity`.
 - **The credit economy.** "data credits", credit counts, call counts. This is our own coinage and means nothing outside the plugin.
 - **Plugin surface.** Recipe names, `/sw-` commands, flag syntax, section names that are ours rather than the reader's.

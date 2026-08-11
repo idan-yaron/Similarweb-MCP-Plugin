@@ -981,6 +981,45 @@ def scan_payload_budget():
     return errors, warnings
 
 
+# Claude Code's plugin-manifest schema types these fields as strings and FAILS
+# THE WHOLE PLUGIN LOAD on a mismatch, with no error surfaced anywhere in the
+# desktop app. Shipped for real: npm-style repository-as-object made every
+# claude-code zip through v0.1.24 install as a silent no-op ("failed to load /
+# Validation errors: repository: Invalid input: expected string, received
+# object" per claude plugin list, 2026-08-11). bugs and author as objects are
+# accepted (verified by single-variable experiment), so they are deliberately
+# NOT in this set; widen it only on evidence.
+MANIFEST_STRING_FIELDS = ("name", "version", "description", "repository",
+                          "homepage", "license")
+
+
+def scan_manifest_schema():
+    """Fail validate when the canonical manifest would fail Claude Code's loader.
+
+    Scans the SOURCE manifest, not emitted copies: CI runs validate before
+    build on a fresh checkout, so dist/ does not exist at validate time. The
+    claude-code, cowork and cursor emitters dump this manifest verbatim (pinned
+    in tests/build-guards), so a clean source proves every bundle that carries
+    it. Returns (errors, warnings)."""
+    errors, warnings = [], []
+    p = REPO_ROOT / ".claude-plugin" / "plugin.json"
+    try:
+        manifest = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return [f".claude-plugin/plugin.json unreadable: {exc}"], warnings
+    if not isinstance(manifest.get("name"), str) or not manifest.get("name"):
+        errors.append(".claude-plugin/plugin.json: 'name' must be a non-empty string")
+    for field in MANIFEST_STRING_FIELDS:
+        value = manifest.get(field)
+        if value is not None and not isinstance(value, str):
+            errors.append(
+                f".claude-plugin/plugin.json: '{field}' must be a STRING, got "
+                f"{type(value).__name__}. Claude Code's loader rejects the whole "
+                f"plugin on this mismatch and the desktop app surfaces no error; "
+                f"the npm object form shipped this exact failure through v0.1.24.")
+    return errors, warnings
+
+
 CATALOG_STALE_AFTER_DAYS = 30
 
 
@@ -1358,13 +1397,13 @@ def cmd_validate():
         if "hooks" in codex_manifest:
             errors.append(
                 f"{plugin_at}: Codex plugin manifest carries a 'hooks' key. The Codex "
-                f"bundle ships NO hooks as of v0.1.10 (hooks are Cowork-only); emit_codex "
+                f"bundle ships NO hooks as of v0.1.10 (Codex never ships hooks); emit_codex "
                 f"must not set it. See the Codex-hooks note in CLAUDE.md."
             )
         if (plugin_at.parent.parent / "hooks").exists():
             errors.append(
                 f"{plugin_at.parent.parent / 'hooks'}: the Codex bundle must not contain a "
-                f"hooks/ directory (Codex hooks dropped in v0.1.10; hooks are Cowork-only). "
+                f"hooks/ directory (Codex hooks dropped in v0.1.10 and never restored). "
                 f"Re-run build.py --build."
             )
         skills_mirror = plugin_at.parent.parent / "skills"
@@ -1543,6 +1582,9 @@ def cmd_validate():
         stale_errors, stale_warnings = scan_catalog_staleness()
         errors.extend(stale_errors)
         warnings.extend(stale_warnings)
+        manifest_errors, manifest_warnings = scan_manifest_schema()
+        errors.extend(manifest_errors)
+        warnings.extend(manifest_warnings)
     except ToolCatalogError as exc:
         # The lists ship, unlike the tool-catalog snapshot, so a missing or
         # unparseable block is a broken guard rather than a CI-shaped absence.
@@ -1634,7 +1676,8 @@ def emit_cowork(manifest, version):
         shutil.copytree(agents_src, target_dir / "agents")
     hooks_src = REPO_ROOT / "hooks"
     if hooks_src.is_dir():
-        shutil.copytree(hooks_src, target_dir / "hooks")
+        shutil.copytree(hooks_src, target_dir / "hooks",
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     connectors_src = REPO_ROOT / "CONNECTORS.md"
     if connectors_src.is_file():
         shutil.copy(connectors_src, target_dir / "CONNECTORS.md")
@@ -1646,9 +1689,41 @@ def emit_cowork(manifest, version):
     print(f"  cowork: {zip_path}")
 
 
+# The claude-code bundle's hook wiring. Written by emit_claude_code as
+# hooks/hooks.json; the script it runs is hooks/scripts/similarweb-context.py.
+# Python with a python3-then-python fallback because Windows sessions have no
+# guaranteed bash (the Windows hook shell defaults to PowerShell when Git Bash
+# is absent, and the fallback chain works in bash and modern PowerShell).
+# UserPromptSubmit injection on Claude Code is live-verified: the desktop app
+# executes plugin hooks and surfaces hookSpecificOutput.additionalContext
+# (observed 2026-08-11 on Windows; per the official Claude Code hooks reference). Cowork keeps its
+# own bash hooks.json; Codex ships no hooks (v0.1.10 decision, unchanged).
+CLAUDE_CODE_HOOKS = {
+    "description": ("Injects the Similarweb recipe surface, the client-output "
+                    "rule, and the payload pre-call step on Similarweb-shaped "
+                    "prompts."),
+    "hooks": {
+        "UserPromptSubmit": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": ("python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/"
+                                    "similarweb-context.py\" || python "
+                                    "\"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/"
+                                    "similarweb-context.py\""),
+                        "timeout": 10,
+                    }
+                ]
+            }
+        ]
+    },
+}
+
+
 def emit_claude_code(manifest, version):
-    """claude-code: copy skills + commands + plugin.json. MCP server is configured
-    separately by the user."""
+    """claude-code: copy skills + commands + plugin.json, plus the context hook.
+    MCP server is configured separately by the user."""
     target_dir = DIST_DIR / "claude-code"
     _prepare_target_dir(target_dir)
     (target_dir / ".claude-plugin").mkdir()
@@ -1661,6 +1736,12 @@ def emit_claude_code(manifest, version):
     commands_src = REPO_ROOT / "commands"
     if commands_src.is_dir():
         shutil.copytree(commands_src, target_dir / "commands")
+    hooks_scripts = target_dir / "hooks" / "scripts"
+    hooks_scripts.mkdir(parents=True)
+    with open(target_dir / "hooks" / "hooks.json", "w", encoding="utf-8") as f:
+        json.dump(CLAUDE_CODE_HOOKS, f, indent=2)
+    shutil.copy2(REPO_ROOT / "hooks" / "scripts" / "similarweb-context.py",
+                 hooks_scripts / "similarweb-context.py")
     zip_path = DIST_DIR / f"similarweb-claude-code-{version}.zip"
     _zip_target_dir(target_dir, zip_path)
     print(f"  claude-code: {zip_path}")
