@@ -174,6 +174,10 @@ The default for an unmeasured tool is bound-required, never silence. Requiring a
 
 The inline budget is about 50 KB per response and is a conservative proxy, not a measured threshold; the exact number is not load-bearing because every bound-accepting tool is bounded regardless. Some clients replace an oversized result with a size notice and a preview instead of the payload, so a 200 does not guarantee the data is in front of you (see sw-foundation-render § error-rendering Pattern 8). The full lists, the reference measurements for choosing a bound, and the rule for adding a tool to either list live in `references/payload-budget.md`; Read it before bounding a tool for the first time.
 
+### § client-output
+
+Anything a CLIENT will receive (briefs, dashboards, calendars, copy decks, files of any kind) carries no supplier vocabulary: no MCP tool names (`get-...`), no endpoint or API wording, no data-credit or cost vocabulary, and no Similarweb product-line names. The product-line denylist, carried inline because the rule works only when the names are written down: Shopper Intelligence, Sales Intelligence, Digital Research Intelligence, Digital Marketing Intelligence, App Intelligence, Stock Intelligence, CRIQ. The list binds in any casing, spacing, or hyphenation, and it covers FILENAMES, headings, and chart titles as well as prose; a term appearing in the user's own prompt does not license it into a deliverable (say "retail intelligence" or name the surface plainly instead). One plain provenance line naming the data source is the only source mention a client deliverable carries. The full client register (voice, provenance-line shape, the never-drop-a-caveat rule) lives in the render skill's client-register reference and stays the authority; this block exists so the invariant holds even in a session where the render skill never loads.
+
 ### Distinction summary
 
 | Envelope | What it means | In-run map | Skip rule |
