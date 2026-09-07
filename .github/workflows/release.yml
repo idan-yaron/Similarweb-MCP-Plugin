@@ -24,7 +24,7 @@ jobs:
       - name: Build all platform bundles
         run: python3 build.py --build
       - name: Create GitHub Release with the four platform zips as assets
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           files: |
             dist/similarweb-cowork-*.zip
